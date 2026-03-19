@@ -1,0 +1,56 @@
+<mujoco>
+  <!-- Включаем гравитацию -->
+  <option gravity="0 0 0" timestep="0.001" iterations="100" solver="Newton"/>
+
+  <asset>
+    <!-- Текстура модели -->
+    <texture name="tex_qilin" file="models/cloth.png" type="2d"/>
+    
+    <!-- ИСПРАВЛЕНО: specular здесь только ОДНО число (сила блика), а не цвет -->
+    <material name="mat_qilin" texture="tex_qilin" specular="0.5" shininess="0.5"/>
+
+    <!-- Текстура пола -->
+    <texture name="tex_grid" type="2d" builtin="checker" rgb1="0.2 0.4 0.8" rgb2="0.1 0.2 0.4" width="300" height="300"/>
+    <material name="mat_grid" texture="tex_grid" texrepeat="5 5" reflectance="0.2"/>
+
+    <!-- Модель -->
+    <mesh name="my_robot_part" file="models/armchair_wing.obj" scale="0.3 0.3 0.3"/>
+  </asset>
+
+  <worldbody>
+    <!-- Основной свет (цвет specular тут нужен, поэтому 3 числа) -->
+    <light name="global_light_1" 
+           pos="0 0 3" 
+           mode="trackcom" 
+           directional="false" 
+           diffuse="1.5 1.5 1.5" 
+           specular="1 1 1" 
+           castshadow="false"/>
+
+    <!-- Дополнительный свет -->
+    <light name="global_light_2" 
+           pos="0 -2 1" 
+           mode="trackcom" 
+           directional="false" 
+           diffuse="0.8 0.8 0.8" 
+           specular="0 0 0" 
+           castshadow="false"/>
+
+    <!-- Фоновое освещение (точечный свет в центре) -->
+    <light name="fill_light" 
+           pos="0 0 3" 
+           directional="false" 
+           diffuse="0.6 0.6 0.6" 
+           specular="0 0 0" 
+           castshadow="false"/>
+
+    <!-- Пол -->
+    <geom name="floor" type="plane" size="20 20 0.1" material="mat_grid" friction="1 0.5 0.5"/>
+
+    <!-- Модель -->
+    <body name="base" pos="0 0 10">
+      <freejoint/>
+      <geom type="mesh" mesh="my_robot_part" material="mat_qilin"/>
+    </body>
+  </worldbody>
+</mujoco>
