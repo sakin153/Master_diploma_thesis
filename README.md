@@ -81,13 +81,23 @@ Robot models are detected using a heuristic. See the section below on how to con
 
 ## Prompting / Scene Generation Examples
 
-You can conveniently generate a MuJoCo scene from a natural-language prompt (requires an OpenAI API key):
+You can conveniently generate a MuJoCo scene from a natural-language prompt (requires an OpenRouter API key):
 
 ```bash
-# Set this to your API key
-export OPENAI_API_KEY=...
+# Set this to your OpenRouter API key
+export OPENROUTER_API_KEY=...
+# Optional configuration
+export OPENROUTER_MODEL=nvidia/nemotron-3-super-120b-a12b:free
+# Optional: fallback models (comma-separated) tried automatically on
+# rate-limit/provider errors or empty responses.
+# export OPENROUTER_FALLBACK_MODELS=qwen/qwen3-next-80b-a3b-instruct:free,google/gemma-4-31b-it:free
+# export OPENROUTER_HTTP_REFERER=https://your-app.example
+# export OPENROUTER_X_TITLE=mujoco-scene-editor
 # Generate a scene from a prompt string
 mjprompt
+
+# Or override the model for a single run
+# mjprompt --model qwen/qwen3-next-80b-a3b-instruct:free
 
 # Edit the generated scene. 
 mjedit examples/prompt/scene_coffee_shop.xml

@@ -203,6 +203,48 @@ class SceneEditorController:
 
         MujocoXMLExporter().export_scene(out_path, bps_to_export)
 
+        # Run the same stabilization passes used by CLI generation/import so
+        # exported files stay physically editable after MJCF roundtrips.
+        from mujoco_scene_editor.utils.mjcf_physics import (
+            ensure_default_gravity,
+            ensure_freejoint_bodies_above_supports,
+            ensure_freejoint_bodies_have_inertial,
+            ensure_freejoint_bodies_have_collision_proxy,
+            ensure_inertial_top_level_bodies_are_movable,
+            ensure_small_top_level_bodies_are_movable,
+            ensure_mesh_asset_scale_is_triplet,
+            ground_large_top_level_bodies,
+            normalize_objaverse_geom_orientation,
+            normalize_objaverse_mesh_scales,
+            recenter_freejoint_body_frames,
+            resolve_freejoint_xy_overlaps,
+            sanitize_mjcf_schema,
+            stabilize_contact_friction,
+            stabilize_free_motion_joints,
+            stabilize_small_container_bases,
+        )
+
+        xml_text = out_path.read_text(encoding="utf-8")
+        fixed = sanitize_mjcf_schema(xml_text)
+        fixed = ensure_default_gravity(fixed)
+        fixed = ensure_mesh_asset_scale_is_triplet(fixed)
+        fixed = normalize_objaverse_mesh_scales(fixed, mjcf_dir=out_path.parent)
+        fixed = normalize_objaverse_geom_orientation(fixed, mjcf_dir=out_path.parent)
+        fixed = ground_large_top_level_bodies(fixed, mjcf_dir=out_path.parent)
+        fixed = ensure_small_top_level_bodies_are_movable(fixed, mjcf_dir=out_path.parent)
+        fixed = ensure_inertial_top_level_bodies_are_movable(fixed, mjcf_dir=out_path.parent)
+        fixed = recenter_freejoint_body_frames(fixed, mjcf_dir=out_path.parent)
+        fixed = stabilize_free_motion_joints(fixed)
+        fixed = ensure_freejoint_bodies_have_inertial(fixed)
+        fixed = stabilize_small_container_bases(fixed, mjcf_dir=out_path.parent)
+        fixed = ensure_freejoint_bodies_have_collision_proxy(fixed, mjcf_dir=out_path.parent)
+        fixed = ensure_freejoint_bodies_above_supports(fixed, mjcf_dir=out_path.parent)
+        fixed = stabilize_contact_friction(fixed)
+        fixed = resolve_freejoint_xy_overlaps(fixed, mjcf_dir=out_path.parent)
+
+        if fixed != xml_text:
+            out_path.write_text(fixed, encoding="utf-8")
+
     def update_pose(
         self,
         name: str,

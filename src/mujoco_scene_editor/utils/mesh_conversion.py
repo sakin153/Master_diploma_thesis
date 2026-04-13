@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
+import shutil
 import trimesh
 
 
@@ -14,6 +15,11 @@ def convert_to_mujoco_mesh(
         raise ValueError("out_ext must be '.stl' or '.obj'")
 
     if src_path.suffix.lower() == out_ext:
+        if out_path is not None and Path(out_path).resolve() != Path(src_path).resolve():
+            out_path = Path(out_path)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_path, out_path)
+            return out_path
         return src_path
 
     mesh = trimesh.load_mesh(src_path)

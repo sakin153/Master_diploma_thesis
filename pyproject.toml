@@ -37,6 +37,7 @@ dependencies = [
     "qpsolvers[quadprog]>=0.1.13",
     "openai>=2.15.0",
     "trimesh>=4.11.1",
+  "pydantic>=2.6,<3.0",
 ]
 
 [project.optional-dependencies]
