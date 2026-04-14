@@ -1,0 +1,21 @@
+# Minimal runtime deps for running `python main.py` (LLM via Ollama localhost).
+# Intentionally excludes chromadb/openai/langchain to avoid native build deps like hnswlib.
+
+requests
+click
+questionary
+lxml
+tinydb
+aiohttp
+lark
+pandas
+tqdm
+tabulate
+pytest
+
+# Mujoco/Objaverse pipeline deps
+objaverse==0.1.7
+trimesh
+obj2mjcf==0.0.25
+aspose-words
+aspose-3d

@@ -43,5 +43,5 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 # Python-style entrypoints and scripts are easily expressed
-[tool.poetry.scripts]
-ciare_world_creator = "ciare_world_creator.cli:cli"
+#[tool.poetry.scripts]
+# Removed console entrypoint: use `python main.py` instead.
