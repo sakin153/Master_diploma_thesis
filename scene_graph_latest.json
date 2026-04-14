@@ -1,0 +1,90 @@
+{
+  "query": "table and book on it",
+  "nodes": [
+    {
+      "id": "obj_0",
+      "name": "Table",
+      "constraints_count": 1
+    },
+    {
+      "id": "obj_1",
+      "name": "Book",
+      "constraints_count": 2
+    }
+  ],
+  "edges": [
+    {
+      "from": "obj_0",
+      "from_name": "Table",
+      "type": "region",
+      "hard": false,
+      "weight": 1.0,
+      "value": "middle",
+      "to": "",
+      "to_name": ""
+    },
+    {
+      "from": "obj_1",
+      "from_name": "Book",
+      "type": "near",
+      "hard": false,
+      "weight": 1.0,
+      "value": "None",
+      "distance": [
+        0.0,
+        0.1
+      ],
+      "to": "obj_0",
+      "to_name": "Table"
+    },
+    {
+      "from": "obj_1",
+      "from_name": "Book",
+      "type": "center_aligned",
+      "hard": false,
+      "weight": 0.8,
+      "value": "None",
+      "to": "obj_0",
+      "to_name": "Table"
+    }
+  ],
+  "raw_plan": {
+    "objects": [
+      {
+        "Model": "Table",
+        "constraints": [
+          {
+            "type": "region",
+            "target": "",
+            "value": "middle",
+            "hard": false,
+            "weight": 1.0
+          }
+        ]
+      },
+      {
+        "Model": "Book",
+        "constraints": [
+          {
+            "type": "near",
+            "target": "Table",
+            "value": null,
+            "hard": false,
+            "weight": 1.0,
+            "distance": [
+              0.0,
+              0.1
+            ]
+          },
+          {
+            "type": "center_aligned",
+            "target": "Table",
+            "value": null,
+            "hard": false,
+            "weight": 0.8
+          }
+        ]
+      }
+    ]
+  }
+}

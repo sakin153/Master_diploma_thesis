@@ -1,0 +1,10 @@
+{
+  "query": "table and book on it",
+  "violations_before": [
+    "Book: near Table violated (d=0.96)"
+  ],
+  "violations_after": [
+    "Book: near Table violated (d=1.01)"
+  ],
+  "accepted_repair": true
+}

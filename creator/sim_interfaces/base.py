@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List
 
 from creator.contexts_prompts.place import fmt_place_qa_tmpl
 from creator.contexts_prompts.scale import fmt_scale_qa_tmpl
@@ -21,4 +21,7 @@ class BaseSimInterface:
         content = fmt_place_qa_tmpl.format(
             context_str=f"Arrange following models: {str(models_for_placement)}",
         )
+        return prompt_model(content, query, self.chosen_model)
+
+    def prompt_model_for_constraints(self, content: str, query: str) -> Dict:
         return prompt_model(content, query, self.chosen_model)

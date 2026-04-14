@@ -7,7 +7,7 @@ import requests
 from creator.utils.json import parse_output_to_json
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "gpt-oss:120b-cloud"
+OLLAMA_MODEL = "deepseek-v3.1:671b-cloud"
 OLLAMA_TIMEOUT_S = 120
 
 CACHE_DB_PATH = "/var/tmp/ciare/.ollama_cache.sqlite3"

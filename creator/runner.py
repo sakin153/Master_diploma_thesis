@@ -16,9 +16,92 @@ from creator.xml.worlds import find_model
 
 Simulator = Literal["mujoco"]
 
+_NUMBER_WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
 
 def _tokenize(text: str) -> List[str]:
     return re.findall(r"[a-z0-9]+", (text or "").lower())
+
+
+def _singularize(word: str) -> str:
+    w = (word or "").strip().lower()
+    if len(w) > 3 and w.endswith("ies"):
+        return w[:-3] + "y"
+    if len(w) > 2 and w.endswith("s"):
+        return w[:-1]
+    return w
+
+
+def _requested_counts_from_query(query: str) -> Dict[str, int]:
+    tokens = _tokenize(query)
+    counts: Dict[str, int] = {}
+    for i, t in enumerate(tokens[:-1]):
+        n = None
+        if t.isdigit():
+            n = int(t)
+        elif t in _NUMBER_WORDS:
+            n = _NUMBER_WORDS[t]
+        if n is None or n <= 1:
+            continue
+        noun = _singularize(tokens[i + 1])
+        if noun:
+            counts[noun] = max(counts.get(noun, 1), min(n, 10))
+    return counts
+
+
+def _expand_models_by_requested_counts(
+    chosen_models: Sequence[Dict[str, Any]],
+    query: str,
+) -> List[Dict[str, Any]]:
+    counts = _requested_counts_from_query(query)
+    if not counts:
+        return list(chosen_models)
+
+    requested_nouns = list(counts.keys())
+    grouped: Dict[str, List[Dict[str, Any]]] = {noun: [] for noun in requested_nouns}
+    unmatched: List[Dict[str, Any]] = []
+
+    for m in chosen_models:
+        name = str(m.get("Model", "")).lower()
+        name_tokens = {_singularize(t) for t in _tokenize(name)}
+        matched_noun = ""
+        for noun in requested_nouns:
+            if noun in name_tokens:
+                matched_noun = noun
+                break
+        if matched_noun:
+            grouped[matched_noun].append(dict(m))
+        else:
+            unmatched.append(dict(m))
+
+    expanded: List[Dict[str, Any]] = []
+    for noun in requested_nouns:
+        target_count = counts[noun]
+        pool = grouped.get(noun, [])
+        if not pool:
+            continue
+
+        # Keep exact requested quantity for this noun.
+        i = 0
+        current = 0
+        while current < target_count:
+            expanded.append(dict(pool[i % len(pool)]))
+            i += 1
+            current += 1
+
+    expanded.extend(unmatched)
+    return expanded
 
 
 def _score_model_for_object(obj: str, model: Dict[str, Any]) -> int:
@@ -105,6 +188,27 @@ def _objects_from_llm_output(raw: Any) -> List[str]:
     return []
 
 
+def _normalize_chosen_models(raw: Any) -> List[Dict[str, str]]:
+    if raw is None:
+        return []
+    out: List[Dict[str, str]] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                model_name = item.get("Model") or item.get("model")
+                if isinstance(model_name, str) and model_name.strip():
+                    out.append({"Model": model_name.strip()})
+            elif isinstance(item, str) and item.strip():
+                out.append({"Model": item.strip()})
+    elif isinstance(raw, dict):
+        model_name = raw.get("Model") or raw.get("model")
+        if isinstance(model_name, str) and model_name.strip():
+            out.append({"Model": model_name.strip()})
+    elif isinstance(raw, str) and raw.strip():
+        out.append({"Model": raw.strip()})
+    return out
+
+
 def generate_world(
     *,
     simulator: Simulator,
@@ -128,7 +232,7 @@ def generate_world(
 
     from creator.llm.model import prompt_model
 
-    chosen_model = "gpt-oss:120b-cloud"  # ignored by prompt_model(), kept for compatibility
+    chosen_model = "deepseek-v3.1:671b-cloud"  # ignored by prompt_model(), kept for compatibility
 
     if simulator == "mujoco":
         loader = ObjaverseLoader()
@@ -175,16 +279,43 @@ def generate_world(
     template_world_path = os.path.join(cache.worlds_path, "empty.sdf")
 
     content = fmt_model_qa_tmpl.format(context_str=context)
-    chosen_models = prompt_model(content, query, chosen_model)
+    chosen_models_raw = prompt_model(content, query, chosen_model)
+    chosen_models = _normalize_chosen_models(chosen_models_raw)
 
     filtered_models = []
     for model in chosen_models:
         if find_model(model["Model"], models):
             filtered_models.append(model)
-    chosen_models = filtered_models
+    chosen_models = _expand_models_by_requested_counts(filtered_models, query)
 
-    cleaned_query = re.sub(r"[<>:;.\,\"/\\|?*]", "", query).strip()
-    world_name = f"world_{cleaned_query.replace(' ', '_')}"
+    # Last-resort fallback: keep scene non-empty even when LLM model-picking fails.
+    if not chosen_models:
+        fallback_candidates = _rank_models_for_object(query, models, limit=8)
+        if not fallback_candidates and objects:
+            for obj in objects:
+                fallback_candidates.extend(_rank_models_for_object(obj, models, limit=4))
+
+        seen_fallback = set()
+        fallback_models: List[Dict[str, str]] = []
+        for m in fallback_candidates:
+            name = m.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+            if name in seen_fallback:
+                continue
+            seen_fallback.add(name)
+            fallback_models.append({"Model": name})
+            if len(fallback_models) >= 6:
+                break
+        chosen_models = fallback_models
+
+    if not chosen_models:
+        raise RuntimeError(
+            "No suitable models were found for the prompt. "
+            "Try a more specific prompt (for example: 'office desk and chair')."
+        )
+
+    world_name = "scene_latest"
     world_path = (
         os.path.join(cache.worlds_path, world_name) + interface.get_world_extension()
     )

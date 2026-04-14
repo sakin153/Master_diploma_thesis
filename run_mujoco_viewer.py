@@ -5,10 +5,13 @@ try:
     from mujoco import viewer
     import mujoco
 except ImportError:
-    print("MuJoCo is not installed in this environment. Activate your .venv and install mujoco.")
+    print(
+        "MuJoCo is not installed in this environment. "
+        "Activate your .venv and install mujoco."
+    )
     sys.exit(1)
 
-SCENE_PATH = "/var/tmp/ciare/worlds/world_table_with_4_chairs_around_it_and_a_lamp_on_the_table.xml"
+SCENE_PATH = "/var/tmp/ciare/worlds/scene_latest.xml"
 
 if not os.path.exists(SCENE_PATH):
     print(f"File not found: {SCENE_PATH}")

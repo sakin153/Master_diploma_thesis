@@ -25,7 +25,8 @@ Rules:
 - Each "Model" value must be a string matching a model name from the context.
 - Prefer generic objects over specific brands unless specified.
 - Keep it short: usually 2-10 models.
-- Do NOT include duplicates.
+- Include duplicates when quantity is requested in prompt
+    (example: "4 chairs" means 4 entries with a chair model).
 
 Example:
 "question": "Pair of shoes on the table"

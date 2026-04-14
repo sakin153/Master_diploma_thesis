@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100">
+<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>
+<text x="40" y="50" font-size="28" font-family="Helvetica" fill="#263238">Scene Graph: офисный кабинет с 4 столами и 8 стульями и компьютеры на каждом столе</text>
+<rect x="1258.0" y="507.0" width="136" height="24" rx="6" ry="6" fill="#eceff1" stroke="#90a4ae" stroke-width="1.0"/>
+<text x="1326.0" y="524.0" font-size="10" font-family="Helvetica" fill="#455a64" text-anchor="middle">region | w=1.00 | v=middle</text>
+<line x1="1196.0" y1="550.0" x2="1326.0" y2="520.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<rect x="1212.6" y="691.0" width="136" height="24" rx="6" ry="6" fill="#eceff1" stroke="#90a4ae" stroke-width="1.0"/>
+<text x="1280.6" y="708.0" font-size="10" font-family="Helvetica" fill="#455a64" text-anchor="middle">region | w=1.00 | v=middle</text>
+<line x1="1150.6" y1="734.0" x2="1280.6" y2="704.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<line x1="1150.6" y1="734.0" x2="1196.0" y2="550.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1173.3" y="642.0" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">right_of | w=0.60</text>
+<rect x="1087.0" y="832.9" width="136" height="24" rx="6" ry="6" fill="#eceff1" stroke="#90a4ae" stroke-width="1.0"/>
+<text x="1155.0" y="849.9" font-size="10" font-family="Helvetica" fill="#455a64" text-anchor="middle">region | w=1.00 | v=middle</text>
+<line x1="1025.0" y1="875.9" x2="1155.0" y2="845.9" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<line x1="1025.0" y1="875.9" x2="1150.6" y2="734.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1087.8" y="805.0" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">right_of | w=0.60</text>
+<rect x="909.7" y="900.1" width="136" height="24" rx="6" ry="6" fill="#eceff1" stroke="#90a4ae" stroke-width="1.0"/>
+<text x="977.7" y="917.1" font-size="10" font-family="Helvetica" fill="#455a64" text-anchor="middle">region | w=1.00 | v=middle</text>
+<line x1="847.7" y1="943.1" x2="977.7" y2="913.1" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<line x1="847.7" y1="943.1" x2="1025.0" y2="875.9" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="936.3" y="909.5" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">right_of | w=0.60</text>
+<line x1="659.6" y1="920.3" x2="847.7" y2="943.1" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="753.7" y="931.7" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="659.6" y1="920.3" x2="1196.0" y2="550.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="927.8" y="735.1" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="503.6" y1="812.6" x2="1150.6" y2="734.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="827.1" y="773.3" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="503.6" y1="812.6" x2="1025.0" y2="875.9" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="764.3" y="844.2" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="415.5" y1="644.8" x2="847.7" y2="943.1" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="631.6" y="793.9" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="415.5" y1="644.8" x2="1196.0" y2="550.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="805.8" y="597.4" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="415.5" y1="455.2" x2="1150.6" y2="734.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="783.1" y="594.6" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="415.5" y1="455.2" x2="1025.0" y2="875.9" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="720.2" y="665.6" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="503.6" y1="287.4" x2="847.7" y2="943.1" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="675.7" y="615.3" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="503.6" y1="287.4" x2="1196.0" y2="550.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="849.8" y="418.7" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="659.6" y1="179.7" x2="1150.6" y2="734.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="905.1" y="456.9" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="659.6" y1="179.7" x2="1025.0" y2="875.9" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="842.3" y="527.8" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="847.7" y1="156.9" x2="847.7" y2="943.1" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="847.7" y="550.0" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="847.7" y1="156.9" x2="1196.0" y2="550.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1021.9" y="353.4" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="1025.0" y1="224.1" x2="1150.6" y2="734.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1087.8" y="479.1" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="1025.0" y1="224.1" x2="1025.0" y2="875.9" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1025.0" y="550.0" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<line x1="1150.6" y1="366.0" x2="847.7" y2="943.1" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="999.2" y="654.5" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">near | w=0.80 | d=[0.4, 0.9]</text>
+<line x1="1150.6" y1="366.0" x2="1196.0" y2="550.0" stroke="#607d8b" stroke-width="1.8" stroke-dasharray="7 5"/>
+<text x="1173.3" y="458.0" font-size="12" font-family="Helvetica" fill="#455a64" text-anchor="middle">in_front_of | w=0.50</text>
+<rect x="1101.0" y="519.0" width="190" height="62" rx="10" ry="10" fill="#d6eaf8" stroke="#455a64" stroke-width="1.2"/>
+<text x="1196.0" y="546.0" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Computer</text>
+<text x="1196.0" y="564.0" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_0</text>
+<rect x="1055.6" y="703.0" width="190" height="62" rx="10" ry="10" fill="#d6eaf8" stroke="#455a64" stroke-width="1.2"/>
+<text x="1150.6" y="730.0" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Computer</text>
+<text x="1150.6" y="748.0" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_1</text>
+<rect x="930.0" y="844.9" width="190" height="62" rx="10" ry="10" fill="#d6eaf8" stroke="#455a64" stroke-width="1.2"/>
+<text x="1025.0" y="871.9" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Computer</text>
+<text x="1025.0" y="889.9" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_2</text>
+<rect x="752.7" y="912.1" width="190" height="62" rx="10" ry="10" fill="#d6eaf8" stroke="#455a64" stroke-width="1.2"/>
+<text x="847.7" y="939.1" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Computer</text>
+<text x="847.7" y="957.1" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_3</text>
+<rect x="564.6" y="889.3" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="659.6" y="916.3" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="659.6" y="934.3" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_4</text>
+<rect x="408.6" y="781.6" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="503.6" y="808.6" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="503.6" y="826.6" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_5</text>
+<rect x="320.5" y="613.8" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="415.5" y="640.8" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="415.5" y="658.8" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_6</text>
+<rect x="320.5" y="424.2" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="415.5" y="451.2" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="415.5" y="469.2" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_7</text>
+<rect x="408.6" y="256.4" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="503.6" y="283.4" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="503.6" y="301.4" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_8</text>
+<rect x="564.6" y="148.7" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="659.6" y="175.7" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="659.6" y="193.7" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_9</text>
+<rect x="752.7" y="125.9" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="847.7" y="152.9" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="847.7" y="170.9" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_10</text>
+<rect x="930.0" y="193.1" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="1025.0" y="220.1" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="1025.0" y="238.1" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_11</text>
+<rect x="1055.6" y="335.0" width="190" height="62" rx="10" ry="10" fill="#f9ebea" stroke="#455a64" stroke-width="1.2"/>
+<text x="1150.6" y="362.0" font-size="13" font-family="Helvetica" fill="#263238" text-anchor="middle">Chair</text>
+<text x="1150.6" y="380.0" font-size="11" font-family="Helvetica" fill="#37474f" text-anchor="middle">obj_12</text>
+</svg>

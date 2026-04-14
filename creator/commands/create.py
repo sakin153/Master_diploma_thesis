@@ -41,7 +41,7 @@ def cli(ctx):
         style=STYLE,
     ).ask()
 
-    chosen_model = "gpt-oss:120b-cloud"  # Gpt-4 is default and cheapest
+    chosen_model = "deepseek-v3.1:671b-cloud"  # Gpt-4 is default and cheapest
     if chosen_simulator == "mujoco":
         loader = ObjaverseLoader()
         interface = MujocoSimInterface(chosen_model)
