@@ -9,6 +9,7 @@ from tinydb import TinyDB
 from creator.contexts_prompts.model import fmt_model_qa_tmpl
 from creator.contexts_prompts.objects import fmt_objects_qa_tmpl
 from creator.model_databases.objaverse import ObjaverseLoader
+from creator.postprocess import refine_scene_with_engine
 from creator.sim_interfaces.mujoco import MujocoSimInterface
 from creator.utils.cache import Cache
 from creator.utils.json import NumpyEncoder
@@ -327,6 +328,14 @@ def generate_world(
         world_path,
         template_world_path,
     )
+
+    if simulator == "mujoco":
+        saved_models = refine_scene_with_engine(
+            interface=interface,
+            world_path=world_path,
+            placed_models=saved_models,
+            room_half_size=5.0,
+        )
 
     db.insert(
         {

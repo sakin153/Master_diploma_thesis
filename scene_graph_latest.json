@@ -1,9 +1,9 @@
 {
-  "query": "table and book on it",
+  "query": "sofa with book on it",
   "nodes": [
     {
       "id": "obj_0",
-      "name": "Table",
+      "name": "Sofa",
       "constraints_count": 1
     },
     {
@@ -15,7 +15,7 @@
   "edges": [
     {
       "from": "obj_0",
-      "from_name": "Table",
+      "from_name": "Sofa",
       "type": "region",
       "hard": false,
       "weight": 1.0,
@@ -26,32 +26,28 @@
     {
       "from": "obj_1",
       "from_name": "Book",
-      "type": "near",
-      "hard": false,
+      "type": "on_top_of",
+      "hard": true,
       "weight": 1.0,
       "value": "None",
-      "distance": [
-        0.0,
-        0.1
-      ],
       "to": "obj_0",
-      "to_name": "Table"
+      "to_name": "Sofa"
     },
     {
       "from": "obj_1",
       "from_name": "Book",
-      "type": "center_aligned",
+      "type": "region",
       "hard": false,
       "weight": 0.8,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "Table"
+      "value": "middle",
+      "to": "",
+      "to_name": ""
     }
   ],
   "raw_plan": {
     "objects": [
       {
-        "Model": "Table",
+        "Model": "Sofa",
         "constraints": [
           {
             "type": "region",
@@ -66,20 +62,16 @@
         "Model": "Book",
         "constraints": [
           {
-            "type": "near",
-            "target": "Table",
+            "type": "on_top_of",
+            "target": "Sofa",
             "value": null,
-            "hard": false,
-            "weight": 1.0,
-            "distance": [
-              0.0,
-              0.1
-            ]
+            "hard": true,
+            "weight": 1.0
           },
           {
-            "type": "center_aligned",
-            "target": "Table",
-            "value": null,
+            "type": "region",
+            "target": "",
+            "value": "middle",
             "hard": false,
             "weight": 0.8
           }

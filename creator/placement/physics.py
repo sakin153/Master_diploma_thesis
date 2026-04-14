@@ -120,6 +120,41 @@ def _target_pose_candidates(
     return out
 
 
+def _find_nearest_target(
+    placed_models: Sequence[Dict[str, Any]],
+    *,
+    source_index: int,
+    target_name: str,
+) -> Dict[str, Any]:
+    src = placed_models[source_index]
+    sp = src.get("Pose") or {}
+    sx = float(sp.get("x", 0.0))
+    sy = float(sp.get("y", 0.0))
+
+    best: Dict[str, Any] = {}
+    best_d = float("inf")
+    for i, m in enumerate(placed_models):
+        if i == source_index:
+            continue
+        if str(m.get("Model") or m.get("name") or "") != target_name:
+            continue
+        tp = m.get("Pose") or {}
+        tx = float(tp.get("x", 0.0))
+        ty = float(tp.get("y", 0.0))
+        d = (sx - tx) * (sx - tx) + (sy - ty) * (sy - ty)
+        if d < best_d:
+            best_d = d
+            best = m
+    return best
+
+
+def _size_xyz(item: Dict[str, Any]) -> Tuple[float, float, float]:
+    size = item.get("size")
+    if not isinstance(size, (list, tuple)) or len(size) < 3:
+        return 1.0, 1.0, 1.0
+    return max(0.01, float(size[0])), max(0.01, float(size[1])), max(0.01, float(size[2]))
+
+
 def repair_semantic_constraints(
     placed_models: Sequence[Dict[str, Any]],
     *,
@@ -180,6 +215,20 @@ def repair_semantic_constraints(
                 elif ctype == "behind" and not (y < ty - 0.1):
                     y -= step
                     moved = True
+                elif ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
+                    target_item = _find_nearest_target(
+                        repaired,
+                        source_index=i,
+                        target_name=tname,
+                    )
+                    if target_item:
+                        tp = target_item.get("Pose") or {}
+                        _, _, ssz = _size_xyz(item)
+                        _, _, tsz = _size_xyz(target_item)
+                        pose["z"] = float(tp.get("z", 0.0)) + tsz / 2.0 + ssz / 2.0 + 0.01
+                        x = float(tp.get("x", 0.0))
+                        y = float(tp.get("y", 0.0))
+                        moved = True
 
             pose["x"] = float(x)
             pose["y"] = float(y)
@@ -236,6 +285,27 @@ def validate_semantic_constraints(
                         sat = y > ty + 0.1
                     elif ctype == "behind":
                         sat = y < ty - 0.1
+                    elif ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
+                        source_pose = item.get("Pose") or {}
+                        source_z = float(source_pose.get("z", 0.0))
+                        target_item = _find_nearest_target(
+                            placed_models,
+                            source_index=i,
+                            target_name=tname,
+                        )
+                        if target_item:
+                            target_pose = target_item.get("Pose") or {}
+                            target_z = float(target_pose.get("z", 0.0))
+                            ssx, ssy, ssz = _size_xyz(item)
+                            tsx, tsy, tsz = _size_xyz(target_item)
+                            exp_z = target_z + tsz / 2.0 + ssz / 2.0 + 0.01
+                            xy_tol = max(0.12, 0.35 * max(tsx, tsy))
+                            z_tol = max(0.08, 0.25 * ssz)
+                            sat = (
+                                abs(x - tx) <= xy_tol
+                                and abs(y - ty) <= xy_tol
+                                and abs(source_z - exp_z) <= z_tol
+                            )
 
             if sat:
                 ok += 1

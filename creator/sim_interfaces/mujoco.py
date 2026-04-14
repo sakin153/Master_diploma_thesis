@@ -7,7 +7,7 @@ import sys
 import xml.etree.ElementTree as ET
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import objaverse
 import trimesh
@@ -87,7 +87,10 @@ class MujocoSimInterface(BaseSimInterface):
             full_placed_models[i]["model_loc"] = objects[full_placed_models[i]["uuid"]]
             full_placed_models[i]["save_fn"] = full_placed_models[i]["uuid"] + f"_{i}"
         full_placed_models = self.update_model_sizes(full_placed_models)
-        full_placed_models = self.normalize_models_to_realistic_scale(full_placed_models)
+        full_placed_models = self.normalize_models_to_realistic_scale(
+            full_placed_models,
+            query=query,
+        )
         # 1) LLM semantic plan
         semantic_plan = build_semantic_plan(
             prompt_model=self.prompt_model_for_constraints,
@@ -119,6 +122,7 @@ class MujocoSimInterface(BaseSimInterface):
         )
         full_placed_models = solve_small_object_placements(
             placed_models=full_placed_models,
+            semantic_plan=semantic_plan,
             small_threshold_volume=0.06,
         )
 
@@ -233,7 +237,6 @@ class MujocoSimInterface(BaseSimInterface):
         if max_dim < 0.05:
             return 10.0
         return 1.0
-
     def target_max_dimension_m(self, model_name: str) -> float:
         name = str(model_name or "").lower()
         for keywords, target in self._REALISTIC_MAX_DIM_HINTS:
@@ -241,8 +244,85 @@ class MujocoSimInterface(BaseSimInterface):
                 return target
         return 1.0
 
-    def normalize_models_to_realistic_scale(self, models: List[Dict]) -> List[Dict]:
+    def target_dimension_bounds_m(self, model_name: str) -> Tuple[float, float]:
+        target = self.target_max_dimension_m(model_name)
+        min_dim = max(0.06, target * 0.35)
+        max_dim = max(min_dim + 0.05, target * 1.5)
+        return min_dim, max_dim
+
+    def parse_scale_hints(self, raw_scale_output: Any) -> Dict[str, float]:
+        rows: List[Dict[str, Any]] = []
+        if isinstance(raw_scale_output, list):
+            rows = [r for r in raw_scale_output if isinstance(r, dict)]
+        elif isinstance(raw_scale_output, dict):
+            if "Model" in raw_scale_output and "Scale" in raw_scale_output:
+                rows = [raw_scale_output]
+            else:
+                nested = raw_scale_output.get("answer") or raw_scale_output.get("models")
+                if isinstance(nested, list):
+                    rows = [r for r in nested if isinstance(r, dict)]
+
+        out: Dict[str, float] = {}
+        for row in rows:
+            model_name = row.get("Model") or row.get("model")
+            raw_scale = row.get("Scale") or row.get("scale")
+            if not isinstance(model_name, str):
+                continue
+            try:
+                scale = float(raw_scale)
+            except (TypeError, ValueError):
+                continue
+            if scale <= 0.0:
+                continue
+            out[model_name.strip().lower()] = max(1e-4, min(500.0, scale))
+        return out
+
+    def llm_scale_hints(self, models: List[Dict], query: str) -> Dict[str, float]:
+        if not models:
+            return {}
+
+        use_llm = os.getenv("CIARE_LLM_SCALE_HINTS", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if not use_llm:
+            return {}
+
+        models_for_scale: List[Dict[str, Union[str, List[float]]]] = []
+        for m in models:
+            raw_size = m.get("size")
+            if raw_size is None or len(raw_size) < 3:
+                continue
+            try:
+                sx = float(raw_size[0])
+                sy = float(raw_size[1])
+                sz = float(raw_size[2])
+            except (TypeError, ValueError):
+                continue
+
+            name = str(m.get("Model") or m.get("name") or "").strip()
+            if not name:
+                continue
+            models_for_scale.append({"Model": name, "Size": [sx, sy, sz]})
+
+        if not models_for_scale:
+            return {}
+
+        try:
+            raw = self.prompt_model_for_scale(models_for_scale, query)
+        except BaseException:
+            return {}
+        return self.parse_scale_hints(raw)
+
+    def normalize_models_to_realistic_scale(
+        self,
+        models: List[Dict],
+        query: str = "",
+    ) -> List[Dict]:
         updated_models = models
+        llm_hints = self.llm_scale_hints(updated_models, query)
         for model in updated_models:
             raw_size = model.get("size")
             if raw_size is None or len(raw_size) < 3:
@@ -256,13 +336,29 @@ class MujocoSimInterface(BaseSimInterface):
 
             unit_scale = self.infer_unit_scale(max_dim)
             normalized_max = max_dim * unit_scale
-            target_max = self.target_max_dimension_m(
-                str(model.get("Model") or model.get("name") or "")
-            )
+            model_name = str(model.get("Model") or model.get("name") or "")
+            target_max = self.target_max_dimension_m(model_name)
             semantic_scale = target_max / max(1e-6, normalized_max)
             semantic_scale = max(0.25, min(4.0, semantic_scale))
+            deterministic_scale = unit_scale * semantic_scale
 
-            final_scale = unit_scale * semantic_scale
+            llm_scale = llm_hints.get(model_name.lower())
+            if llm_scale is not None:
+                lo = deterministic_scale / 8.0
+                hi = deterministic_scale * 8.0
+                llm_scale = max(lo, min(hi, llm_scale))
+                final_scale = (deterministic_scale * llm_scale) ** 0.5
+            else:
+                final_scale = deterministic_scale
+
+            min_dim_m, max_dim_m = self.target_dimension_bounds_m(model_name)
+            scaled_max = max_dim * final_scale
+            if scaled_max < min_dim_m:
+                final_scale *= min_dim_m / max(1e-6, scaled_max)
+            elif scaled_max > max_dim_m:
+                final_scale *= max_dim_m / max(1e-6, scaled_max)
+
+            final_scale = max(1e-4, min(500.0, final_scale))
             model["scale"] = final_scale
             model["size"] = [sx * final_scale, sy * final_scale, sz * final_scale]
 
@@ -325,18 +421,19 @@ class MujocoSimInterface(BaseSimInterface):
 
             obj_path = self.write_obj_file(obj, path, model)
             self.save_material_and_images(data, path)
-            self.copy_images_to_nested_path(path, model)
             args = self.create_args(path)
             printed_output = self.process_obj_file(obj_path, args)
-            if "Error compiling model" in printed_output:
-                print(
-                    f"Error compiling model {model['Model']},"
-                    " it will be replaced with fallback cube."
-                )
-                fallback_xml = self.create_fallback_cube_xml(path, model)
-                self.insert_include_tags(main_root, fallback_xml)
-                continue
+            self.copy_images_to_nested_path(path, model)
             saved_mjc_path = self.get_saved_mjc_path(path, model)
+            if "Error compiling model" in printed_output:
+                if not self.model_xml_compiles(saved_mjc_path):
+                    print(
+                        f"Error compiling model {model['Model']},"
+                        " it will be replaced with fallback cube."
+                    )
+                    fallback_xml = self.create_fallback_cube_xml(path, model)
+                    self.insert_include_tags(main_root, fallback_xml)
+                    continue
             tree, root, included_tree, included_root = self.parse_xml(saved_mjc_path)
 
             self.modify_default_class_attributes(
@@ -560,6 +657,20 @@ class MujocoSimInterface(BaseSimInterface):
         printed_output = sys.stdout.getvalue()
         sys.stdout = sys.__stdout__
         return printed_output
+
+    def model_xml_compiles(self, xml_path: Path) -> bool:
+        if not xml_path.exists():
+            return False
+        try:
+            import mujoco  # type: ignore
+
+            mujoco.MjModel.from_xml_path(str(xml_path))
+            return True
+        except ImportError:
+            # Keep non-mujoco environments usable; final scene compile check is separate.
+            return True
+        except Exception:
+            return False
 
     def get_saved_mjc_path(
         self, path: Path, model: Dict[str, Union[str, int, float]]

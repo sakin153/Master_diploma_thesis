@@ -13,6 +13,7 @@ For each object include constraints that can be consumed by a deterministic solv
 
 Allowed constraint types:
 - region: value is "edge" or "middle"
+- on / on_top_of: target (object should be on top of target)
 - near / far: target + distance range [min,max]
 - left_of / right_of / in_front_of / behind: target
 - face_to / face_same_as: target

@@ -1,10 +1,8 @@
 {
-  "query": "table and book on it",
+  "query": "sofa with book on it",
   "violations_before": [
-    "Book: near Table violated (d=0.96)"
+    "Book: on Sofa violated (dx=0.60, dy=0.00, dz=0.00)"
   ],
-  "violations_after": [
-    "Book: near Table violated (d=1.01)"
-  ],
+  "violations_after": [],
   "accepted_repair": true
 }

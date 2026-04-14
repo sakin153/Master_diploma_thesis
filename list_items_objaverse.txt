@@ -1,0 +1,10 @@
+Table
+Book
+Chair
+Computer
+Office Table
+Motorcycle (voxels)
+Cafe Racer motorcycle
+Motorcycle road king
+Tricycle
+Desk Lamp
