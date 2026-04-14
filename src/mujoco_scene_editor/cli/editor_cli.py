@@ -278,13 +278,15 @@ def list_assets(root: str):
 
 
 def validate_has_openrouter_key(func):
+    """Compatibility decorator.
+
+    For local Ollama usage an API key is not required, so this decorator no
+    longer enforces OPENROUTER_API_KEY.
+    """
+
     @wraps(func)
     def _wrapper(*args, **kwargs):
-        if _is_placeholder_api_key(os.environ.get("OPENROUTER_API_KEY")):
-            logger.error("Environment variable OPENROUTER_API_KEY is not set.")
-            raise RuntimeError(
-                "Missing OPENROUTER_API_KEY. Set it in .env or export it with export OPENROUTER_API_KEY=... and retry."
-            )
+        # No API-key enforcement for local Ollama.
         return func(*args, **kwargs)
 
     return _wrapper
@@ -293,13 +295,10 @@ def validate_has_openrouter_key(func):
 def _require_openrouter_key(
     ctx: click.Context, param: click.Parameter, value: object
 ) -> object:
+    # Retained for compatibility with existing option callbacks.
+    # For Ollama-backed usage we allow missing OPENROUTER_API_KEY.
     if ctx.resilient_parsing:
         return value
-
-    if _is_placeholder_api_key(os.environ.get("OPENROUTER_API_KEY")):
-        raise click.ClickException(
-            "Missing OPENROUTER_API_KEY. Set it in .env or export it with export OPENROUTER_API_KEY=... and retry."
-        )
     return value
 
 
@@ -460,11 +459,11 @@ def prompt(
     prompt: str,
 ) -> None:
     """
-    Ask an LLM via OpenRouter to generate a scene. Requires an OpenRouter API key
+    Ask an LLM via OpenRouter/Ollama to generate a scene.
     """
     if not offline and _is_placeholder_api_key(os.environ.get("OPENROUTER_API_KEY")):
-        raise click.ClickException(
-            "Missing OPENROUTER_API_KEY. Set it in .env or export it, or run mjprompt --offline."
+        logger.warning(
+            "OPENROUTER_API_KEY is not set; continuing for local Ollama usage."
         )
 
     if not offline:
@@ -519,59 +518,127 @@ Output the complete XML file. The scene is as follows:
 """
     output_path = Path(output_model_name).expanduser()
 
-    prepared_meshes = []
-    if not offline:
-        keywords = extract_objaverse_keywords(prompt)
-        prepared_meshes = []
-        if keywords:
-            prepared_meshes = prepare_objaverse_meshes_for_mjcf(
-                keywords=keywords,
-                mjcf_path=output_path,
-                max_labels=6,
-                limit_per_label=1,
-                max_total=8,
-            )
-
-    if prepared_meshes:
-        meshes_txt = "\n".join(
-            f"- name: {m.name}\n  uid: {m.uid}\n  file: {m.rel_file}\n  suggested_scale: {m.scale}"
-            for m in prepared_meshes
-        )
-        prefix = (
-            prefix
-            + "\n\n"
-            + "Objaverse meshes are available locally next to this XML. "
-            + "If any of them match the requested scene, you MUST use them instead of primitive geoms. "
-            + "Only use mesh files listed below; do not invent file paths.\n\n"
-            + "Meshes:\n"
-            + meshes_txt
-            + "\n\n"
-            + "Physics requirements for movable objects:\n"
-            + "- Every movable object must be a <body> with a <freejoint/>.\n"
-            + "- Every movable object body must include an <inertial mass=... diaginertia=.../> tag.\n"
-            + "- Use collision geoms; do not make movable objects static.\n"
-            + "- Keep requested counts exact (e.g. 5 chairs means exactly 5 chairs total).\n"
-            + "- Reuse one mesh per object class when instancing repeats (do not mix multiple chair mesh types unless explicitly requested).\n"
-            + "- If a matching table mesh is provided and the prompt asks for a table, use that table mesh instead of primitive table boxes.\n"
-        )
-
     pipeline = (pipeline_mode or "xml").lower().strip()
     do_verify = False
     if not skip_verify:
         do_verify = bool(verify) or pipeline in {"graph", "staged"}
 
+    prepared_meshes = []
     content = ""
+
     if not offline:
         with Progress() as progress:
             progress.add_task("Querying.", total=None)
             try:
-                if pipeline == "graph":
-                    graph_prefix = build_scene_graph_prefix(
+                if pipeline in {"graph", "staged"}:
+                    # Pass 1: discover scene objects/classes without mesh bias.
+                    graph_prefix_initial = build_scene_graph_prefix(meshes=[])
+                    first_content = query_openrouter(
+                        graph_prefix_initial, prompt, model=openrouter_model
+                    )
+
+                    keywords: list[str] = []
+                    try:
+                        first_graph = parse_scene_graph_from_llm(first_content)
+                        keywords = sorted(
+                            {
+                                (o.class_name or "").strip().lower()
+                                for o in first_graph.objects
+                                if (o.class_name or "").strip()
+                            }
+                        )
+                    except ValueError:
+                        # Fallback: derive search keywords from the user prompt.
+                        keywords = extract_objaverse_keywords(prompt)
+
+                    if keywords:
+                        prepared_meshes = prepare_objaverse_meshes_for_mjcf(
+                            keywords=keywords,
+                            mjcf_path=output_path,
+                            max_labels=6,
+                            limit_per_label=1,
+                            max_total=8,
+                        )
+                        if prepared_meshes:
+                            logger.info(
+                                "Prepared %d meshes for objects: %s",
+                                len(prepared_meshes),
+                                ", ".join(keywords),
+                            )
+                        else:
+                            logger.warning(
+                                "No meshes found for objects: %s",
+                                ", ".join(keywords),
+                            )
+
+                    # Pass 2: regenerate graph with known local mesh list.
+                    graph_prefix_final = build_scene_graph_prefix(
                         meshes=meshes_from_prepared(prepared_meshes)
                     )
-                    content = query_openrouter(graph_prefix, prompt, model=openrouter_model)
+                    content = query_openrouter(
+                        graph_prefix_final, prompt, model=openrouter_model
+                    )
                 else:
-                    content = query_openrouter(prefix, prompt, model=openrouter_model)
+                    # XML pipeline.
+                    # Pass 1: generate a first scene draft and extract object names.
+                    first_content = query_openrouter(prefix, prompt, model=openrouter_model)
+                    keywords = sorted(
+                        {
+                            name.strip().lower()
+                            for name in re.findall(r'<body[^>]*name="([^"]+)"', first_content)
+                            if name and name.strip()
+                        }
+                    )
+                    if not keywords:
+                        keywords = extract_objaverse_keywords(prompt)
+
+                    if keywords:
+                        prepared_meshes = prepare_objaverse_meshes_for_mjcf(
+                            keywords=keywords,
+                            mjcf_path=output_path,
+                            max_labels=6,
+                            limit_per_label=1,
+                            max_total=8,
+                        )
+                        if prepared_meshes:
+                            logger.info(
+                                "Prepared %d meshes for objects: %s",
+                                len(prepared_meshes),
+                                ", ".join(keywords),
+                            )
+                            meshes_txt = "\n".join(
+                                f"- name: {m.name}\n  uid: {m.uid}\n  file: {m.rel_file}\n  suggested_scale: {m.scale}"
+                                for m in prepared_meshes
+                            )
+                            prefix_with_meshes = (
+                                prefix
+                                + "\n\n"
+                                + "Objaverse meshes are available locally next to this XML. "
+                                + "If any of them match the requested scene, you MUST use them instead of primitive geoms. "
+                                + "Only use mesh files listed below; do not invent file paths.\n\n"
+                                + "Meshes:\n"
+                                + meshes_txt
+                                + "\n\n"
+                                + "Physics requirements for movable objects:\n"
+                                + "- Every movable object must be a <body> with a <freejoint/>.\n"
+                                + "- Every movable object body must include an <inertial mass=... diaginertia=.../> tag.\n"
+                                + "- Use collision geoms; do not make movable objects static.\n"
+                                + "- Keep requested counts exact (e.g. 5 chairs means exactly 5 chairs total).\n"
+                                + "- Reuse one mesh per object class when instancing repeats (do not mix multiple chair mesh types unless explicitly requested).\n"
+                                + "- If a matching table mesh is provided and the prompt asks for a table, use that table mesh instead of primitive table boxes.\n"
+                            )
+                            # Pass 2: regenerate final XML with concrete local mesh hints.
+                            content = query_openrouter(
+                                prefix_with_meshes, prompt, model=openrouter_model
+                            )
+                        else:
+                            logger.warning(
+                                "No meshes found for objects: %s",
+                                ", ".join(keywords),
+                            )
+                            content = first_content
+                    else:
+                        content = first_content
             except RuntimeError as e:
                 raise click.ClickException(str(e)) from e
 

@@ -10,10 +10,10 @@ from pathlib import Path
 
 from openai import NotFoundError, OpenAI
 
-DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-# NOTE: OpenRouter model availability changes over time. If a model disappears,
-# users can override via OPENROUTER_MODEL or mjprompt --model.
-DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+# Default to local Ollama server
+DEFAULT_OPENROUTER_BASE_URL = "http://localhost:11434/v1"
+# Hard‑code the desired Ollama model
+DEFAULT_OPENROUTER_MODEL = "gpt-oss:120b-cloud"
 DEFAULT_OPENROUTER_FALLBACK_MODELS: tuple[str, ...] = (
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "google/gemma-4-31b-it:free",
@@ -82,21 +82,24 @@ def _is_placeholder_api_key(value: str | None) -> bool:
 
 
 def load_openrouter_config(environ: Mapping[str, str] | None = None) -> OpenRouterConfig:
+    """Load configuration for Ollama.
+
+    The original implementation required an ``OPENROUTER_API_KEY`` which is not
+    needed for a local Ollama server. We therefore relax the validation and fall
+    back to a dummy key when none is provided. All other environment overrides
+    (base URL, model) are still respected.
+    """
     if environ is None:
         merged_env: dict[str, str] = dict(os.environ)
         dotenv_values = _read_simple_dotenv(Path.cwd() / ".env")
-        # Real process environment wins over .env values.
         for key, value in dotenv_values.items():
             merged_env.setdefault(key, value)
         env: Mapping[str, str] = merged_env
     else:
         env = environ
 
-    api_key = env.get("OPENROUTER_API_KEY")
-    if _is_placeholder_api_key(api_key):
-        raise RuntimeError(
-            "Missing OPENROUTER_API_KEY. Please export it with export OPENROUTER_API_KEY=... and retry."
-        )
+    # Ollama does not require an API key; use a placeholder if missing.
+    api_key = env.get("OPENROUTER_API_KEY") or "dummy-key"
 
     base_url = env.get("OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL)
     model = env.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
