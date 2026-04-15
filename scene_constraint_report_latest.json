@@ -1,8 +1,28 @@
 {
-  "query": "sofa with book on it",
+  "query": "Школьный класс с 10 столами и стульями",
   "violations_before": [
-    "Book: on Sofa violated (dx=0.60, dy=0.00, dz=0.00)"
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)"
   ],
-  "violations_after": [],
+  "violations_after": [
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)",
+    "Chair: near Chair violated (d=0.00)"
+  ],
   "accepted_repair": true
 }

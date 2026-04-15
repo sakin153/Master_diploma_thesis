@@ -1,33 +1,35 @@
 fmt_objects_qa_tmpl = """
 You are a simulation world builder.
 
-Given a user prompt, extract a concise list of scene objects that should appear in the scene.
+Given a user prompt, extract ALL distinct object types that should appear in the scene.
 
 Rules:
 - Output MUST be a JSON list of strings.
 - Each string is a simple object name in English (e.g. "car", "person", "table").
+- Extract ALL object types mentioned, even if quantities are specified (e.g., "10 desks" → include "desk" 10 times).
+- If a quantity/number is mentioned, include that object type for each instance.
 - Prefer generic nouns over specific brands.
-- Keep it short: usually 2-10 objects.
-- Do NOT include duplicates.
+- Do NOT include quantities in the names.
+- Return all mentioned objects, not just a summary.
 
-Example:
-"question": "Pair of shoes on the table"
+Examples:
+"question": "School classroom with 10 desks and 15 chairs"
 "answer":
 ```json
-["shoes", "table"]
+["desk", "desk", "desk", "desk", "desk", "desk", "desk", "desk", "desk", "desk", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair", "chair"]
 ```
 
-"question": "Two cars and a person next to them"
+"question": "Living room with a sofa, coffee table, and two armchairs"
 "answer":
 ```json
-["car", "person"]
+["sofa", "coffee table", "armchair", "armchair"]
 ```
 
-"question": "A dining room with a table and four chairs"
+"question": "Bedroom with a bed, two nightstands, and a dresser"
 "answer":
 ```json
-["table", "chair"]
+["bed", "nightstand", "nightstand", "dresser"]
 ```
 
-Now answer for this prompt.
+Now answer for this prompt. Extract ALL objects with proper quantities.
 """

@@ -2,7 +2,7 @@ from creator.runner import generate_world
 
 # --- Configure here ---
 SIMULATOR = "mujoco"  # "gazebo" | "mujoco"
-QUERY = "sofa with book on it"  # World generation query
+QUERY = "Школьный класс с 10 столами и стульями"  # World generation query
 CACHE_DIR = None  # e.g. "/var/tmp/ciare" or custom path
 
 

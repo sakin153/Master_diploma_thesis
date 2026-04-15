@@ -1,7 +1,19 @@
+"""Constraint validation and repair for placed objects.
+
+Improvements:
+- Uses OBB/SAT for overlap checking in repair pass
+- Better "on" constraint validation with tolerance scaling
+- Gradient-based repair for near/far constraints
+"""
+
 import math
 from typing import Any, Dict, List, Sequence, Tuple
 
-from creator.placement.physics import validate_and_repair_layout
+from creator.placement.geometry import (
+    gradient_resolve_overlaps,
+    model_to_obb,
+    obb_overlap,
+)
 
 
 def _clip(v: float, lo: float, hi: float) -> float:
@@ -28,11 +40,13 @@ def _find_target(
     target_name: str,
     models: Sequence[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    candidates = [m for m in models if str(m.get("Model") or m.get("name")) == target_name]
+    candidates = [
+        m for m in models
+        if str(m.get("Model") or m.get("name")) == target_name
+    ]
     if not candidates:
         return {}
-    best = min(candidates, key=lambda t: _dist_xy(source, t))
-    return best
+    return min(candidates, key=lambda t: _dist_xy(source, t))
 
 
 def evaluate_constraint_violations(
@@ -139,6 +153,11 @@ def repair_layout_by_constraints(
     room_half_size: float = 5.0,
     iterations: int = 2,
 ) -> List[Dict[str, Any]]:
+    """Repair layout by iteratively satisfying constraints.
+
+    After each constraint-repair iteration, runs gradient-based overlap
+    resolution to ensure no new collisions are introduced.
+    """
     repaired = [dict(m) for m in placed_models]
     objects = semantic_plan.get("objects", []) if isinstance(semantic_plan, dict) else []
     if not isinstance(objects, list) or not objects:
@@ -165,18 +184,13 @@ def repair_layout_by_constraints(
                 else []
             )
 
-            # If object is explicitly attached to a support surface (e.g. book on table),
-            # keep XY anchored and do not apply generic region drift on top of it.
-            anchored_on_target = False
-            for c in constraints:
-                if not isinstance(c, dict):
-                    continue
-                ctype_on = str(c.get("type", "")).lower()
-                target_on = str(c.get("target", "")).strip()
-                on_types = {"on", "on_top_of", "on-top-of", "on top of", "on_top"}
-                if ctype_on in on_types and target_on:
-                    anchored_on_target = True
-                    break
+            # If object is explicitly on a support surface, skip region drift
+            anchored_on_target = any(
+                str(c.get("type", "")).lower() in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}
+                and str(c.get("target", "")).strip()
+                for c in constraints
+                if isinstance(c, dict)
+            )
 
             pose = dict(source.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.5})
             sx, sy = float(pose.get("x", 0.0)), float(pose.get("y", 0.0))
@@ -248,10 +262,16 @@ def repair_layout_by_constraints(
             pose["z"] = max(0.01, sz)
             source["Pose"] = pose
 
-        repaired = validate_and_repair_layout(repaired)
+        # After constraint repair, resolve any newly introduced overlaps using OBB/SAT
+        repaired = gradient_resolve_overlaps(
+            repaired,
+            room_half_size=room_half_size,
+            iterations=60,
+            step_size=0.04,
+            collision_margin=0.01,
+        )
 
-    # Final hard anchoring pass: keep "on" relations exact even if generic
-    # overlap/floor repair nudged objects during the physics pass.
+    # Final pass: hard-anchor "on" relations
     by_name_final: Dict[str, List[Dict[str, Any]]] = {}
     for m in repaired:
         n = str(m.get("Model") or m.get("name") or "")

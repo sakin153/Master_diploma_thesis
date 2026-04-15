@@ -32,7 +32,8 @@ _NUMBER_WORDS = {
 
 
 def _tokenize(text: str) -> List[str]:
-    return re.findall(r"[a-z0-9]+", (text or "").lower())
+    # Support both Latin and Cyrillic (Russian) characters
+    return re.findall(r"[a-zа-яё0-9]+", (text or "").lower())
 
 
 def _singularize(word: str) -> str:

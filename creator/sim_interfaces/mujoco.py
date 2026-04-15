@@ -203,15 +203,38 @@ class MujocoSimInterface(BaseSimInterface):
 
     def load_objects(self, full_placed_models: List[Dict]) -> Dict[str, str]:
         # TODO abstract dataset loader
-        return objaverse.load_objects(
-            uids=[entry["uuid"] for entry in full_placed_models]
-        )
+        try:
+            loaded = objaverse.load_objects(
+                uids=[entry["uuid"] for entry in full_placed_models]
+            )
+        except Exception as e:
+            print(f"Warning: Failed to load objects from Objaverse: {e}")
+            loaded = {}
+
+        # Mark missing models for fallback cube substitution
+        result = {}
+        for entry in full_placed_models:
+            uuid = entry["uuid"]
+            if uuid in loaded and loaded[uuid]:
+                result[uuid] = loaded[uuid]
+            else:
+                # None signals missing model -> will use fallback cube
+                result[uuid] = None
+
+        return result
 
     def update_model_sizes(self, models: List[Dict]) -> List[Dict]:
         updated_models = models
         for i, model in enumerate(models):
-            mesh = trimesh.load(model["model_loc"], force="mesh")
-            updated_models[i]["size"] = mesh.extents
+            if not model.get("model_loc") or not os.path.exists(str(model.get("model_loc"))):
+                # Skip missing models - will use fallback cube
+                continue
+            try:
+                mesh = trimesh.load(model["model_loc"], force="mesh")
+                updated_models[i]["size"] = mesh.extents
+            except Exception as e:
+                print(f"Warning: Failed to load mesh for {model.get('Model')}: {e}")
+                # Keep original size, will use fallback
         return updated_models
 
     def try_compile_in_mujoco(self, xml_path: str) -> None:
@@ -407,11 +430,12 @@ class MujocoSimInterface(BaseSimInterface):
             model = full_placed_models[i]
 
             path = self.create_model_path(model)
-            if not model.get("model_loc") or not os.path.exists(str(model.get("model_loc"))):
-                print(
-                    f"Model {model.get('Model', model.get('name', 'unknown'))} not found, "
-                    "using fallback cube."
-                )
+            model_loc = model.get("model_loc")
+
+            # Use fallback cube if model is missing (model_loc is None or doesn't exist)
+            if model_loc is None or not os.path.exists(str(model_loc)):
+                model_name = model.get('Model', model.get('name', 'unknown'))
+                print(f"Model '{model_name}' not found in Objaverse, using fallback cube.")
                 fallback_xml = self.create_fallback_cube_xml(path, model)
                 self.insert_include_tags(main_root, fallback_xml)
                 continue

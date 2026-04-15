@@ -1,37 +1,43 @@
+"""Physics-aware validation and repair for placed objects.
+
+Improvements:
+- Uses OBB/SAT collision from geometry module for accurate overlap detection
+- Gradient-based overlap resolution (ImperativeScene-inspired)
+- Better semantic constraint repair with convergence checking
+"""
+
 import math
 from typing import Any, Dict, List, Sequence, Tuple
 
+from creator.placement.geometry import (
+    Vec2,
+    gradient_resolve_overlaps,
+    model_to_obb,
+    obb_overlap,
+)
 
-def _half_xy(size: Sequence[float]) -> List[float]:
-    return [max(0.01, float(size[0]) / 2.0), max(0.01, float(size[1]) / 2.0)]
 
-
-def _aabb(item: Dict[str, Any]) -> Dict[str, float]:
-    pose = item.get("Pose") or {"x": 0.0, "y": 0.0}
+def _size_xyz(item: Dict[str, Any]) -> Tuple[float, float, float]:
     size = item.get("size")
-    if size is None:
-        size = [1.0, 1.0, 1.0]
-    hx, hy = _half_xy(size)
-    x, y = float(pose.get("x", 0.0)), float(pose.get("y", 0.0))
-    return {"min_x": x - hx, "max_x": x + hx, "min_y": y - hy, "max_y": y + hy}
-
-
-def _overlap_xy(a: Dict[str, float], b: Dict[str, float]) -> bool:
-    cond1 = a["max_x"] < b["min_x"]
-    cond2 = b["max_x"] < a["min_x"]
-    cond3 = a["max_y"] < b["min_y"]
-    cond4 = b["max_y"] < a["min_y"]
-    separated = cond1 or cond2 or cond3 or cond4
-    return not separated
+    if not isinstance(size, (list, tuple)) or len(size) < 3:
+        return 1.0, 1.0, 1.0
+    return max(0.01, float(size[0])), max(0.01, float(size[1])), max(0.01, float(size[2]))
 
 
 def validate_and_repair_layout(
     placed_models: Sequence[Dict[str, Any]],
     *,
     min_z: float = 0.01,
+    room_half_size: float = 5.0,
     repair_iters: int = 8,
     push_step: float = 0.06,
 ) -> List[Dict[str, Any]]:
+    """Validate layout and resolve overlaps using gradient-based resolution.
+
+    Two-phase approach:
+    1. Fix Z positions (ensure objects rest on floor or support)
+    2. Resolve XY overlaps using gradient descent (ImperativeScene approach)
+    """
     repaired: List[Dict[str, Any]] = []
     for m in placed_models:
         item = dict(m)
@@ -43,37 +49,14 @@ def validate_and_repair_layout(
         item["Pose"] = pose
         repaired.append(item)
 
-    # Lightweight interpenetration repair in XY using AABB pushes.
-    for _ in range(max(1, repair_iters)):
-        moved = False
-        for i in range(len(repaired)):
-            for j in range(i + 1, len(repaired)):
-                ai = _aabb(repaired[i])
-                aj = _aabb(repaired[j])
-                if not _overlap_xy(ai, aj):
-                    continue
-                pi = repaired[i].get("Pose") or {"x": 0.0, "y": 0.0}
-                pj = repaired[j].get("Pose") or {"x": 0.0, "y": 0.0}
-                xi, yi = float(pi.get("x", 0.0)), float(pi.get("y", 0.0))
-                xj, yj = float(pj.get("x", 0.0)), float(pj.get("y", 0.0))
-
-                # Push apart along dominant axis.
-                dx = xi - xj
-                dy = yi - yj
-                if abs(dx) >= abs(dy):
-                    delta = push_step if dx >= 0 else -push_step
-                    pi["x"] = xi + delta
-                    pj["x"] = xj - delta
-                else:
-                    delta = push_step if dy >= 0 else -push_step
-                    pi["y"] = yi + delta
-                    pj["y"] = yj - delta
-
-                repaired[i]["Pose"] = pi
-                repaired[j]["Pose"] = pj
-                moved = True
-        if not moved:
-            break
+    # Phase 2: Gradient-based overlap resolution
+    repaired = gradient_resolve_overlaps(
+        repaired,
+        room_half_size=room_half_size,
+        iterations=repair_iters * 20,
+        step_size=push_step,
+        collision_margin=0.01,
+    )
 
     return repaired
 
@@ -148,13 +131,6 @@ def _find_nearest_target(
     return best
 
 
-def _size_xyz(item: Dict[str, Any]) -> Tuple[float, float, float]:
-    size = item.get("size")
-    if not isinstance(size, (list, tuple)) or len(size) < 3:
-        return 1.0, 1.0, 1.0
-    return max(0.01, float(size[0])), max(0.01, float(size[1])), max(0.01, float(size[2]))
-
-
 def repair_semantic_constraints(
     placed_models: Sequence[Dict[str, Any]],
     *,
@@ -162,11 +138,18 @@ def repair_semantic_constraints(
     iters: int = 6,
     step: float = 0.12,
 ) -> List[Dict[str, Any]]:
+    """Iteratively repair semantic constraint violations.
+
+    Uses diminishing step size for convergence (ImperativeScene-inspired).
+    """
     repaired = [dict(m) for m in placed_models]
     constraints_rows = _instance_constraints(repaired, semantic_plan)
 
-    for _ in range(max(1, iters)):
+    for iteration in range(max(1, iters)):
         moved = False
+        # Diminishing step for convergence
+        current_step = step * (1.0 - 0.5 * iteration / max(1, iters))
+
         for i, item in enumerate(repaired):
             pose = dict(item.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.1})
             x = float(pose.get("x", 0.0))
@@ -180,15 +163,18 @@ def repair_semantic_constraints(
                 if ctype == "region":
                     pref = str(c.get("value", "")).lower()
                     if pref == "middle":
-                        x *= 0.95
-                        y *= 0.95
+                        x *= (1.0 - current_step * 0.5)
+                        y *= (1.0 - current_step * 0.5)
                         moved = True
                     continue
 
                 if not targets:
                     continue
 
-                tx, ty = min(targets, key=lambda t: (x - t[0]) * (x - t[0]) + (y - t[1]) * (y - t[1]))
+                tx, ty = min(
+                    targets,
+                    key=lambda t: (x - t[0]) ** 2 + (y - t[1]) ** 2,
+                )
                 dx, dy = tx - x, ty - y
                 dist = math.sqrt(dx * dx + dy * dy)
 
@@ -196,24 +182,24 @@ def repair_semantic_constraints(
                     d = c.get("distance") if isinstance(c.get("distance"), list) else [0.3, 1.2]
                     low, high = float(d[0]), float(d[1])
                     if dist > high and dist > 1e-6:
-                        x += step * dx / dist
-                        y += step * dy / dist
+                        x += current_step * dx / dist
+                        y += current_step * dy / dist
                         moved = True
                     elif dist < low and dist > 1e-6:
-                        x -= step * dx / dist
-                        y -= step * dy / dist
+                        x -= current_step * dx / dist
+                        y -= current_step * dy / dist
                         moved = True
                 elif ctype == "left_of" and not (x < tx - 0.1):
-                    x -= step
+                    x -= current_step
                     moved = True
                 elif ctype == "right_of" and not (x > tx + 0.1):
-                    x += step
+                    x += current_step
                     moved = True
                 elif ctype == "in_front_of" and not (y > ty + 0.1):
-                    y += step
+                    y += current_step
                     moved = True
                 elif ctype == "behind" and not (y < ty - 0.1):
-                    y -= step
+                    y -= current_step
                     moved = True
                 elif ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
                     target_item = _find_nearest_target(
@@ -270,7 +256,7 @@ def validate_semantic_constraints(
                 if targets:
                     tx, ty = min(
                         targets,
-                        key=lambda t: (x - t[0]) * (x - t[0]) + (y - t[1]) * (y - t[1]),
+                        key=lambda t: (x - t[0]) ** 2 + (y - t[1]) ** 2,
                     )
                     dx, dy = x - tx, y - ty
                     dist = math.sqrt(dx * dx + dy * dy)
