@@ -431,6 +431,19 @@ def _extract_requested_instance_counts(prompt_text: str) -> dict[str, int]:
     help="Run without OpenRouter: use a simple deterministic prompt->SceneGraph heuristic",
 )
 @click.option(
+    "--expand/--no-expand",
+    "expand_prompt_flag",
+    default=True,
+    show_default=True,
+    help="Expand short prompts via LLM before scene graph generation",
+)
+@click.option(
+    "--vlm-validate",
+    is_flag=True,
+    default=False,
+    help="Render scene and ask the multimodal LLM to validate layout after generation",
+)
+@click.option(
     "--verify",
     is_flag=True,
     default=False,
@@ -454,6 +467,8 @@ def prompt(
     openrouter_model: str | None,
     pipeline_mode: str,
     offline: bool,
+    expand_prompt_flag: bool,
+    vlm_validate: bool,
     verify: bool,
     skip_verify: bool,
     prompt: str,
@@ -465,6 +480,14 @@ def prompt(
         logger.warning(
             "OPENROUTER_API_KEY is not set; continuing for local Ollama usage."
         )
+
+    # Expand short prompt before any LLM generation.
+    if not offline and expand_prompt_flag:
+        from mujoco_scene_editor.llm.prompt_expansion import expand_prompt as _expand
+        original_prompt = prompt
+        prompt = _expand(prompt, model=openrouter_model)
+        if prompt != original_prompt:
+            logger.info("Prompt expanded: %s", prompt)
 
     if not offline:
         from mujoco_scene_editor.llm.openrouter import query_openrouter
@@ -738,6 +761,18 @@ Output the complete XML file. The scene is as follows:
             logger.warning("Physics verification failed: %s", "; ".join(res.errors))
         for w in res.warnings:
             logger.warning("Physics verification warning: %s", w)
+
+    if vlm_validate and not offline:
+        from mujoco_scene_editor.utils.vlm_validate import vlm_validate_scene
+        vres = vlm_validate_scene(xml, mjcf_dir=output_path.parent, model=openrouter_model)
+        if vres.feedback:
+            logger.info("VLM scene feedback: %s", vres.feedback)
+        if not vres.ok:
+            logger.warning("VLM found layout issues:")
+            for issue in vres.issues:
+                logger.warning("  - %s", issue)
+        else:
+            logger.info("VLM validation: scene looks correct.")
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(xml)

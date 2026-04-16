@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -17,13 +18,30 @@ class PlacementConfig:
     max_penetration_m: float = 0.005
 
     # Workspace extents for sampling (rough room footprint).
-    room_half_x: float = 2.0
-    room_half_y: float = 2.0
+    # 0.0 means: compute from scene graph automatically.
+    room_half_x: float = 0.0
+    room_half_y: float = 0.0
 
     # Table defaults (used when anything needs a tabletop surface).
     table_top_z: float = 0.75
     table_half_x: float = 0.55
     table_half_y: float = 0.35
+
+
+def _compute_room_half_size(graph: SceneGraph, config: PlacementConfig) -> float:
+    """Compute room half-size: explicit constraint > config override > auto from footprints."""
+    if graph.constraints.room_half_size_m is not None:
+        return float(graph.constraints.room_half_size_m)
+    if config.room_half_x > 0.0:
+        return float(config.room_half_x)
+    total_area = 0.0
+    for obj in graph.objects:
+        size = obj.size_m or list(_default_size_m(obj.class_name))
+        sx = float(size[0]) if len(size) > 0 else 0.5
+        sy = float(size[1]) if len(size) > 1 else 0.5
+        total_area += sx * sy
+    half = math.sqrt(max(0.0, total_area) * 2.5)
+    return float(max(2.5, min(half, 10.0)))
 
 
 @dataclass
@@ -368,7 +386,7 @@ def _support_for_object(
 
 def _candidate_xy_for_against_wall(
     rng: random.Random,
-    config: PlacementConfig,
+    room_half: float,
     half_x: float,
     half_y: float,
     *,
@@ -377,11 +395,11 @@ def _candidate_xy_for_against_wall(
     # Choose one of 4 walls and place near it.
     wall = rng.choice(["+x", "-x", "+y", "-y"])
     if wall in ("+x", "-x"):
-        x = (config.room_half_x - half_x - margin) * (1.0 if wall == "+x" else -1.0)
-        y = rng.uniform(-config.room_half_y + half_y + margin, config.room_half_y - half_y - margin)
+        x = (room_half - half_x - margin) * (1.0 if wall == "+x" else -1.0)
+        y = rng.uniform(-room_half + half_y + margin, room_half - half_y - margin)
     else:
-        y = (config.room_half_y - half_y - margin) * (1.0 if wall == "+y" else -1.0)
-        x = rng.uniform(-config.room_half_x + half_x + margin, config.room_half_x - half_x - margin)
+        y = (room_half - half_y - margin) * (1.0 if wall == "+y" else -1.0)
+        x = rng.uniform(-room_half + half_x + margin, room_half - half_x - margin)
     return x, y
 
 
@@ -411,31 +429,48 @@ def scene_graph_to_mjcf_staged(
     by_id = index_objects(graph)
     rel_target = _relation_target_map(graph)
 
+    # Compute room size.
+    room_half = _compute_room_half_size(graph, cfg)
+    wall_h = float(graph.constraints.wall_height_m or 3.0)
+    wall_t = 0.05  # half-thickness of wall bodies
+
     root = ET.Element("mujoco")
     ET.SubElement(root, "option", timestep="0.002")
     ET.SubElement(root, "asset")
-    ET.SubElement(root, "worldbody")
+    worldbody = ET.SubElement(root, "worldbody")
 
     # Floor.
-    worldbody = root.find("worldbody")
-    assert worldbody is not None
     floor_body = ET.SubElement(worldbody, "body", name="floor", pos="0 0 0")
     ET.SubElement(
         floor_body,
         "geom",
         name="floor_geom",
         type="plane",
-        size="2.5 2.5 0.01",
-        rgba="0.5 0.5 0.5 1",
+        size=f"{room_half:.4f} {room_half:.4f} 0.01",
+        rgba="0.55 0.52 0.48 1",
         contype="1",
         conaffinity="1",
     )
+
+    # Walls.
+    wh2 = wall_h / 2.0
+    for bname, bx, by, gsx, gsy, gsz in [
+        ("wall_north",  0.0,       room_half, room_half, wall_t,    wh2),
+        ("wall_south",  0.0,      -room_half, room_half, wall_t,    wh2),
+        ("wall_east",   room_half, 0.0,       wall_t,    room_half, wh2),
+        ("wall_west",  -room_half, 0.0,       wall_t,    room_half, wh2),
+    ]:
+        wb = ET.SubElement(worldbody, "body", name=bname, pos=f"{bx:.4f} {by:.4f} {wh2:.4f}")
+        ET.SubElement(wb, "geom", type="box",
+                      size=f"{gsx:.4f} {gsy:.4f} {gsz:.4f}",
+                      rgba="0.85 0.82 0.78 1",
+                      contype="1", conaffinity="1")
 
     surfaces: dict[str, _SupportSurface] = {
         "__floor__": _SupportSurface(
             id="__floor__",
             xy_center=(0.0, 0.0),
-            half_xy=(cfg.room_half_x, cfg.room_half_y),
+            half_xy=(room_half * 0.85, room_half * 0.85),
             top_z=0.0,
         )
     }
@@ -443,7 +478,60 @@ def scene_graph_to_mjcf_staged(
     if _needs_synthetic_table(graph):
         _ensure_table_anchor(root, surfaces, cfg)
 
-    placed: set[str] = set()
+    # ── Wall-mounted objects (placed first so they can serve as surfaces) ─────
+    wall_mounted_ids: set[str] = set()
+    for rel in graph.relations:
+        if rel.type != RelationType.wall_mounted:
+            continue
+        obj = by_id.get(rel.subject)
+        if obj is None:
+            continue
+        wall_mounted_ids.add(obj.id)
+
+        size = obj.size_m
+        if size is None:
+            sx, sy, sz = _default_size_m(obj.class_name)
+        else:
+            try:
+                sx, sy, sz = float(size[0]), float(size[1]), float(size[2])
+            except Exception:
+                sx, sy, sz = _default_size_m(obj.class_name)
+        sx = max(0.01, min(abs(sx), 3.0))
+        sy = max(0.01, min(abs(sy), 3.0))
+        sz = max(0.01, min(abs(sz), 3.0))
+        hx, hy, hz = sx / 2.0, sy / 2.0, sz / 2.0
+
+        side = (rel.wall_side or "north").lower()
+        height_z = float(rel.height_m) if rel.height_m is not None else 1.4
+        height_z = max(0.3, min(height_z, wall_h - hz - 0.05))
+
+        if side in ("north", "south"):
+            sign = 1.0 if side == "north" else -1.0
+            wx = rng.uniform(-room_half * 0.7 + hx, room_half * 0.7 - hx)
+            wy = sign * (room_half - wall_t - hy)
+            wz = height_z
+        else:  # east / west
+            sign = 1.0 if side == "east" else -1.0
+            wx = sign * (room_half - wall_t - hx)
+            wy = rng.uniform(-room_half * 0.7 + hy, room_half * 0.7 - hy)
+            wz = height_z
+
+        body = ET.SubElement(worldbody, "body", name=obj.id,
+                             pos=f"{wx:.4f} {wy:.4f} {wz:.4f}")
+        # Static — no freejoint.
+        ET.SubElement(body, "geom", type="box",
+                      size=f"{hx:.6g} {hy:.6g} {hz:.6g}",
+                      rgba="0.7 0.7 0.7 1",
+                      contype="1", conaffinity="1")
+
+        surfaces[obj.id] = _SupportSurface(
+            id=obj.id,
+            xy_center=(wx, wy),
+            half_xy=(hx, hy),
+            top_z=wz + hz,
+        )
+
+    placed: set[str] = set(wall_mounted_ids)  # wall-mounted already placed
 
     # Place objects.
     objects = _sorted_objects_for_staging(list(graph.objects))
@@ -452,7 +540,9 @@ def scene_graph_to_mjcf_staged(
         if not obj.id:
             continue
 
-        # Skip synthetic anchor ids.
+        # Skip wall-mounted (placed above) and synthetic anchors.
+        if obj.id in wall_mounted_ids:
+            continue
         if obj.id.startswith("anchor_"):
             continue
 
@@ -487,7 +577,7 @@ def scene_graph_to_mjcf_staged(
             # XY.
             tgt = rel_target.get(obj.id)
             if tgt is not None and tgt[1] == RelationType.against_wall:
-                x, y = _candidate_xy_for_against_wall(rng, cfg, hx, hy)
+                x, y = _candidate_xy_for_against_wall(rng, room_half, hx, hy)
             else:
                 x, y = support.sample_xy(rng, hx, hy)
 
@@ -543,11 +633,14 @@ def scene_graph_to_mjcf_staged(
                 continue
             if not obj.mesh_file:
                 continue
+            if obj.id in wall_mounted_ids:
+                # Wall-mounted bodies use box geoms; mesh replacement handled here too.
+                pass
 
-            worldbody = root.find("worldbody")
-            if worldbody is None:
+            wb = root.find("worldbody")
+            if wb is None:
                 continue
-            body = next((b for b in list(worldbody.findall("body")) if (b.get("name") or "") == obj.id), None)
+            body = next((b for b in list(wb.findall("body")) if (b.get("name") or "") == obj.id), None)
             if body is None:
                 continue
 

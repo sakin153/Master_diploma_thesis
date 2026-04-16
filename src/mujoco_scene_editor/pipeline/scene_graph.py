@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal  # noqa: F401 (Literal used in SceneObject + SceneRelation)
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,6 +11,7 @@ class RelationType(str, Enum):
     ontop = "ontop"
     on_floor = "on_floor"
     against_wall = "against_wall"
+    wall_mounted = "wall_mounted"   # physically attached to wall (shelf, painting, lamp)
     inside = "inside"
     next_to = "next_to"
     aligned_with = "aligned_with"
@@ -66,7 +67,18 @@ class SceneRelation(BaseModel):
 
     type: RelationType
     subject: str = Field(..., description="SceneObject.id")
-    object: str = Field(..., description="SceneObject.id")
+    object: str = Field(default="", description="SceneObject.id (empty for wall_mounted)")
+
+    # Wall-mounting hints (only for type=wall_mounted).
+    wall_side: Literal["north", "south", "east", "west"] | None = Field(
+        default=None,
+        description="Which wall to mount on (north=+Y, south=-Y, east=+X, west=-X).",
+    )
+    height_m: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Height above floor in metres for wall-mounted objects.",
+    )
 
     # Optional numeric hints.
     distance_m: float | None = Field(default=None, ge=0.0)
@@ -85,6 +97,16 @@ class GlobalConstraints(BaseModel):
         default=None,
         description="Preferred working height (e.g., table top height).",
         ge=0.0,
+    )
+    room_half_size_m: float | None = Field(
+        default=None,
+        description="Half-size of the square room (metres). Auto-computed if null.",
+        ge=1.0,
+    )
+    wall_height_m: float | None = Field(
+        default=None,
+        description="Room wall height in metres (default 3.0).",
+        ge=1.5,
     )
 
 
