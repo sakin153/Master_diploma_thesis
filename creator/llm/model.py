@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import sqlite3
 from typing import Any, Dict, Optional
@@ -119,3 +120,85 @@ def prompt_model(context: str, prompt: str, model: str = "gpt-3.5-turbo-16k"):
         )
         sys.exit(os.EX_UNAVAILABLE)
     return parse_output_to_json(ans_text)
+
+
+def prompt_model_with_image(context: str, prompt: str, image_base64: str) -> Any:
+    """Send a multimodal prompt with a rendered image to Ollama VLM.
+
+    The model must support vision (e.g. deepseek-v3.1 multimodal or llava).
+    The image should be a base64-encoded PNG/JPEG string.
+    """
+    url = f"{OLLAMA_BASE_URL}/api/chat"
+    payload: Dict[str, Any] = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": context},
+            {"role": "user", "content": prompt, "images": [image_base64]},
+        ],
+        "options": {"temperature": 0},
+    }
+    try:
+        resp = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT_S)
+    except requests.exceptions.Timeout:
+        raise TimeoutError("Timeout waiting for Ollama multimodal response")
+    except requests.exceptions.ConnectionError as e:
+        raise ConnectionError(f"Failed to connect to Ollama at {OLLAMA_BASE_URL}") from e
+
+    if resp.status_code != 200:
+        raise RuntimeError(f"Ollama error {resp.status_code}: {resp.text}")
+
+    data: Dict[str, Any] = resp.json()
+    message: Optional[Dict[str, Any]] = data.get("message")
+    if not message or "content" not in message:
+        raise RuntimeError(f"Unexpected Ollama response: {data}")
+    return parse_output_to_json(str(message["content"]))
+
+
+def ask_object_height_m(object_name: str) -> Optional[float]:
+    """Ask the LLM for the real-world height of an object in meters.
+
+    Used as fallback when the object category is not in the hardcoded table.
+    Results are persisted in the SQLite cache (key prefixed with __height__).
+    Returns None on failure so the caller can use its own fallback.
+    """
+    name_clean = (object_name or "").strip().lower()
+    if not name_clean:
+        return None
+
+    cache_key = f"__height__{name_clean}"
+    cached = _cache_get(cache_key, OLLAMA_MODEL)
+    if cached is not None:
+        try:
+            val = float(cached)
+            if 0.01 < val < 10.0:
+                return val
+        except (ValueError, TypeError):
+            pass
+
+    system_prompt = (
+        "You are a 3D scene assistant. "
+        "Answer with ONLY a single decimal number in metres, no units, no text."
+    )
+    user_prompt = (
+        f"Typical real-world height in metres of a '{object_name}' "
+        "(common household/furniture item). Example answers: 0.75, 1.80, 0.12"
+    )
+    try:
+        ans = _ollama_chat(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=OLLAMA_MODEL,
+            timeout_s=30,
+            base_url=OLLAMA_BASE_URL,
+        )
+        nums = re.findall(r"\d+(?:\.\d+)?", ans.strip())
+        if nums:
+            val = float(nums[0])
+            if 0.01 < val < 10.0:
+                _cache_set(cache_key, OLLAMA_MODEL, str(val))
+                return val
+    except Exception as exc:
+        print(f"[llm] height inference failed for '{object_name}': {exc}")
+
+    return None

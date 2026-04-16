@@ -1,95 +1,21 @@
 {
-  "query": "Школьный класс с 10 столами и стульями",
+  "query": "sofa with book",
   "nodes": [
     {
       "id": "obj_0",
-      "name": "Chair",
-      "constraints_count": 3
+      "name": "Sofa",
+      "constraints_count": 1
     },
     {
       "id": "obj_1",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_2",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_3",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_4",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_5",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_6",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_7",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_8",
-      "name": "Chair",
-      "constraints_count": 3
-    },
-    {
-      "id": "obj_9",
-      "name": "Chair",
-      "constraints_count": 3
+      "name": "Book",
+      "constraints_count": 2
     }
   ],
   "edges": [
     {
       "from": "obj_0",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_0",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_1",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_0",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_1",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_1",
-      "from_name": "Chair",
+      "from_name": "Sofa",
       "type": "region",
       "hard": false,
       "weight": 1.0,
@@ -99,305 +25,29 @@
     },
     {
       "from": "obj_1",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_2",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_1",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_3",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_2",
-      "from_name": "Chair",
-      "type": "region",
+      "from_name": "Book",
+      "type": "on_top_of",
       "hard": false,
       "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_2",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_4",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_2",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_5",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_3",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_3",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_6",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_3",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_7",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_4",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_4",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_8",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_4",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_9",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_5",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_5",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_0",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_5",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_1",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_6",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_6",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_2",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_6",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_3",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_7",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_7",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_4",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_7",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_5",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_8",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_8",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_6",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_8",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
-      "value": "None",
-      "to": "obj_7",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_9",
-      "from_name": "Chair",
-      "type": "region",
-      "hard": false,
-      "weight": 1.0,
-      "value": "middle",
-      "to": "",
-      "to_name": ""
-    },
-    {
-      "from": "obj_9",
-      "from_name": "Chair",
-      "type": "near",
-      "hard": false,
-      "weight": 0.9,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_8",
-      "to_name": "Chair"
-    },
-    {
-      "from": "obj_9",
-      "from_name": "Chair",
-      "type": "face_same_as",
-      "hard": false,
-      "weight": 0.8,
       "value": "None",
       "to": "obj_0",
-      "to_name": "Chair"
+      "to_name": "Sofa"
+    },
+    {
+      "from": "obj_1",
+      "from_name": "Book",
+      "type": "region",
+      "hard": false,
+      "weight": 0.7,
+      "value": "middle",
+      "to": "",
+      "to_name": ""
     }
   ],
   "raw_plan": {
     "objects": [
       {
-        "Model": "Chair",
+        "Model": "Sofa",
         "constraints": [
           {
             "type": "region",
@@ -405,297 +55,32 @@
             "value": "middle",
             "hard": false,
             "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
           }
         ]
       },
       {
-        "Model": "Chair",
+        "Model": "Book",
         "constraints": [
+          {
+            "type": "on_top_of",
+            "target": "Sofa",
+            "value": null,
+            "hard": false,
+            "weight": 1.0
+          },
           {
             "type": "region",
             "target": "",
             "value": "middle",
             "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
-          }
-        ]
-      },
-      {
-        "Model": "Chair",
-        "constraints": [
-          {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.9,
-            "distance": [
-              0.8,
-              1.2
-            ]
-          },
-          {
-            "type": "face_same_as",
-            "target": "Chair",
-            "value": null,
-            "hard": false,
-            "weight": 0.8
+            "weight": 0.7
           }
         ]
       }
-    ]
+    ],
+    "room": {
+      "half_size": 2.0,
+      "type": "other"
+    }
   }
 }

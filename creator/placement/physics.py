@@ -209,11 +209,18 @@ def repair_semantic_constraints(
                     )
                     if target_item:
                         tp = target_item.get("Pose") or {}
-                        _, _, ssz = _size_xyz(item)
-                        _, _, tsz = _size_xyz(target_item)
-                        pose["z"] = float(tp.get("z", 0.0)) + tsz / 2.0 + ssz / 2.0 + 0.01
-                        x = float(tp.get("x", 0.0))
-                        y = float(tp.get("y", 0.0))
+                        # size[1] = height; size[0]/size[2] = footprint
+                        s_hh = max(0.01, float((item.get("size") or [0, 0.1, 0])[1])) / 2.0
+                        t_hh = max(0.01, float((target_item.get("size") or [0, 0.1, 0])[1])) / 2.0
+                        t_hx = max(0.01, float((target_item.get("size") or [0.1, 0, 0])[0])) / 2.0
+                        t_hy = max(0.01, float((target_item.get("size") or [0, 0, 0.1])[2])) / 2.0
+                        tx_c = float(tp.get("x", 0.0))
+                        ty_c = float(tp.get("y", 0.0))
+                        pose["z"] = float(tp.get("z", 0.0)) + t_hh + s_hh + 0.01
+                        # Only move X,Y to center if outside target footprint
+                        if abs(x - tx_c) > t_hx or abs(y - ty_c) > t_hy:
+                            x = tx_c
+                            y = ty_c
                         moved = True
 
             pose["x"] = float(x)

@@ -14,6 +14,7 @@ import math
 import random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from creator.placement.arranger import apply_arrangements
 from creator.placement.geometry import (
     AABB,
     ClearanceZone,
@@ -295,10 +296,20 @@ def solve_floor_placements(
         if isinstance(polygon, list) and len(polygon) >= 3:
             clearance_zones.append(build_door_clearance(polygon))
 
-    # Prepare indexed models with constraints
-    indexed_models = _prepare_indexed_models(
-        full_placed_models, objects, model_plan,
+    # Pre-arrange grid/row groups (classroom, warehouse layouts)
+    pre_arranged, beam_models = apply_arrangements(
+        list(full_placed_models), semantic_plan,
+        room_half_size=room_half_size,
+        grid_threshold=4,
     )
+
+    # Prepare indexed models with constraints (only beam_models need search)
+    indexed_models = _prepare_indexed_models(
+        beam_models, objects, model_plan,
+    )
+
+    # Topological sort: ensure dependencies (near-target anchors) are placed first
+    indexed_models = _topological_sort_models(indexed_models)
 
     # Generate base grid
     grid = _grid_candidates(room_half_size=room_half_size, step=grid_step)
@@ -306,9 +317,17 @@ def solve_floor_placements(
     jittered = _jittered_candidates(grid, jitter=grid_step * 0.3, rng=rng, count=1)
     all_candidates = grid + jittered
 
-    # DFS + Beam search
+    # DFS + Beam search — seed state with pre-arranged objects
+    pre_arranged_obbs = [
+        model_to_obb(m, inflation=collision_inflation)
+        for m in pre_arranged
+    ]
+    pre_arranged_placed = {
+        f"{str(m.get('Model', ''))}__arr_{i}": m
+        for i, m in enumerate(pre_arranged)
+    }
     states: List[Dict[str, Any]] = [
-        {"placed": {}, "obbs": [], "score": 0.0}
+        {"placed": pre_arranged_placed, "obbs": pre_arranged_obbs, "score": 0.0}
     ]
 
     for m in indexed_models:
@@ -439,12 +458,226 @@ def solve_floor_placements(
         collision_margin=collision_inflation,
     )
 
+    # Orientation search post-pass (ImperativeScene-inspired):
+    # for objects with constraint violations, try all 4 rotations and keep best
+    out = _orientation_search_postpass(
+        out,
+        objects=objects,
+        room_half_size=room_half_size,
+        collision_inflation=collision_inflation,
+    )
+
     return out
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _topological_sort_models(
+    indexed_models: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Topological sort so near-target anchors are placed before dependants.
+
+    If object B has a 'near' constraint pointing to object A, A must be
+    placed first so beam search can generate near-target candidates for B.
+    This is a simplified DAG sort: anchors first, then dependants.
+    """
+    # Build dependency map: name -> list of names it depends on
+    all_names = [str(m.get("Model", "")) for m in indexed_models]
+    name_set = set(all_names)
+
+    deps: Dict[str, set] = {str(m.get("Model", "")): set() for m in indexed_models}
+    for m in indexed_models:
+        mname = str(m.get("Model", ""))
+        for c in m.get("_constraints", []):
+            if not isinstance(c, dict):
+                continue
+            if str(c.get("type", "")).lower() in {"near", "next_to", "beside"}:
+                target = str(c.get("target", ""))
+                if target in name_set and target != mname:
+                    deps[mname].add(target)
+
+    # Kahn's algorithm (stable - preserves footprint order within level)
+    in_degree: Dict[str, int] = {n: 0 for n in deps}
+    for n, d in deps.items():
+        for dep in d:
+            if dep in in_degree:
+                in_degree[dep] = in_degree.get(dep, 0)  # dep has no extra in-degree from this
+
+    # Build reverse: who depends on me
+    dependants: Dict[str, List[str]] = {n: [] for n in deps}
+    for n, d in deps.items():
+        for dep in d:
+            if dep in dependants:
+                dependants[dep].append(n)
+        in_degree[n] = len([dep for dep in d if dep in name_set])
+
+    queue = [n for n, deg in in_degree.items() if deg == 0]
+    sorted_names: List[str] = []
+    visited: set = set()
+
+    while queue:
+        # Sort queue by footprint size (largest first, preserving original priority)
+        name_to_model = {str(m.get("Model", "")): m for m in indexed_models}
+        queue.sort(
+            key=lambda n: -(
+                float(name_to_model[n].get("size", [1, 1, 1])[0])
+                * float(name_to_model[n].get("size", [1, 1, 1])[1])
+                if n in name_to_model else 0
+            )
+        )
+        n = queue.pop(0)
+        if n in visited:
+            continue
+        visited.add(n)
+        sorted_names.append(n)
+        for dep in dependants.get(n, []):
+            in_degree[dep] -= 1
+            if in_degree[dep] == 0:
+                queue.append(dep)
+
+    # Add any remaining (cycles or not in deps)
+    for n in all_names:
+        if n not in visited:
+            sorted_names.append(n)
+
+    # Build per-name queues preserving multiple instances
+    name_queues: Dict[str, List[Dict[str, Any]]] = {}
+    for m in indexed_models:
+        n = str(m.get("Model", ""))
+        name_queues.setdefault(n, []).append(m)
+
+    result: List[Dict[str, Any]] = []
+    seen_names: set = set()
+    for n in sorted_names:
+        if n in seen_names:
+            continue
+        seen_names.add(n)
+        result.extend(name_queues.get(n, []))
+
+    return result
+
+
+def _orientation_search_postpass(
+    out: List[Dict[str, Any]],
+    *,
+    objects: Any,
+    room_half_size: float,
+    collision_inflation: float = 0.01,
+) -> List[Dict[str, Any]]:
+    """For objects with constraint violations after gradient pass, try all 4
+    rotations and keep the orientation that minimizes constraint loss.
+
+    Inspired by ImperativeScene orientation search.
+    """
+    # Build constraint lookup
+    plan_constraints: Dict[str, List[Dict[str, Any]]] = {}
+    if isinstance(objects, list):
+        for o in objects:
+            if isinstance(o, dict) and o.get("Model"):
+                name = str(o["Model"])
+                plan_constraints.setdefault(name, []).extend(
+                    c for c in (o.get("constraints") or []) if isinstance(c, dict)
+                )
+
+    placed_lookup: Dict[str, List[Dict[str, Any]]] = {}
+    for m in out:
+        n = str(m.get("Model") or m.get("name") or "")
+        placed_lookup.setdefault(n, []).append(m)
+
+    result = list(out)
+    yaw_candidates = [0.0, 90.0, 180.0, 270.0]
+
+    for i, m in enumerate(result):
+        name = str(m.get("Model") or m.get("name") or "")
+        constraints = plan_constraints.get(name, [])
+        if not constraints:
+            continue
+
+        current_yaw = float(m.get("yaw_deg", 0.0))
+        pose = m.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0}
+        x = float(pose.get("x", 0.0))
+        y = float(pose.get("y", 0.0))
+
+        # Compute current score
+        placed_others = {
+            f"{n}__{j}": result[j]
+            for j, n in enumerate((str(r.get("Model", "")) for r in result))
+            if j != i
+        }
+        best_yaw = current_yaw
+        best_score = _score_orientation(
+            x, y, current_yaw, m, constraints, placed_others,
+            room_half_size, collision_inflation,
+        )
+
+        for yaw in yaw_candidates:
+            if abs(yaw - current_yaw) < 1.0:
+                continue
+            score = _score_orientation(
+                x, y, yaw, m, constraints, placed_others,
+                room_half_size, collision_inflation,
+            )
+            if score > best_score:
+                best_score = score
+                best_yaw = yaw
+
+        if abs(best_yaw - current_yaw) > 1.0:
+            result[i] = dict(m)
+            result[i]["yaw_deg"] = best_yaw
+
+    return result
+
+
+def _score_orientation(
+    x: float,
+    y: float,
+    yaw: float,
+    m: Dict[str, Any],
+    constraints: List[Dict[str, Any]],
+    placed: Dict[str, Dict[str, Any]],
+    room_half_size: float,
+    collision_inflation: float,
+) -> float:
+    """Score a candidate orientation based on constraint satisfaction."""
+    obb = model_to_obb(
+        m,
+        inflation=collision_inflation,
+        pos_override=(x, y),
+        yaw_override=yaw,
+    )
+
+    # Inbound score
+    inbound = compute_inbound_loss(obb, room_half_size)
+
+    # Overlap penalty
+    placed_obbs = [model_to_obb(p, inflation=collision_inflation) for p in placed.values()]
+    overlap = compute_overlap_loss(obb, placed_obbs)
+
+    # Constraint score (near = minimize distance)
+    constraint_score = 0.0
+    for c in constraints:
+        ctype = str(c.get("type", "")).lower()
+        if ctype == "near":
+            target_name = str(c.get("target", ""))
+            dist_range = c.get("distance", [0.3, 2.0])
+            lo, hi = float(dist_range[0]), float(dist_range[1])
+            best_dist = float("inf")
+            for p in placed.values():
+                if str(p.get("Model", "")) == target_name:
+                    pp = p.get("Pose", {})
+                    d = math.sqrt((x - float(pp.get("x", 0))) ** 2 + (y - float(pp.get("y", 0))) ** 2)
+                    best_dist = min(best_dist, d)
+            if best_dist < float("inf"):
+                if lo <= best_dist <= hi:
+                    constraint_score += 10.0
+                else:
+                    constraint_score -= min(10.0, abs(best_dist - (lo + hi) / 2.0) * 2.0)
+
+    return constraint_score - 250.0 * inbound - 100.0 * overlap
+
 
 def _prepare_indexed_models(
     full_placed_models: Sequence[Dict[str, Any]],

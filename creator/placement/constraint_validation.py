@@ -35,6 +35,22 @@ def _size_xyz(item: Dict[str, Any]) -> Tuple[float, float, float]:
     return max(0.01, float(size[0])), max(0.01, float(size[1])), max(0.01, float(size[2]))
 
 
+def _half_height(item: Dict[str, Any]) -> float:
+    """Half-height of item in scene Z: size[1] (mesh Y = height after euler='90 0 yaw')."""
+    size = item.get("size")
+    if not isinstance(size, (list, tuple)) or len(size) < 2:
+        return 0.5
+    return max(0.01, float(size[1])) / 2.0
+
+
+def _footprint_half(item: Dict[str, Any]) -> Tuple[float, float]:
+    """(half_width_X, half_depth_Y) of item footprint in scene XY plane."""
+    size = item.get("size")
+    if not isinstance(size, (list, tuple)) or len(size) < 3:
+        return 0.5, 0.5
+    return max(0.01, float(size[0])) / 2.0, max(0.01, float(size[2])) / 2.0
+
+
 def _find_target(
     source: Dict[str, Any],
     target_name: str,
@@ -129,12 +145,16 @@ def evaluate_constraint_violations(
             elif ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
                 spz = float(sp.get("z", 0.0))
                 tpz = float(tp.get("z", 0.0))
-                ssx, ssy, ssz = _size_xyz(source)
-                tsx, tsy, tsz = _size_xyz(target)
-                exp_z = tpz + tsz / 2.0 + ssz / 2.0 + 0.01
-                xy_tol = max(0.12, 0.35 * max(tsx, tsy))
-                z_tol = max(0.08, 0.25 * ssz)
-                sat_xy = abs(sx - tx) <= xy_tol and abs(sy - ty) <= xy_tol
+                # Height = size[1]; footprint = size[0] × size[2]
+                s_hh = _half_height(source)
+                t_hh = _half_height(target)
+                t_hx, t_hy = _footprint_half(target)
+                exp_z = tpz + t_hh + s_hh + 0.01
+                # XY tolerance: object may be placed anywhere within target footprint
+                xy_tol_x = max(0.12, t_hx)
+                xy_tol_y = max(0.12, t_hy)
+                z_tol = max(0.08, s_hh * 0.5)
+                sat_xy = abs(sx - tx) <= xy_tol_x and abs(sy - ty) <= xy_tol_y
                 sat_z = abs(spz - exp_z) <= z_tol
                 if not (sat_xy and sat_z):
                     violations.append(
@@ -251,11 +271,15 @@ def repair_layout_by_constraints(
                 elif ctype == "behind":
                     sy = min(sy, ty - 0.35)
                 elif ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
-                    _, _, ssz = _size_xyz(source)
-                    _, _, tsz = _size_xyz(target)
-                    sx = tx
-                    sy = ty
-                    sz = float(tp.get("z", 0.0)) + tsz / 2.0 + ssz / 2.0 + 0.01
+                    s_hh = _half_height(source)
+                    t_hh = _half_height(target)
+                    t_hx, t_hy = _footprint_half(target)
+                    # Only snap X,Y to target center if object is outside its footprint.
+                    # Preserve positions set by solve_small_object_placements.
+                    if abs(sx - tx) > t_hx or abs(sy - ty) > t_hy:
+                        sx = tx
+                        sy = ty
+                    sz = float(tp.get("z", 0.0)) + t_hh + s_hh + 0.01
 
             pose["x"] = _clip(sx, -room_half_size + 0.2, room_half_size - 0.2)
             pose["y"] = _clip(sy, -room_half_size + 0.2, room_half_size - 0.2)
@@ -306,11 +330,18 @@ def repair_layout_by_constraints(
 
             source_pose = dict(source.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.01})
             target_pose = target.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0}
-            _, _, ssz = _size_xyz(source)
-            _, _, tsz = _size_xyz(target)
-            source_pose["x"] = float(target_pose.get("x", 0.0))
-            source_pose["y"] = float(target_pose.get("y", 0.0))
-            source_pose["z"] = float(target_pose.get("z", 0.0)) + tsz / 2.0 + ssz / 2.0 + 0.01
+            s_hh = _half_height(source)
+            t_hh = _half_height(target)
+            t_hx, t_hy = _footprint_half(target)
+            tx_c = float(target_pose.get("x", 0.0))
+            ty_c = float(target_pose.get("y", 0.0))
+            sx_c = float(source_pose.get("x", tx_c))
+            sy_c = float(source_pose.get("y", ty_c))
+            # Only snap X,Y to target center if object is outside its footprint.
+            if abs(sx_c - tx_c) > t_hx or abs(sy_c - ty_c) > t_hy:
+                source_pose["x"] = tx_c
+                source_pose["y"] = ty_c
+            source_pose["z"] = float(target_pose.get("z", 0.0)) + t_hh + s_hh + 0.01
             source["Pose"] = source_pose
             break
 

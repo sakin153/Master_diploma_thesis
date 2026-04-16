@@ -24,29 +24,54 @@ def _env_enabled(name: str, default: bool) -> bool:
 
 
 def _size_xyz(model: Dict[str, Any]) -> Tuple[float, float, float]:
+    """Return (scene_width, scene_depth, scene_height) accounting for rotation.
+
+    After euler="90 0 yaw": mesh X→width, mesh Z→depth, mesh Y→height.
+    Returns (width=size[0], depth=size[2], height=size[1]).
+    """
     size = model.get("size")
     if not isinstance(size, (list, tuple)) or len(size) < 3:
         return 0.4, 0.4, 0.4
-    sx = max(0.05, min(5.0, float(size[0])))
-    sy = max(0.05, min(5.0, float(size[1])))
-    sz = max(0.05, min(5.0, float(size[2])))
+    sx = max(0.05, min(5.0, float(size[0])))   # scene width
+    sy = max(0.05, min(5.0, float(size[2])))   # scene depth (mesh Z)
+    sz = max(0.05, min(5.0, float(size[1])))   # scene height (mesh Y)
     return sx, sy, sz
 
 
 def _build_proxy_world_xml(placed_models: List[Dict[str, Any]]) -> str:
+    """Build a proxy MuJoCo world for physics settlement.
+
+    Uses box colliders per object with category-aware physics (static furniture
+    stays fixed; dynamic small objects settle under gravity).
+    """
+    from creator.scene.physics_profile import get_physics_profile
+
     root = ET.Element("mujoco", model="proxy_refine")
     ET.SubElement(root, "compiler", angle="degree")
-    ET.SubElement(root, "option", timestep="0.01", gravity="0 0 -9.81", iterations="80")
+    # Small timestep + many iterations = stable settlement
+    ET.SubElement(root, "option",
+        timestep="0.002",
+        gravity="0 0 -9.81",
+        iterations="50",
+        integrator="implicitfast",
+        tolerance="1e-10",
+    )
+
+    # Global defaults: stiff contacts so objects don't penetrate the floor
+    default = ET.SubElement(root, "default")
+    ET.SubElement(default, "geom",
+        condim="3",
+        friction="0.8 0.005 0.0001",
+        solref="0.01 1",
+        solimp="0.95 0.99 0.001 0.5 2",
+    )
 
     worldbody = ET.SubElement(root, "worldbody")
-    ET.SubElement(
-        worldbody,
-        "geom",
-        name="floor",
-        type="plane",
-        size="0 0 0.05",
-        pos="0 0 0",
-        friction="1.0 0.1 0.1",
+    ET.SubElement(worldbody, "geom",
+        name="floor", type="plane", size="0 0 0.05", pos="0 0 0",
+        friction="1.0 0.005 0.0001",
+        solref="0.01 1",
+        solimp="0.95 0.99 0.001 0.5 2",
     )
 
     for idx, model in enumerate(placed_models):
@@ -54,24 +79,39 @@ def _build_proxy_world_xml(placed_models: List[Dict[str, Any]]) -> str:
         pose = model.get("Pose") or {}
         px = float(pose.get("x", 0.0))
         py = float(pose.get("y", 0.0))
-        pz = max(sz * 0.5, float(pose.get("z", sz * 0.5)))
         yaw_deg = float(model.get("yaw_deg", 0.0))
+        model_name = str(model.get("Model") or model.get("name") or "")
+        profile = get_physics_profile(model_name)
 
-        body = ET.SubElement(
-            worldbody,
-            "body",
+        # Use actual placed z so that objects on shelves/tables start at the
+        # correct height in the proxy world (not collapsed to floor level).
+        # Fall back to sz/2 (floor level) only when no pose z is set.
+        pose_z = float(pose.get("z", sz / 2.0))
+        pz = max(sz / 2.0, pose_z)
+
+        body = ET.SubElement(worldbody, "body",
             name=f"proxy_{idx}",
             pos=f"{px} {py} {pz}",
             euler=f"0 0 {yaw_deg}",
         )
-        ET.SubElement(body, "freejoint")
-        ET.SubElement(
-            body,
-            "geom",
+
+        if not profile.is_static:
+            # Dynamic objects: freejoint → settle under gravity
+            ET.SubElement(body, "joint", type="free",
+                          damping="0.5", stiffness="0")
+        # Static objects: no joint → welded in proxy world too
+
+        friction_str = " ".join(str(v) for v in profile.friction)
+        solref_str = " ".join(str(v) for v in profile.solref)
+        solimp_str = " ".join(str(v) for v in profile.solimp)
+        ET.SubElement(body, "geom",
             type="box",
             size=f"{sx / 2.0} {sy / 2.0} {sz / 2.0}",
-            density="220",
-            friction="0.9 0.1 0.1",
+            density=str(profile.density),
+            friction=friction_str,
+            condim=str(profile.condim),
+            solref=solref_str,
+            solimp=solimp_str,
         )
 
     return ET.tostring(root, encoding="unicode")
@@ -83,10 +123,17 @@ def _simulate_proxy_settle(
     room_half_size: float,
     sim_steps: int,
 ) -> Tuple[List[Dict[str, Any]], bool, str]:
+    """Run proxy physics simulation to settle dynamic objects.
+
+    Static furniture stays at its placed position (no joint in proxy world).
+    Only dynamic objects (books, cups, etc.) are updated from simulation.
+    """
     try:
         import mujoco  # type: ignore
     except ImportError:
         return placed_models, False, "mujoco is not installed"
+
+    from creator.scene.physics_profile import get_physics_profile
 
     xml_text = _build_proxy_world_xml(placed_models)
     try:
@@ -95,11 +142,25 @@ def _simulate_proxy_settle(
     except Exception as exc:
         return placed_models, False, f"proxy model build failed ({exc})"
 
-    for _ in range(max(1, sim_steps)):
-        mujoco.mj_step(proxy_model, proxy_data)
+    # Run simulation in batches — check convergence every 200 steps
+    batch = 200
+    n_batches = max(1, sim_steps // batch)
+    for _ in range(n_batches):
+        for _ in range(batch):
+            mujoco.mj_step(proxy_model, proxy_data)
+        # Early exit if kinetic energy is low (settled)
+        if float(proxy_data.energy[1]) < 1e-4:
+            break
 
     settled = [copy.deepcopy(model) for model in placed_models]
     for idx, model in enumerate(settled):
+        model_name = str(model.get("Model") or model.get("name") or "")
+        profile = get_physics_profile(model_name)
+
+        # Static objects: keep original placement, don't update from sim
+        if profile.is_static:
+            continue
+
         body_name = f"proxy_{idx}"
         body_id = mujoco.mj_name2id(proxy_model, mujoco.mjtObj.mjOBJ_BODY, body_name)
         if body_id < 0:
@@ -122,6 +183,46 @@ def _simulate_proxy_settle(
         model["yaw_deg"] = math.degrees(math.atan2(float(xmat[3]), float(xmat[0])))
 
     return settled, True, ""
+
+
+def _reanchor_fallen_objects(
+    settled: List[Dict[str, Any]],
+    original: List[Dict[str, Any]],
+    *,
+    fall_threshold: float = 0.25,
+) -> List[Dict[str, Any]]:
+    """Re-anchor dynamic objects that fell off surfaces during physics settle.
+
+    If a dynamic object's z dropped more than fall_threshold from its original
+    placement z (e.g. a book slid off a shelf), we restore its original pose.
+    This preserves surface placements that the physics proxy world may not
+    faithfully reproduce (shelf geometry is approximate in the proxy).
+    """
+    from creator.scene.physics_profile import get_physics_profile
+
+    result = [dict(m) for m in settled]
+    for i, (orig, s) in enumerate(zip(original, settled)):
+        model_name = str(orig.get("Model") or orig.get("name") or "")
+        profile = get_physics_profile(model_name)
+        if profile.is_static:
+            continue  # static objects are never updated by settle anyway
+
+        orig_z = float((orig.get("Pose") or {}).get("z", 0.0))
+        settled_z = float((s.get("Pose") or {}).get("z", 0.0))
+        _, _, sz = _size_xyz(orig)
+        floor_z = sz / 2.0
+
+        # The object was on a surface if its original z significantly exceeds floor level.
+        was_on_surface = orig_z > floor_z + fall_threshold
+        if was_on_surface and (orig_z - settled_z) > fall_threshold:
+            # Object fell — restore original placement
+            pose = dict(result[i].get("Pose") or {})
+            pose["x"] = float((orig.get("Pose") or {}).get("x", pose.get("x", 0.0)))
+            pose["y"] = float((orig.get("Pose") or {}).get("y", pose.get("y", 0.0)))
+            pose["z"] = orig_z
+            result[i]["Pose"] = pose
+            result[i]["yaw_deg"] = orig.get("yaw_deg", result[i].get("yaw_deg", 0.0))
+    return result
 
 
 def _load_semantic_plan(project_root: Path) -> Dict[str, Any]:
@@ -341,6 +442,7 @@ def refine_scene_with_engine(
             sim_steps=sim_steps,
         )
         if ok:
+            settled = _reanchor_fallen_objects(settled, search_seed)
             settled = validate_and_repair_layout(settled)
             candidates.append(settled)
             for it in (1, 2, 3):

@@ -247,8 +247,14 @@ def model_to_obb(
 ) -> OBB:
     """Convert a placed model dict to an OBB."""
     size = model.get("size", [1.0, 1.0, 1.0])
-    sx = max(0.02, float(size[0]))
-    sy = max(0.02, float(size[1]))
+    # After euler="90 0 yaw" rotation (Y-up → Z-up):
+    #   mesh X → scene X (width)
+    #   mesh Z → scene Y (depth)   ← floor footprint uses this
+    #   mesh Y → scene Z (height)
+    raw_sx = float(size[0]) if len(size) > 0 else 1.0
+    raw_sy = float(size[2]) if len(size) > 2 else 1.0  # mesh Z = scene depth
+    sx = max(0.02, raw_sx)
+    sy = max(0.02, raw_sy)
 
     pose = model.get("Pose") or {}
     if pos_override is not None:
@@ -270,8 +276,20 @@ def model_to_obb(
 
 
 def model_half_height(model: Dict[str, Any]) -> float:
+    """Return half-height of model in the scene (Z direction).
+
+    Objaverse GLB models use Y-up convention. MuJoCo assembly applies
+    euler="90 0 yaw" which maps mesh-Y → scene-Z.
+    Therefore the scene height = size[1] (mesh Y extent).
+    Falls back to max(size) if size[1] is suspiciously small.
+    """
     size = model.get("size", [1.0, 1.0, 1.0])
-    return max(0.01, float(size[2]) / 2.0)
+    if len(size) < 3:
+        return 0.5
+    sx, sy, sz = float(size[0]), float(size[1]), float(size[2])
+    # Use mesh Y as height; fallback to max if Y is implausibly tiny
+    height = sy if sy >= 0.05 * max(sx, sy, sz) else max(sx, sy, sz)
+    return max(0.01, height / 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +301,8 @@ def _z_intervals_overlap(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
 
     Objects at different Z levels (one stacked on another) should not be
     separated in XY — only objects at the same floor level should be pushed apart.
+
+    Height in scene = size[1] (mesh Y, after euler="90 0 yaw").
     """
     size_a = a.get("size", [1.0, 1.0, 1.0])
     size_b = b.get("size", [1.0, 1.0, 1.0])
@@ -290,8 +310,9 @@ def _z_intervals_overlap(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     pose_b = b.get("Pose") or {}
     za = float(pose_a.get("z", 0.0))
     zb = float(pose_b.get("z", 0.0))
-    ha = max(0.01, float(size_a[2])) / 2.0
-    hb = max(0.01, float(size_b[2])) / 2.0
+    # size[1] = mesh Y = scene Z height (not size[2] which is scene Y depth)
+    ha = max(0.01, float(size_a[1]) if len(size_a) > 1 else 1.0) / 2.0
+    hb = max(0.01, float(size_b[1]) if len(size_b) > 1 else 1.0) / 2.0
     return not ((za + ha < zb - hb) or (zb + hb < za - ha))
 
 

@@ -6,9 +6,18 @@ from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 from tinydb import TinyDB
 
+from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
 from creator.contexts_prompts.model import fmt_model_qa_tmpl
 from creator.contexts_prompts.objects import fmt_objects_qa_tmpl
 from creator.model_databases.objaverse import ObjaverseLoader
+from creator.placement import (
+    build_semantic_plan,
+    repair_layout_by_constraints,
+    solve_floor_placements,
+    solve_small_object_placements,
+    solve_wall_placements,
+    validate_and_repair_layout,
+)
 from creator.postprocess import refine_scene_with_engine
 from creator.sim_interfaces.mujoco import MujocoSimInterface
 from creator.utils.cache import Cache
@@ -216,14 +225,21 @@ def generate_world(
     simulator: Simulator,
     query: str,
     cache_dir: Optional[str] = None,
+    vlm_validation: bool = False,   # enable VLM layout validation loop
+    max_vlm_iters: int = 1,
 ) -> str:
-    """Generate a world without Click/questionary orchestration.
+    """Generate a 3D MuJoCo scene from a text query.
 
-    Notes:
-    - LLM calls go through creator.llm.model.prompt_model (Ollama localhost).
-        - Model search is local string scoring over model name/tags/categories.
+    New pipeline (stages):
+      0. Prompt expansion    — expand short queries into full scene specs
+      1. Object extraction   — LLM selects objects from catalog
+      2. Room sizing         — compute room dimensions from object footprints
+      3. Semantic plan       — LLM generates placement constraints + scene graph
+      4. Layout solving      — floor / wall / surface placement
+      5. Assembly            — MuJoCo XML with proper physics (static/dynamic)
+      6. Physics refinement  — proxy settle for dynamic objects
+      7. VLM validation      — optional LLM layout quality check + repair loop
     """
-
     if not query or not query.strip():
         raise ValueError("query must be non-empty")
 
@@ -233,8 +249,10 @@ def generate_world(
     db = TinyDB(os.path.join(cache.worlds_path, "world_db.json"))
 
     from creator.llm.model import prompt_model
+    from creator.scene.prompt_expander import expand_prompt
+    from creator.scene.room_planner import compute_room_half_size
 
-    chosen_model = "deepseek-v3.1:671b-cloud"  # ignored by prompt_model(), kept for compatibility
+    chosen_model = "deepseek-v3.1:671b-cloud"
 
     if simulator == "mujoco":
         loader = ObjaverseLoader()
@@ -244,79 +262,152 @@ def generate_world(
 
     models, _worlds = loader.get_models()
 
-    # 1) LLM: extract objects for the scene
-    raw_objects = prompt_model(fmt_objects_qa_tmpl, query, chosen_model)
+    # ---------------------------------------------------------------
+    # Stage 0: Prompt expansion
+    # ---------------------------------------------------------------
+    scene_spec = expand_prompt(
+        query,
+        prompt_model_fn=prompt_model,
+        llm_model=chosen_model,
+        verbose=True,
+    )
+    effective_query = scene_spec.effective_query
+    print(f"[pipeline] Room type: {scene_spec.room_type}, "
+          f"initial half-size estimate: {scene_spec.room_half_size}m")
+
+    # ---------------------------------------------------------------
+    # Stage 1: Object extraction
+    # ---------------------------------------------------------------
+    raw_objects = prompt_model(fmt_objects_qa_tmpl, effective_query, chosen_model)
     objects = _objects_from_llm_output(raw_objects)
     if not objects:
-        # Fallback: if the model returns something unexpected,
-        # at least search by the full query
-        objects = [query]
+        objects = [effective_query]
 
-    # 2) Search models for each object, build context
     candidates: List[Dict[str, Any]] = []
     for obj in objects:
         candidates.extend(_rank_models_for_object(obj, models, limit=10))
-
-    # If search returned nothing (rare), fallback to query search
     if not candidates:
-        candidates = _rank_models_for_object(query, models, limit=40)
+        candidates = _rank_models_for_object(effective_query, models, limit=40)
 
     context: List[Dict[str, Any]] = []
-    seen_names = set()
+    seen_names: set = set()
     for m in candidates:
         name = m.get("name")
-        if not name:
-            continue
-        if name in seen_names:
+        if not name or name in seen_names:
             continue
         seen_names.add(name)
-        metadata = {
+        context.append({"name": name, "metadata": {
             "tags": m.get("tags"),
             "categories": m.get("categories"),
-        }
-        if m.get("uuid"):
-            metadata["uuid"] = m.get("uuid")
-        context.append({"name": name, "metadata": metadata})
-
-    template_world_path = os.path.join(cache.worlds_path, "empty.sdf")
+            "uuid": m.get("uuid"),
+        }})
 
     content = fmt_model_qa_tmpl.format(context_str=context)
-    chosen_models_raw = prompt_model(content, query, chosen_model)
+    chosen_models_raw = prompt_model(content, effective_query, chosen_model)
     chosen_models = _normalize_chosen_models(chosen_models_raw)
 
-    filtered_models = []
-    for model in chosen_models:
-        if find_model(model["Model"], models):
-            filtered_models.append(model)
-    chosen_models = _expand_models_by_requested_counts(filtered_models, query)
+    filtered_models = [m for m in chosen_models if find_model(m["Model"], models)]
+    # Expand by requested counts (e.g. "10 desks" → 10 desk instances)
+    chosen_models = _expand_models_by_requested_counts(filtered_models, effective_query)
 
-    # Last-resort fallback: keep scene non-empty even when LLM model-picking fails.
+    # Last-resort fallback
     if not chosen_models:
-        fallback_candidates = _rank_models_for_object(query, models, limit=8)
-        if not fallback_candidates and objects:
-            for obj in objects:
-                fallback_candidates.extend(_rank_models_for_object(obj, models, limit=4))
-
-        seen_fallback = set()
-        fallback_models: List[Dict[str, str]] = []
+        fallback_candidates = _rank_models_for_object(effective_query, models, limit=8)
+        seen_fb: set = set()
+        fallback: List[Dict[str, str]] = []
         for m in fallback_candidates:
             name = m.get("name")
-            if not isinstance(name, str) or not name:
-                continue
-            if name in seen_fallback:
-                continue
-            seen_fallback.add(name)
-            fallback_models.append({"Model": name})
-            if len(fallback_models) >= 6:
-                break
-        chosen_models = fallback_models
+            if isinstance(name, str) and name and name not in seen_fb:
+                seen_fb.add(name)
+                fallback.append({"Model": name})
+                if len(fallback) >= 6:
+                    break
+        chosen_models = fallback
 
     if not chosen_models:
         raise RuntimeError(
-            "No suitable models were found for the prompt. "
-            "Try a more specific prompt (for example: 'office desk and chair')."
+            "No suitable models were found. "
+            "Try a more specific prompt (e.g. 'office desk and chair')."
         )
 
+    # ---------------------------------------------------------------
+    # Stage 2: Load models, sizes, and normalize scale
+    # (room sizing happens after sizes are known)
+    # ---------------------------------------------------------------
+    full_placed_models = interface.get_full_placed_models(
+        chosen_models, loader.get_models_full()
+    )
+    objects_map = interface.load_objects(full_placed_models)
+    for i, _ in enumerate(full_placed_models):
+        uid = full_placed_models[i].get("uuid", "")
+        full_placed_models[i]["model_loc"] = objects_map.get(uid)
+        full_placed_models[i]["save_fn"] = uid + f"_{i}"
+    full_placed_models = interface.update_model_sizes(full_placed_models)
+    full_placed_models = interface.normalize_models_to_realistic_scale(
+        full_placed_models, query=effective_query,
+    )
+
+    # Compute room size from actual object footprints
+    room_half_size = compute_room_half_size(
+        full_placed_models,
+        room_type=scene_spec.room_type,
+        verbose=True,
+    )
+    print(f"[pipeline] Final room: {room_half_size*2:.0f}m × {room_half_size*2:.0f}m")
+
+    # ---------------------------------------------------------------
+    # Stage 3: Semantic plan (constraints + scene graph)
+    # ---------------------------------------------------------------
+    semantic_plan = build_semantic_plan(
+        prompt_model=interface.prompt_model_for_constraints,
+        prompt_template=fmt_constraints_plan_tmpl,
+        query=effective_query,
+        chosen_model=chosen_model,
+        chosen_models=chosen_models,
+        context_models=models,
+    )
+    # Inject room spec into the plan for solvers
+    semantic_plan.setdefault("room", {})["half_size"] = room_half_size
+    semantic_plan["room"]["type"] = scene_spec.room_type
+
+    interface.save_constraint_graph(
+        semantic_plan=semantic_plan,
+        query=effective_query,
+        output_filename="scene_graph_latest.json",
+    )
+
+    # ---------------------------------------------------------------
+    # Stage 4: Layout solving
+    # ---------------------------------------------------------------
+    full_placed_models = solve_floor_placements(
+        full_placed_models=full_placed_models,
+        semantic_plan=semantic_plan,
+        room_half_size=room_half_size,
+        grid_step=0.8,
+        yaw_candidates_deg=(0.0, 90.0, 180.0, 270.0),
+        beam_width=12,
+    )
+    full_placed_models = solve_wall_placements(
+        placed_models=full_placed_models,
+        semantic_plan=semantic_plan,
+        room_half_size=room_half_size,
+    )
+    full_placed_models = solve_small_object_placements(
+        placed_models=full_placed_models,
+        semantic_plan=semantic_plan,
+        small_threshold_volume=0.06,
+    )
+    full_placed_models = validate_and_repair_layout(
+        full_placed_models, room_half_size=room_half_size,
+    )
+    full_placed_models = repair_layout_by_constraints(
+        full_placed_models, semantic_plan=semantic_plan,
+        room_half_size=room_half_size,
+    )
+
+    # ---------------------------------------------------------------
+    # Stage 5: MuJoCo assembly
+    # ---------------------------------------------------------------
     world_name = "scene_latest"
     world_path = (
         os.path.join(cache.worlds_path, world_name) + interface.get_world_extension()
@@ -325,28 +416,65 @@ def generate_world(
     saved_models = interface.add_models(
         chosen_models,
         loader.get_models_full(),
-        query,
+        effective_query,
         world_path,
-        template_world_path,
+        room_half_size=room_half_size,
+        pre_placed_models=full_placed_models,
+        semantic_plan=semantic_plan,
     )
 
-    if simulator == "mujoco":
-        saved_models = refine_scene_with_engine(
-            interface=interface,
+    # ---------------------------------------------------------------
+    # Stage 6: Physics refinement
+    # ---------------------------------------------------------------
+    saved_models = refine_scene_with_engine(
+        interface=interface,
+        world_path=world_path,
+        placed_models=saved_models,
+        room_half_size=room_half_size,
+    )
+
+    # ---------------------------------------------------------------
+    # Stage 6.5: Scene preview render
+    # ---------------------------------------------------------------
+    preview_path = interface.render_preview(world_path)
+    if preview_path:
+        print(f"[pipeline] Preview saved → {preview_path}")
+
+    # ---------------------------------------------------------------
+    # Stage 7: VLM validation loop (optional, enabled by flag)
+    # ---------------------------------------------------------------
+    if vlm_validation:
+        from creator.scene.vlm_validator import validate_and_repair_loop
+        saved_models = validate_and_repair_loop(
+            saved_models,
+            query=effective_query,
+            prompt_model_fn=prompt_model,
+            llm_model=chosen_model,
+            room_half_size=room_half_size,
             world_path=world_path,
-            placed_models=saved_models,
-            room_half_size=5.0,
+            max_iterations=max_vlm_iters,
+            verbose=True,
+        )
+        # Re-assemble after VLM repair
+        saved_models = interface.add_models(
+            [{"Model": m.get("Model", m.get("name", ""))} for m in saved_models],
+            loader.get_models_full(),
+            effective_query,
+            world_path,
+            room_half_size=room_half_size,
         )
 
-    db.insert(
-        {
-            "id": str(uuid.uuid4()),
-            "name": world_name,
-            "filepath": world_path,
-            "prompt": query,
-            "total_models": json.dumps(saved_models, cls=NumpyEncoder),
-            "world_name": "Empty",
-        }
-    )
+    db.insert({
+        "id": str(uuid.uuid4()),
+        "name": world_name,
+        "filepath": world_path,
+        "prompt": query,
+        "expanded_query": effective_query,
+        "room_type": scene_spec.room_type,
+        "room_half_size": room_half_size,
+        "total_models": json.dumps(saved_models, cls=NumpyEncoder),
+        "world_name": "Empty",
+    })
 
+    print(f"[pipeline] Done. Scene saved to: {world_path}")
     return world_path

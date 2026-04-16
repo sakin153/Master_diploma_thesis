@@ -105,13 +105,29 @@ def _spawn_positions_on_surface(
     rsize = _get_size(receptacle)
 
     # Usable surface = receptacle footprint minus item half-extents
+    # After euler="90 0 yaw": size[0]=scene X (width), size[2]=scene Y (depth)
     margin_x = float(item_size[0]) / 2.0 + 0.02
-    margin_y = float(item_size[1]) / 2.0 + 0.02
+    margin_y = (float(item_size[2]) / 2.0 + 0.02) if len(item_size) > 2 else (float(item_size[0]) / 2.0 + 0.02)
     usable_hx = max(0.0, rsize[0] / 2.0 - margin_x)
-    usable_hy = max(0.0, rsize[1] / 2.0 - margin_y)
+    usable_hy = max(0.0, (rsize[2] / 2.0 if len(rsize) > 2 else rsize[0] / 2.0) - margin_y)
 
     positions = [(rx, ry)]  # center always included
-    for _ in range(n_samples - 1):
+
+    # Systematic grid candidates — use (grid_steps+1)² including boundary points
+    # so the search always reaches the extreme edges of the usable surface.
+    grid_steps = max(3, int(n_samples ** 0.5))
+    if usable_hx > 0.01 or usable_hy > 0.01:
+        for gi in range(grid_steps + 1):
+            for gj in range(grid_steps + 1):
+                t = gi / grid_steps       # 0..1 inclusive (boundary reached)
+                s = gj / grid_steps
+                ox = usable_hx * (2 * t - 1) if usable_hx > 0.01 else 0.0
+                oy = usable_hy * (2 * s - 1) if usable_hy > 0.01 else 0.0
+                positions.append((rx + ox, ry + oy))
+
+    # Random candidates for diversity (fills gaps between grid points)
+    remaining = max(16, n_samples - len(positions))
+    for _ in range(remaining):
         ox = rng.uniform(-usable_hx, usable_hx) if usable_hx > 0.01 else 0.0
         oy = rng.uniform(-usable_hy, usable_hy) if usable_hy > 0.01 else 0.0
         positions.append((rx + ox, ry + oy))
@@ -124,9 +140,14 @@ def _xy_overlap(
     x2: float, y2: float, s2: Sequence[float],
     margin: float = 0.02,
 ) -> bool:
-    """Check if two items overlap in XY given their center positions and sizes."""
-    hx1, hy1 = s1[0] / 2.0, s1[1] / 2.0
-    hx2, hy2 = s2[0] / 2.0, s2[1] / 2.0
+    """Check if two items overlap in XY (floor plane).
+
+    After euler="90 0 yaw": size[0]=scene X, size[2]=scene Y (depth), size[1]=height.
+    """
+    hx1 = float(s1[0]) / 2.0
+    hy1 = float(s1[2]) / 2.0 if len(s1) > 2 else float(s1[0]) / 2.0
+    hx2 = float(s2[0]) / 2.0
+    hy2 = float(s2[2]) / 2.0 if len(s2) > 2 else float(s2[0]) / 2.0
     sep_x = (x1 + hx1 + margin < x2 - hx2) or (x2 + hx2 + margin < x1 - hx1)
     sep_y = (y1 + hy1 + margin < y2 - hy2) or (y2 + hy2 + margin < y1 - hy1)
     return not (sep_x or sep_y)
@@ -212,21 +233,26 @@ def _place_on_receptacle(
     rsize = _get_size(receptacle)
 
     z_base = float(rp.get("z", 0.0))
-    z_receptacle = float(rsize[2]) / 2.0
-    z_item = float(item_size[2]) / 2.0
+    # size[1] = mesh Y = scene Z (height) after euler="90 0 yaw" rotation
+    z_receptacle = float(rsize[1]) / 2.0
+    z_item = float(item_size[1]) / 2.0
     target_z = z_base + z_receptacle + z_item + 0.01
 
     # Find receptacle id for tracking
     recep_id = id(receptacle)
     existing = surface_items.get(recep_id, [])
 
-    # Try candidate positions
-    candidates = _spawn_positions_on_surface(receptacle, item_size, n_samples=12, rng=rng)
+    # Try candidate positions (grid + random for full surface coverage)
+    candidates = _spawn_positions_on_surface(receptacle, item_size, n_samples=64, rng=rng)
     best_pos = candidates[0]  # default: center
     best_score = -float("inf")
 
     hx_item = float(item_size[0]) / 2.0
     hy_item = float(item_size[1]) / 2.0
+
+    rx_center = float(rp.get("x", 0.0))
+    ry_center = float(rp.get("y", 0.0))
+    has_existing = bool(existing)
 
     for cx, cy in candidates:
         # Clamp to room bounds
@@ -236,18 +262,25 @@ def _place_on_receptacle(
         # Check collision with other items on this surface
         collision = False
         for ex, ey, esize in existing:
-            if _xy_overlap(cx, cy, item_size, ex, ey, esize):
+            if _xy_overlap(cx, cy, item_size, ex, ey, esize, margin=0.03):
                 collision = True
                 break
 
         if collision:
             continue
 
-        # Prefer positions closer to center of receptacle
-        rx = float(rp.get("x", 0.0))
-        ry = float(rp.get("y", 0.0))
-        dist_to_center = math.sqrt((cx - rx) ** 2 + (cy - ry) ** 2)
-        score = -dist_to_center
+        if has_existing:
+            # Score = maximize minimum distance to any existing item on this surface.
+            # This spreads items evenly across the surface.
+            min_d = min(
+                math.sqrt((cx - ex) ** 2 + (cy - ey) ** 2)
+                for ex, ey, _ in existing
+            )
+            score = min_d
+        else:
+            # No existing items: prefer center to anchor the first object.
+            dist_to_center = math.sqrt((cx - rx_center) ** 2 + (cy - ry_center) ** 2)
+            score = -dist_to_center
 
         if score > best_score:
             best_score = score
