@@ -39,7 +39,7 @@ from embodied_gen.data.utils import (
     post_process_texture,
     save_mesh_with_mtl,
 )
-from embodied_gen.models.delight_model import DelightingModel
+# delight_model removed (disabled in pipeline)
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -469,6 +469,7 @@ def entrypoint() -> None:
             img_path, img_size=camera_params.resolution_hw[0]
         )
         if args.delight:
+            from embodied_gen.models.delight_model import DelightingModel
             delight_model = DelightingModel()
             images = [delight_model(img) for img in images]
 

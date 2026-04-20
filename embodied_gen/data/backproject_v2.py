@@ -40,8 +40,7 @@ from embodied_gen.data.utils import (
     post_process_texture,
     save_mesh_with_mtl,
 )
-from embodied_gen.models.delight_model import DelightingModel
-from embodied_gen.models.sr_model import ImageRealESRGAN
+# delight_model and sr_model removed (disabled in pipeline)
 from embodied_gen.utils.process_media import vcat_pil_images
 
 logging.basicConfig(
@@ -781,8 +780,8 @@ def parse_args():
 
 
 def entrypoint(
-    delight_model: DelightingModel = None,
-    imagesr_model: ImageRealESRGAN = None,
+    delight_model=None,
+    imagesr_model=None,
     **kwargs,
 ) -> trimesh.Trimesh:
     """Entrypoint for texture backprojection from multi-view images.
@@ -812,6 +811,7 @@ def entrypoint(
 
     args.color_path = as_list(args.color_path)
     if args.delight and delight_model is None:
+        from embodied_gen.models.delight_model import DelightingModel
         delight_model = DelightingModel()
 
     color_grid = [Image.open(color_path) for color_path in args.color_path]
@@ -829,6 +829,7 @@ def entrypoint(
 
     # Use RealESRGAN_x4plus for x4 (512->2048) image super resolution.
     if imagesr_model is None:
+        from embodied_gen.models.sr_model import ImageRealESRGAN
         imagesr_model = ImageRealESRGAN(outscale=4)
     multiviews = [imagesr_model(img) for img in multiviews]
     multiviews = [img.convert("RGB") for img in multiviews]

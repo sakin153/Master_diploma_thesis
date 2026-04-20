@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 
 import torch
 from diffusers import (
+    AutoPipelineForText2Image,
     ChromaPipeline,
     Cosmos2TextToImagePipeline,
     DPMSolverMultistepScheduler,
@@ -323,12 +324,42 @@ class ChromaRunner(BasePipelineRunner):
         ).images
 
 
+# ===== SDXL-Turbo (8GB GPU, e.g. RTX 2070 Super) =====
+class SDXLTurboLoader(BasePipelineLoader):
+    """Loader for SDXL-Turbo pipeline. Fits in 8GB VRAM (FP16, Turing+)."""
+
+    def load(self):
+        pipe = AutoPipelineForText2Image.from_pretrained(
+            "stabilityai/sdxl-turbo",
+            torch_dtype=torch.float16,
+            variant="fp16",
+        )
+        pipe.enable_model_cpu_offload()
+        pipe.enable_xformers_memory_efficient_attention()
+        pipe.enable_attention_slicing()
+        return pipe
+
+
+class SDXLTurboRunner(BasePipelineRunner):
+    """Runner for SDXL-Turbo. Uses 4 steps, guidance_scale=0 (distilled model)."""
+
+    def run(self, prompt: str, **kwargs) -> list[Image.Image]:
+        # SDXL-Turbo is distilled: fixed 4 steps, no CFG guidance
+        kwargs["num_inference_steps"] = 4
+        kwargs["guidance_scale"] = 0.0
+        # Native resolution is 512x512; clamp to avoid OOM
+        kwargs["height"] = min(kwargs.get("height", 512), 512)
+        kwargs["width"] = min(kwargs.get("width", 512), 512)
+        return self.pipe(prompt=prompt, **kwargs).images
+
+
 PIPELINE_REGISTRY = {
     "sd35": (SD35Loader, SD35Runner),
     "cosmos": (CosmosLoader, CosmosRunner),
     "kolors": (KolorsLoader, KolorsRunner),
     "flux": (FluxLoader, FluxRunner),
     "chroma": (ChromaLoader, ChromaRunner),
+    "sdxl-turbo": (SDXLTurboLoader, SDXLTurboRunner),
 }
 
 

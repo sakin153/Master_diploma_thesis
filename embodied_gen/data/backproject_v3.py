@@ -39,9 +39,8 @@ from embodied_gen.data.utils import (
     post_process_texture,
     save_mesh_with_mtl,
 )
-from embodied_gen.models.delight_model import DelightingModel
+# delight_model and sr_model removed (disabled in pipeline)
 from embodied_gen.models.gs_model import load_gs_model
-from embodied_gen.models.sr_model import ImageRealESRGAN
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -427,8 +426,8 @@ def parse_args():
 
 @spaces.GPU
 def entrypoint(
-    delight_model: DelightingModel = None,
-    imagesr_model: ImageRealESRGAN = None,
+    delight_model=None,
+    imagesr_model=None,
     **kwargs,
 ) -> trimesh.Trimesh:
     """Entrypoint for texture backprojection from multi-view images.
@@ -476,6 +475,7 @@ def entrypoint(
         multiviews.append(Image.fromarray(color))
 
     if args.delight and delight_model is None:
+        from embodied_gen.models.delight_model import DelightingModel
         delight_model = DelightingModel()
 
     if args.delight:

@@ -47,7 +47,7 @@ logger.info("Loading TEXT2IMG_MODEL...")
 SEMANTIC_CHECKER = SemanticConsistChecker(GPT_CLIENT)
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 TXTGEN_CHECKER = TextGenAlignChecker(GPT_CLIENT)
-PIPE_IMG = build_hf_image_pipeline(os.environ.get("TEXT_MODEL", "sd35"))
+PIPE_IMG = build_hf_image_pipeline(os.environ.get("TEXT_MODEL", "sdxl-turbo"))
 BG_REMOVER = RembgRemover()
 
 
