@@ -1,8 +1,12 @@
+x-bake:
+  dockerfile: Dockerfile
+
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      # Base image must be built first: docker build -f Dockerfile.base -t embodiedgen-base:latest .
     image: embodiedgen-api:latest
     container_name: embodiedgen-api
     restart: unless-stopped
