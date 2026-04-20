@@ -21,7 +21,7 @@ COPY pyproject.toml setup.cfg MANIFEST.in ./
 
 # Устанавливаем пакет (только метаданные, зависимости уже в base)
 # Override версию diffusers: 0.34.0 ломает auto_pipeline из-за отсутствия GlmModel в transformers 4.42
-RUN pip install diffusers==0.30.3
+RUN pip install diffusers==0.30.3 plyfile
 
 RUN pip install --no-deps -e .
 
