@@ -21,14 +21,11 @@ from abc import ABC, abstractmethod
 import torch
 from diffusers import (
     AutoPipelineForText2Image,
-    ChromaPipeline,
-    Cosmos2TextToImagePipeline,
     DPMSolverMultistepScheduler,
     FluxPipeline,
     KolorsPipeline,
     StableDiffusion3Pipeline,
 )
-from diffusers.quantizers import PipelineQuantizationConfig
 from huggingface_hub import snapshot_download
 from PIL import Image
 from transformers import AutoModelForCausalLM, SiglipProcessor
@@ -174,6 +171,8 @@ class CosmosLoader(BasePipelineLoader):
             resume_download=True,
         )
 
+        from diffusers import Cosmos2TextToImagePipeline
+        from diffusers.quantizers import PipelineQuantizationConfig
         config = PipelineQuantizationConfig(
             quant_backend="bitsandbytes_4bit",
             quant_kwargs={
@@ -300,6 +299,7 @@ class ChromaLoader(BasePipelineLoader):
         Returns:
             ChromaPipeline: Loaded pipeline.
         """
+        from diffusers import ChromaPipeline
         return ChromaPipeline.from_pretrained(
             "lodestones/Chroma", torch_dtype=torch.bfloat16
         ).to(self.device)
