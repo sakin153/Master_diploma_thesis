@@ -47,13 +47,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # ── 4. kaolin — pre-built wheel (было ~10 мин компиляции) ───────────
 RUN --mount=type=cache,target=/root/.cache/pip \
+    PY_TAG=$(python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')") && \
     pip install \
-        https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118/kaolin-0.16.0-cp310-cp310-linux_x86_64.whl
+        "https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118/kaolin-0.16.0-${PY_TAG}-${PY_TAG}-linux_x86_64.whl"
 
 # ── 5. pytorch3d — pre-built wheel (было ~15 мин компиляции) ────────
 RUN --mount=type=cache,target=/root/.cache/pip \
+    PY_VER=$(python -c "import sys; print(f'py{sys.version_info.major}{sys.version_info.minor}')") && \
+    PY_TAG=$(python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')") && \
     pip install \
-        https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu118_pyt240/pytorch3d-0.7.8-cp310-cp310-linux_x86_64.whl
+        "https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/${PY_VER}_cu118_pyt240/pytorch3d-0.7.8-${PY_TAG}-${PY_TAG}-linux_x86_64.whl"
 
 # ── 6. gsplat — PyPI wheel (было ~8 мин компиляции) ─────────────────
 RUN --mount=type=cache,target=/root/.cache/pip \
