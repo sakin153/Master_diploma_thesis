@@ -1,14 +1,9 @@
-from embodied_gen.utils.monkey_patches import monkey_path_trellis
-
-monkey_path_trellis()
 import random
 
 import torch
 from PIL import Image
-from embodied_gen.data.utils import trellis_preprocess
 from embodied_gen.models.sam3d import Sam3dInference
 from embodied_gen.utils.trender import pack_state, unpack_state
-from thirdparty.TRELLIS.trellis.pipelines import TrellisImageTo3DPipeline
 
 __all__ = [
     "image3d_model_infer",
@@ -16,12 +11,20 @@ __all__ = [
 
 
 def image3d_model_infer(
-    pipe: TrellisImageTo3DPipeline | Sam3dInference,
+    pipe,
     seg_image: Image.Image,
     seed: int = None,
     **kwargs: dict,
 ) -> dict[str, any]:
-    if isinstance(pipe, TrellisImageTo3DPipeline):
+    try:
+        from thirdparty.TRELLIS.trellis.pipelines import TrellisImageTo3DPipeline
+        _trellis_available = True
+    except ImportError:
+        _trellis_available = False
+        TrellisImageTo3DPipeline = type(None)
+
+    if _trellis_available and isinstance(pipe, TrellisImageTo3DPipeline):
+        from embodied_gen.data.utils import trellis_preprocess
         pipe.cuda()
         seg_image = trellis_preprocess(seg_image)
         outputs = pipe.run(
