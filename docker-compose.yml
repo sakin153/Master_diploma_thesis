@@ -1,0 +1,52 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: embodiedgen-api:latest
+    container_name: embodiedgen-api
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      # LLM для физ. параметров — локальный Ollama на хосте
+      GPT_AGENT_TYPE: ${GPT_AGENT_TYPE:-ollama}
+      # Из контейнера хостовый localhost доступен через host.docker.internal
+      OLLAMA_HOST: http://host.docker.internal:11434/v1
+      MODEL_NAME: ${MODEL_NAME:-qwen3.5:cloud}
+
+      # Text-to-image модель (sdxl-turbo для 8GB GPU)
+      TEXT_MODEL: ${TEXT_MODEL:-sdxl-turbo}
+
+      # Пути внутри контейнера
+      OUTPUT_ROOT: /app/outputs/jobs
+      HF_HOME: /app/weights/hf_cache
+      MODELSCOPE_CACHE: /app/weights/modelscope_cache
+      TOKENIZERS_PARALLELISM: "false"
+
+    volumes:
+      - weights:/app/weights
+      - outputs:/app/outputs
+      - ./embodied_gen/utils/gpt_config.yaml:/app/embodied_gen/utils/gpt_config.yaml
+
+    # Позволяет контейнеру обращаться к хостовому localhost (Ollama)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    shm_size: "4gb"
+
+volumes:
+  weights:
+    driver: local
+  outputs:
+    driver: local

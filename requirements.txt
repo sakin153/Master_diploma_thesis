@@ -52,3 +52,6 @@ hydra-core
 modelscope
 timm
 open3d
+# API server
+fastapi==0.115.0
+uvicorn[standard]==0.30.0

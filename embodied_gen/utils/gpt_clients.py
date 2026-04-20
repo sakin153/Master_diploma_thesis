@@ -233,14 +233,26 @@ class GPTclient:
 with open(CONFIG_FILE, "r") as f:
     config = yaml.safe_load(f)
 
-agent_type = config["agent_type"]
+# GPT_AGENT_TYPE env var overrides YAML agent_type
+agent_type = os.environ.get("GPT_AGENT_TYPE", config["agent_type"])
 agent_config = config.get(agent_type, {})
 
-# Prefer environment variables, fallback to YAML config
-endpoint = os.environ.get("ENDPOINT", agent_config.get("endpoint"))
-api_key = os.environ.get("API_KEY", agent_config.get("api_key"))
-api_version = os.environ.get("API_VERSION", agent_config.get("api_version"))
-model_name = os.environ.get("MODEL_NAME", agent_config.get("model_name"))
+if agent_type == "ollama":
+    # OLLAMA_HOST allows overriding endpoint (useful inside Docker)
+    endpoint    = os.environ.get("OLLAMA_HOST", agent_config.get("endpoint", "http://localhost:11434/v1"))
+    api_key     = "ollama"
+    api_version = None
+    model_name  = os.environ.get("MODEL_NAME", agent_config.get("model_name", "qwen3.5:cloud"))
+elif agent_type == "qwen2.5-vl":
+    endpoint    = os.environ.get("OPENROUTER_API_KEY") and "https://openrouter.ai/api/v1" or agent_config.get("endpoint")
+    api_key     = os.environ.get("OPENROUTER_API_KEY", agent_config.get("api_key"))
+    api_version = None
+    model_name  = os.environ.get("MODEL_NAME", agent_config.get("model_name"))
+else:
+    endpoint    = os.environ.get("AZURE_OPENAI_ENDPOINT", os.environ.get("ENDPOINT", agent_config.get("endpoint")))
+    api_key     = os.environ.get("AZURE_OPENAI_API_KEY",  os.environ.get("API_KEY",  agent_config.get("api_key")))
+    api_version = os.environ.get("API_VERSION", agent_config.get("api_version"))
+    model_name  = os.environ.get("MODEL_NAME",  agent_config.get("model_name"))
 
 GPT_CLIENT = GPTclient(
     endpoint=endpoint,

@@ -1,5 +1,11 @@
-# config.yaml
-agent_type: "qwen2.5-vl" # gpt-4o or qwen2.5-vl
+# agent_type: "ollama" | "qwen2.5-vl" | "gpt-4o"
+agent_type: "ollama"
+
+ollama:
+  endpoint: http://localhost:11434/v1
+  api_key: ollama
+  api_version: null
+  model_name: qwen3.5:cloud
 
 gpt-4o:
   endpoint: https://xxx.openai.azure.com
