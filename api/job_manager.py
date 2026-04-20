@@ -1,5 +1,8 @@
 import glob
+import io
+import logging
 import os
+import sys
 import threading
 import uuid
 from collections import OrderedDict
@@ -7,6 +10,44 @@ from datetime import datetime
 from typing import Optional
 
 from api.models import GenerateRequest, JobFiles, JobState, JobStatus
+
+MAX_LOG_LINES = 200
+
+
+class _JobLogHandler(logging.Handler):
+    """Forwards Python logging records to the job's log buffer."""
+
+    def __init__(self, append_fn):
+        super().__init__()
+        self._append = append_fn
+
+    def emit(self, record):
+        try:
+            self._append(self.format(record))
+        except Exception:
+            pass
+
+
+class _TeeStream(io.TextIOBase):
+    """Tees writes to original stream and job log buffer."""
+
+    def __init__(self, original, append_fn):
+        self._original = original
+        self._append = append_fn
+        self._buf = ""
+
+    def write(self, s):
+        self._original.write(s)
+        self._original.flush()
+        self._buf += s
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            if line.strip():
+                self._append(line)
+        return len(s)
+
+    def flush(self):
+        self._original.flush()
 
 
 class JobManager:
@@ -77,6 +118,14 @@ class JobManager:
                     if self._queue and self._queue[0] == job_id:
                         self._queue.pop(0)
 
+    def _append_log(self, job_id: str, line: str):
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job.logs.append(line)
+                if len(job.logs) > MAX_LOG_LINES:
+                    job.logs = job.logs[-MAX_LOG_LINES:]
+
     def _run_job(self, job_id: str):
         with self._lock:
             job = self._jobs[job_id]
@@ -89,6 +138,18 @@ class JobManager:
                 model=job.model,
             )
 
+        append = lambda line: self._append_log(job_id, line)
+
+        # Intercept stdout/stderr and Python root logger
+        tee_out = _TeeStream(sys.stdout, append)
+        tee_err = _TeeStream(sys.stderr, append)
+        log_handler = _JobLogHandler(append)
+        log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+        root_logger = logging.getLogger()
+        root_logger.addHandler(log_handler)
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = tee_out, tee_err
+
         try:
             files = self._execute(job_id, request)
             with self._lock:
@@ -100,6 +161,9 @@ class JobManager:
                 job.status = JobState.failed
                 job.finished_at = datetime.utcnow()
                 job.error = str(exc)
+        finally:
+            sys.stdout, sys.stderr = old_stdout, old_stderr
+            root_logger.removeHandler(log_handler)
 
     def _execute(self, job_id: str, request: GenerateRequest) -> JobFiles:
         # Import here so models are loaded once at server startup, not import time

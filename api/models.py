@@ -46,6 +46,7 @@ class JobStatus(BaseModel):
     error: Optional[str] = None
     files: Optional[JobFiles] = None
     queue_position: Optional[int] = None
+    logs: list[str] = Field(default_factory=list, description="Recent log lines")
 
 
 class GenerateResponse(BaseModel):
