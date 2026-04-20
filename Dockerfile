@@ -13,6 +13,12 @@ COPY .gitmodules .gitmodules
 COPY thirdparty/TRELLIS thirdparty/TRELLIS
 COPY thirdparty/sam3d   thirdparty/sam3d
 
+# Если flexicubes не был инициализирован (вложенный сабмодуль TRELLIS)
+RUN if [ ! -f thirdparty/TRELLIS/trellis/representations/mesh/flexicubes/flexicubes.py ]; then \
+    git clone --depth=1 https://github.com/nv-tlabs/FlexiCubes.git /tmp/fc && \
+    cp /tmp/fc/flexicubes.py thirdparty/TRELLIS/trellis/representations/mesh/flexicubes/ && \
+    rm -rf /tmp/fc; fi
+
 # Исходный код проекта
 COPY embodied_gen embodied_gen
 COPY api          api
