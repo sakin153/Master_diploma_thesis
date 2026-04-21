@@ -964,437 +964,187 @@ dir outputs\generated\asset3d\simple\result\
 
 # Docker
 
-Запуск через Docker — наиболее воспроизводимый способ. Все зависимости
-упакованы в образ, на хосте нужны только **Docker**, **NVIDIA Container Toolkit**
-и запущенная **Ollama**.
-
-Поддерживаемые хост-ОС: **Linux** (рекомендуется) и **Windows** с WSL2.
-
-## Содержание (Docker)
-
-1. [Требования (Docker)](#1-требования-docker)
-2. [Установка Docker и NVIDIA Container Toolkit](#2-установка-docker-и-nvidia-container-toolkit)
-3. [Клонирование репозитория](#3-клонирование-репозитория)
-4. [Настройка LLM (Docker)](#4-настройка-llm-docker)
-5. [Сборка базового образа](#5-сборка-базового-образа)
-6. [Запуск через docker compose](#6-запуск-через-docker-compose)
-7. [Отправка запросов к API](#7-отправка-запросов-к-api)
-8. [Управление контейнером](#8-управление-контейнером)
-9. [Переменные окружения (Docker)](#9-переменные-окружения-docker)
-10. [Устранение проблем (Docker)](#10-устранение-проблем-docker)
+На хосте нужны только **Docker + NVIDIA Container Toolkit** и запущенная **Ollama**.
+Все зависимости упакованы в образ.
 
 ---
 
-## 1. Требования (Docker)
+## Шаг 1 — Установить Docker и NVIDIA Container Toolkit
 
-| Компонент | Версия |
-|-----------|--------|
-| Docker Engine | 24.0+ |
-| Docker Compose | v2.20+ (входит в Docker Desktop / Engine) |
-| NVIDIA Container Toolkit | последняя |
-| NVIDIA драйвер | 520+ |
-| GPU VRAM | 8 GB+ |
-| Диск (образ + веса) | ~50 GB |
-
----
-
-## 2. Установка Docker и NVIDIA Container Toolkit
-
-### Linux (Ubuntu / Fedora)
-
-**Docker Engine:**
-
+**Ubuntu:**
 ```bash
-# Ubuntu
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-newgrp docker   # или перелогиниться
+sudo usermod -aG docker $USER && newgrp docker
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
 
-# Fedora
-sudo dnf install docker
+**Fedora:**
+```bash
+sudo dnf install docker nvidia-container-toolkit
 sudo systemctl enable --now docker
 sudo usermod -aG docker $USER
-```
-
-**NVIDIA Container Toolkit:**
-
-```bash
-# Добавить репозиторий
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-    | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-    | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-    | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-
-# Ubuntu
-sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-
-# Fedora
-sudo dnf install nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 ```
 
-Проверка:
+**Windows:** установить [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+с включённым WSL2. NVIDIA Container Toolkit подхватывается автоматически при актуальном
+драйвере (537.13+).
 
+Проверка GPU в Docker:
 ```bash
-docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
-# Должен вывести таблицу с GPU
-```
-
-### Windows (WSL2)
-
-1. Установить **Docker Desktop for Windows** (`https://www.docker.com/products/docker-desktop/`)
-2. В настройках Docker Desktop включить: **Use WSL 2 based engine**
-3. Установить расширение **NVIDIA Container Toolkit** — входит автоматически при
-   наличии актуального драйвера NVIDIA для Windows (537.13+)
-
-Проверка (в PowerShell):
-
-```powershell
 docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
 ```
 
 ---
 
-## 3. Клонирование репозитория
+## Шаг 2 — Установить и запустить Ollama на хосте
+
+Контейнер обращается к Ollama **на хосте** через `host.docker.internal` (уже настроено
+в [docker-compose.yml](docker-compose.yml)).
 
 ```bash
-git clone https://github.com/ВАШ_ORG/EmbodiedGen.git
-cd EmbodiedGen
-git submodule update --init --recursive
-```
-
----
-
-## 4. Настройка LLM (Docker)
-
-Контейнер обращается к Ollama, запущенной **на хосте** (не внутри Docker).
-Адрес хоста изнутри контейнера: `host.docker.internal` — уже прописан в
-[docker-compose.yml](docker-compose.yml).
-
-### Установить и запустить Ollama на хосте
-
-**Linux:**
-
-```bash
+# Linux
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen2.5vl:7b
-# Ollama запускается как systemd-сервис автоматически
 ```
 
-**Windows:**
+Windows: скачать с `https://ollama.com/download/windows`, затем `ollama pull qwen2.5vl:7b`.
 
-Скачать с `https://ollama.com/download/windows`, установить, затем:
+---
 
-```powershell
-ollama pull qwen2.5vl:7b
-```
+## Шаг 3 — Настроить LLM
 
-### Отредактировать gpt_config.yaml
-
-Файл [embodied_gen/utils/gpt_config.yaml](embodied_gen/utils/gpt_config.yaml)
-монтируется в контейнер как volume, поэтому его можно менять без пересборки образа.
+Отредактировать [embodied_gen/utils/gpt_config.yaml](embodied_gen/utils/gpt_config.yaml)
+(монтируется в контейнер как volume — пересборки не нужно):
 
 ```yaml
 agent_type: "ollama"
 
 ollama:
-  endpoint: http://host.docker.internal:11434/v1
+  endpoint: http://host.docker.internal:11434/v1   # не localhost!
   api_key: ollama
   api_version: null
-  model_name: qwen2.5vl:7b   # имя как в `ollama list`
+  model_name: qwen2.5vl:7b
 ```
-
-> Для OpenRouter или GPT-4o — см. раздел [Настройка LLM (Linux)](#8-настройка-языковой-модели-llm).
-> Конфиг тот же, только для Docker `endpoint` у Ollama должен быть
-> `http://host.docker.internal:11434/v1` вместо `localhost`.
 
 ---
 
-## 5. Сборка базового образа
+## Шаг 4 — Собрать базовый образ (один раз)
 
-Базовый образ содержит все зависимости (PyTorch, расширения C++, Hunyuan3D-2).
-Собирается **один раз** — занимает **30–50 минут** в зависимости от скорости интернета.
+Собирается **один раз**, занимает ~40 минут. Пересобирать нужно только при изменении
+зависимостей.
 
 ```bash
-# Находясь в корне репозитория EmbodiedGen
 docker build -f Dockerfile.base -t embodiedgen-base:latest .
 ```
 
-Что происходит внутри:
-- Устанавливает xformers, requirements.txt
-- Компилирует pytorch3d, diff-gaussian-rasterization (~20 мин)
-- Клонирует и устанавливает Hunyuan3D-2
-- Устанавливает FastAPI + uvicorn
-
-> **Пересобирать базовый образ** нужно только при изменении зависимостей
-> (requirements.txt, новые git-пакеты). При изменении только Python-кода
-> пересобирается только лёгкий app-образ (~1 мин).
-
 ---
 
-## 6. Запуск через docker compose
+## Шаг 5 — Запустить
 
 ```bash
 docker compose up --build
 ```
 
-Флаг `--build` пересобирает app-образ (копирует свежий код). При первом запуске
-также скачиваются веса моделей (~19 GB) — это займёт время.
+`--build` пересобирает app-образ (~1 мин) при каждом изменении кода.
+При первом запуске скачаются веса моделей ~19 GB.
 
-**Запуск в фоне:**
-
+**Фоновый режим:**
 ```bash
 docker compose up --build -d
-docker compose logs -f   # следить за логами
+docker compose logs -f
 ```
 
 **Остановка:**
-
 ```bash
 docker compose down
 ```
 
----
-
-### Отключить texture pipeline (экономия ~6 GB VRAM)
-
+**Для 8 GB GPU** — отключить texture pipeline (экономия ~6 GB VRAM):
 ```bash
 HUNYUAN3D_TEXTURE=0 docker compose up --build
 ```
 
-Или добавить в `.env` файл рядом с `docker-compose.yml`:
-
+Или создать `.env` рядом с `docker-compose.yml`:
 ```env
 HUNYUAN3D_TEXTURE=0
 TEXT_MODEL=sdxl-turbo
-```
-
-И просто запускать `docker compose up --build`.
-
----
-
-## 7. Отправка запросов к API
-
-После запуска сервер доступен на `http://localhost:8000`.
-
-**Swagger UI** (интерактивная документация):
-
-```
-http://localhost:8000/docs
-```
-
-**Создать задачу генерации:**
-
-```bash
-curl -X POST http://localhost:8000/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "a wooden chair", "name": "chair"}'
-# Ответ: {"job_id": "abc123..."}
-```
-
-**Проверить статус:**
-
-```bash
-curl http://localhost:8000/api/jobs/abc123
-# Ответ: {"status": "running"} или {"status": "done", "result": {...}}
-```
-
-**Посмотреть логи задачи:**
-
-```bash
-curl http://localhost:8000/api/jobs/abc123/logs
-```
-
-**Проверить здоровье сервера:**
-
-```bash
-curl http://localhost:8000/health
-# Ответ: {"status": "ok"}
-```
-
----
-
-### Windows (PowerShell)
-
-```powershell
-# Создать задачу
-Invoke-RestMethod http://localhost:8000/api/generate `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"prompt": "a wooden chair", "name": "chair"}'
-
-# Статус
-Invoke-RestMethod http://localhost:8000/api/jobs/<job_id>
-
-# Логи
-Invoke-RestMethod http://localhost:8000/api/jobs/<job_id>/logs
-```
-
----
-
-## 8. Управление контейнером
-
-```bash
-# Посмотреть статус
-docker compose ps
-
-# Логи в реальном времени
-docker compose logs -f
-
-# Зайти внутрь контейнера (для отладки)
-docker compose exec api bash
-
-# Перезапустить без пересборки
-docker compose restart
-
-# Остановить и удалить контейнер (volumes сохраняются)
-docker compose down
-
-# Удалить контейнер И все сохранённые веса/результаты
-docker compose down -v
-```
-
-**Посмотреть где хранятся веса и результаты:**
-
-```bash
-docker volume ls
-# embodiedgen_weights   — веса моделей (~19 GB)
-# embodiedgen_outputs   — результаты генерации
-
-# Найти физическое расположение тома
-docker volume inspect embodiedgen_weights
-```
-
----
-
-## 9. Переменные окружения (Docker)
-
-Все переменные передаются через `docker-compose.yml`. Переопределить можно
-через файл `.env` в корне репозитория или через командную строку.
-
-| Переменная | По умолчанию | Описание |
-|------------|-------------|----------|
-| `TEXT_MODEL` | `sdxl-turbo` | Модель Text→Image |
-| `HUNYUAN3D_TEXTURE` | `1` | `0` — выключить текстуры Hunyuan3D (~6 GB экономия) |
-| `GPT_AGENT_TYPE` | `ollama` | Тип LLM-агента |
-| `MODEL_NAME` | `qwen3.5:cloud` | Имя модели Ollama |
-
-Пример `.env` для слабых GPU (8 GB):
-
-```env
-TEXT_MODEL=sdxl-turbo
-HUNYUAN3D_TEXTURE=0
-GPT_AGENT_TYPE=ollama
 MODEL_NAME=qwen2.5vl:7b
 ```
 
 ---
 
-## 10. Устранение проблем (Docker)
+## Использование API
 
-### docker: Error response from daemon: could not select device driver "nvidia"
-
-NVIDIA Container Toolkit не установлен или не настроен:
+Сервер доступен на `http://localhost:8000`.
+Swagger UI: `http://localhost:8000/docs`
 
 ```bash
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
+# Запустить генерацию
+curl -X POST http://localhost:8000/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "a wooden chair", "name": "chair"}'
+# → {"job_id": "abc123"}
+
+# Статус задачи
+curl http://localhost:8000/api/jobs/abc123
+
+# Логи задачи
+curl http://localhost:8000/api/jobs/abc123/logs
+```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-RestMethod http://localhost:8000/api/generate `
+  -Method POST -ContentType "application/json" `
+  -Body '{"prompt": "a wooden chair", "name": "chair"}'
+
+Invoke-RestMethod http://localhost:8000/api/jobs/<job_id>
 ```
 
 ---
 
-### CUDA out of memory внутри контейнера
+## Полезные команды
 
 ```bash
-# Отключить texture pipeline
+docker compose ps                   # статус контейнера
+docker compose logs -f              # логи в реальном времени
+docker compose exec api bash        # зайти внутрь
+docker compose restart              # перезапустить без пересборки
+docker compose down                 # остановить (volumes сохраняются)
+docker compose down -v              # остановить + удалить веса и результаты
+
+# Пересборка base после изменения зависимостей
+docker build -f Dockerfile.base -t embodiedgen-base:latest . && docker compose up --build
+```
+
+---
+
+## Устранение проблем (Docker)
+
+**`could not select device driver "nvidia"`** — NVIDIA Container Toolkit не настроен:
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
+```
+
+**CUDA out of memory** — отключить текстуры:
+```bash
 HUNYUAN3D_TEXTURE=0 docker compose up
 ```
 
----
+**Ollama недоступна из контейнера** — убедиться, что сервис запущен на хосте и
+в `docker-compose.yml` есть `extra_hosts: ["host.docker.internal:host-gateway"]`.
 
-### Контейнер не видит Ollama (connection refused к host.docker.internal)
-
-```bash
-# Убедиться что Ollama запущена на хосте
-curl http://localhost:11434/api/tags
-
-# На Linux проверить, что extra_hosts прописан в docker-compose.yml:
-# extra_hosts:
-#   - "host.docker.internal:host-gateway"
-```
-
----
-
-### Медленная загрузка весов с HuggingFace
-
-Добавить в `docker-compose.yml` в секцию `environment`:
-
+**Медленный HuggingFace** — добавить в `docker-compose.yml`:
 ```yaml
 HF_ENDPOINT: https://hf-mirror.com
 ```
 
----
-
-### DINOv2 не скачивается (РФ)
-
-Скачать файл вручную через VPN и скопировать в том:
-
+**DINOv2 заблокирован (РФ)** — скопировать файл в контейнер:
 ```bash
-# Найти путь к тому
-docker volume inspect embodiedgen_weights
-
-# Скопировать файл в контейнер
-docker compose cp \
-  dinov2_vitl14_reg4_pretrain.pth \
+docker compose cp dinov2_vitl14_reg4_pretrain.pth \
   api:/app/weights/torch_cache/hub/checkpoints/dinov2_vitl14_reg4_pretrain.pth
-```
-
----
-
-### Пересборка после изменения кода
-
-```bash
-# Только app-образ (~1 мин, без пересборки base)
-docker compose up --build
-
-# Полная пересборка включая base (после изменения зависимостей)
-docker build -f Dockerfile.base -t embodiedgen-base:latest . && \
-docker compose up --build
-```
-
----
-
-## Краткий чеклист первого запуска (Docker)
-
-```bash
-# 1. Убедиться, что Docker работает с GPU
-docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
-
-# 2. Убедиться, что Ollama запущена на хосте
-curl http://localhost:11434/api/tags
-
-# 3. Настроить LLM
-nano embodied_gen/utils/gpt_config.yaml
-# agent_type: "ollama"
-# model_name: qwen2.5vl:7b
-# endpoint: http://host.docker.internal:11434/v1
-
-# 4. Собрать базовый образ (один раз, ~40 мин)
-docker build -f Dockerfile.base -t embodiedgen-base:latest .
-
-# 5. Запустить (первый раз скачает веса ~19 GB)
-HUNYUAN3D_TEXTURE=0 docker compose up --build
-
-# 6. Проверить в браузере
-# http://localhost:8000/docs
-
-# 7. Отправить тестовый запрос
-curl -X POST http://localhost:8000/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "a wooden chair", "name": "chair"}'
 ```
