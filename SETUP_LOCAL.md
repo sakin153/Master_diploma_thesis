@@ -47,13 +47,25 @@ pip install gsplat==1.5.3
 pip install "nvdiffrast@git+https://github.com/NVlabs/nvdiffrast.git@729261d"
 ```
 
-### 5. Git-сабмодули
+### 5. Hunyuan3D-2 (3D-генерация)
+
+```powershell
+# Клонируем рядом с проектом
+git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2
+cd Hunyuan3D-2
+pip install -e .
+cd ..
+```
+
+> Если при установке ошибки на Windows — попробуй через WSL2 или Linux.
+
+### 6. Git-сабмодули
 
 ```powershell
 git submodule update --init --recursive
 ```
 
-### 6. Установить проект
+### 7. Установить проект
 
 ```powershell
 pip install --no-deps -e .
@@ -66,13 +78,14 @@ pip install --no-deps -e .
 ### Переменные окружения (каждый раз перед запуском)
 
 ```powershell
-$env:TEXT_MODEL      = "sdxl-turbo"
-$env:GPT_AGENT_TYPE  = "ollama"
-$env:OLLAMA_HOST     = "http://localhost:11434/v1"
-$env:MODEL_NAME      = "qwen3.5:cloud"
-$env:OUTPUT_ROOT     = "outputs/jobs"
-$env:TORCH_HOME      = "weights/torch_cache"
-$env:HF_HOME         = "weights/hf_cache"
+$env:TEXT_MODEL         = "sdxl-turbo"
+$env:GPT_AGENT_TYPE     = "ollama"
+$env:OLLAMA_HOST        = "http://localhost:11434/v1"
+$env:MODEL_NAME         = "qwen3.5:cloud"
+$env:OUTPUT_ROOT        = "outputs/jobs"
+$env:TORCH_HOME         = "weights/torch_cache"
+$env:HF_HOME            = "weights/hf_cache"
+$env:HUNYUAN3D_TEXTURE  = "1"   # "0" — отключить texture pipeline (экономия 6 GB)
 ```
 
 ### Вариант А — API сервер
@@ -109,13 +122,35 @@ python generate.py --prompt "a wooden chair" --name chair
 
 ---
 
+## Переключение модели 3D-генерации
+
+В файле [embodied_gen/scripts/imageto3d.py](embodied_gen/scripts/imageto3d.py) строка:
+
+```python
+IMAGE3D_MODEL = "HUNYUAN3D"   # активная модель
+# IMAGE3D_MODEL = "SAM3D"     # вернуться на SAM3D (нужен сабмодуль)
+# IMAGE3D_MODEL = "TRELLIS"   # нужно 20+ GB VRAM
+```
+
+---
+
 ## Веса моделей
 
 При первом запуске автоматически скачаются:
-- SDXL-Turbo (~7 GB) → `weights/hf_cache/`
-- SAM3D (~5 GB) → `weights/hf_cache/`
-- DINOv2 ViT-L/14 (~1.1 GB) → `weights/torch_cache/`
-- MoGe (~1 GB) → `weights/hf_cache/`
+
+| Модель | Размер | Куда |
+|--------|--------|------|
+| SDXL-Turbo (text→image) | ~7 GB | `weights/hf_cache/` |
+| Hunyuan3D-2mini (shape) | ~4 GB | HuggingFace cache |
+| Hunyuan3D-2 Paint (texture) | ~6 GB | HuggingFace cache |
+| DINOv2 ViT-L/14 | ~1.1 GB | `weights/torch_cache/` |
+| MoGe | ~1 GB | `weights/hf_cache/` |
 
 > **Важно для РФ:** `dl.fbaipublicfiles.com` (DINOv2) может быть заблокирован.
-> Скачай вручную через VPN и положи в `weights/torch_cache/hub/checkpoints/dinov2_vitl14_reg4_pretrain.pth`
+> Скачай вручную через VPN и положи в
+> `weights/torch_cache/hub/checkpoints/dinov2_vitl14_reg4_pretrain.pth`
+
+> Если нужно отключить texture pipeline (экономия ~6 GB VRAM):
+> ```powershell
+> $env:HUNYUAN3D_TEXTURE = "0"
+> ```

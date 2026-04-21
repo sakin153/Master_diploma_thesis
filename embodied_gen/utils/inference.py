@@ -26,6 +26,13 @@ def image3d_model_infer(
         _trellis_available = False
         TrellisImageTo3DPipeline = type(None)
 
+    try:
+        from embodied_gen.models.hunyuan3d import Hunyuan3DInference
+        _hunyuan_available = True
+    except ImportError:
+        _hunyuan_available = False
+        Hunyuan3DInference = type(None)
+
     _seed = random.randint(0, 100000) if seed is None else seed
 
     if _trellis_available and isinstance(pipe, TrellisImageTo3DPipeline):
@@ -40,14 +47,18 @@ def image3d_model_infer(
                 **kwargs,
             )
         pipe.cpu()
+
+    elif _hunyuan_available and isinstance(pipe, Hunyuan3DInference):
+        # Pipeline already uses @torch.inference_mode() internally.
+        outputs = pipe.run(seg_image, seed=_seed, **kwargs)
+
     elif isinstance(pipe, Sam3dInference):
-        # torch.inference_mode disables autograd and view tracking,
-        # cutting peak activation memory by ~25-35 % vs no-grad alone.
+        # torch.inference_mode reduces peak activation memory ~25-35%.
         with torch.inference_mode():
             outputs = pipe.run(seg_image, seed=_seed, **kwargs)
         state = pack_state(outputs["gaussian"][0], outputs["mesh"][0])
-        # Align GS3D from SAM3D with TRELLIS format.
         outputs["gaussian"][0], _ = unpack_state(state, device="cuda")
+
     else:
         raise ValueError(f"Unsupported pipeline type: {type(pipe)}")
 

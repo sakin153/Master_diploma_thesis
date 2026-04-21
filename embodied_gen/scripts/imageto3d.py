@@ -25,9 +25,6 @@ import trimesh
 from PIL import Image
 from embodied_gen.data.backproject_v3 import entrypoint as backproject_api
 from embodied_gen.data.utils import delete_dir
-
-# from embodied_gen.models.sr_model import ImageRealESRGAN
-# from embodied_gen.models.delight_model import DelightingModel
 from embodied_gen.models.gs_model import GaussianOperator
 from embodied_gen.models.segment_model import RembgRemover
 from embodied_gen.scripts.render_gs import entrypoint as render_gs_api
@@ -49,8 +46,11 @@ from embodied_gen.validators.quality_checkers import (
 )
 from embodied_gen.validators.urdf_convertor import URDFGenerator
 
-# random.seed(0)
-IMAGE3D_MODEL = "SAM3D"  # TRELLIS or SAM3D
+# ── Active 3-D model ─────────────────────────────────────────────────────────
+# "SAM3D"    — Meta SAM-3D-Objects (GS + mesh, requires ~10-14 GB)
+# "TRELLIS"  — Microsoft TRELLIS (GS + mesh, requires ~20-25 GB)
+# "HUNYUAN3D"— Tencent Hunyuan3D-2mini (mesh only, ~6-10 GB)
+IMAGE3D_MODEL = "HUNYUAN3D"
 
 # Quality checkers: GPT-based, no VRAM, safe at module level.
 RBG_REMOVER = RembgRemover()
@@ -59,9 +59,7 @@ GEO_CHECKER = MeshGeoChecker(GPT_CLIENT)
 AESTHETIC_CHECKER = ImageAestheticChecker()
 CHECKERS = [GEO_CHECKER, SEG_CHECKER, AESTHETIC_CHECKER]
 
-# ── Lazy 3-D generation pipeline (10–15 GB VRAM for SAM3D) ──────────────────
-# Loaded on first call to entrypoint(); never loaded together with the
-# text-to-image pipeline so that 8 GB GPUs can run the full pipeline.
+# ── Lazy 3-D generation pipeline ─────────────────────────────────────────────
 _PIPELINE = None
 
 
@@ -80,6 +78,9 @@ def _get_pipeline():
         elif IMAGE3D_MODEL == "SAM3D":
             from embodied_gen.models.sam3d import Sam3dInference
             _PIPELINE = Sam3dInference()
+        elif IMAGE3D_MODEL == "HUNYUAN3D":
+            from embodied_gen.models.hunyuan3d import Hunyuan3DInference
+            _PIPELINE = Hunyuan3DInference()
         log_vram("after 3D pipeline load")
     return _PIPELINE
 
@@ -117,15 +118,10 @@ def parse_args():
     parser.add_argument("--version", type=str, default=VERSION)
     parser.add_argument("--keep_intermediate", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument(
-        "--n_retry",
-        type=int,
-        default=3,
-    )
+    parser.add_argument("--n_retry", type=int, default=3)
     parser.add_argument("--disable_decompose_convex", action="store_true")
     parser.add_argument("--texture_size", type=int, default=1024)
     args, unknown = parser.parse_known_args()
-
     return args
 
 
@@ -161,7 +157,6 @@ def entrypoint(**kwargs):
             image = Image.open(image_path)
             image.save(f"{output_root}/{filename}_raw.png")
 
-            # Segmentation: Get segmented image using Rembg.
             seg_path = f"{output_root}/{filename}_cond.png"
             seg_image = (
                 RBG_REMOVER(image) if image.mode != "RGBA" else image
@@ -171,14 +166,17 @@ def entrypoint(**kwargs):
             seed = args.seed
             asset_node = "unknown"
             gs_model = None
+            mesh_model = None
+            trimesh_result = None
+            aligned_gs_path = None
+
             if isinstance(args.asset_type, list) and args.asset_type[idx]:
                 asset_node = args.asset_type[idx]
 
-            # ── Stage 1: Image → Gaussian Splat + Mesh ───────────────────
+            # ── Stage 1: Image → 3D ───────────────────────────────────────
             rot_matrix = [[0, 0, -1], [0, 1, 0], [1, 0, 0]]
             gs_add_rot = [[1, 0, 0], [0, -1, 0], [0, 0, -1]]
             mesh_add_rot = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
-            aligned_gs_path = None
 
             for try_idx in range(args.n_retry):
                 logger.info(
@@ -201,39 +199,47 @@ def entrypoint(**kwargs):
                     )
                     continue
 
-                gs_model = outputs["gaussian"][0]
+                gs_model = outputs["gaussian"][0]   # None for Hunyuan3D
                 mesh_model = outputs["mesh"][0]
+                trimesh_result = outputs.get("trimesh", [None])[0]
 
-                # Save the raw Gaussian model.
-                gs_path = mesh_out.replace(".obj", "_gs.ply")
-                gs_model.save_ply(gs_path)
+                # ── GS path (SAM3D / TRELLIS only) ───────────────────────
+                if gs_model is not None:
+                    gs_path = mesh_out.replace(".obj", "_gs.ply")
+                    gs_model.save_ply(gs_path)
 
-                # Rotate mesh and GS by 90 degrees around Z-axis.
-                gs_rot = np.array(gs_add_rot) @ np.array(rot_matrix)
-                pose = GaussianOperator.trans_to_quatpose(gs_rot)
-                aligned_gs_path = gs_path.replace(".ply", "_aligned.ply")
-                GaussianOperator.resave_ply(
-                    in_ply=gs_path,
-                    out_ply=aligned_gs_path,
-                    instance_pose=pose,
-                    device="cpu",
-                )
-                color_path = os.path.join(output_root, "color.png")
-                render_gs_api(
-                    input_gs=aligned_gs_path,
-                    output_path=color_path,
-                    elevation=[30, -30],
-                    num_images=4,
-                )
-                color_img = Image.open(color_path)
-                geo_flag, geo_result = GEO_CHECKER(
-                    [color_img], text=asset_node
-                )
-                logger.warning(
-                    f"{GEO_CHECKER.__class__.__name__}: "
-                    f"{geo_result} for {seg_path}"
-                )
-                if geo_flag is True or geo_flag is None:
+                    gs_rot = np.array(gs_add_rot) @ np.array(rot_matrix)
+                    pose = GaussianOperator.trans_to_quatpose(gs_rot)
+                    aligned_gs_path = gs_path.replace(".ply", "_aligned.ply")
+                    GaussianOperator.resave_ply(
+                        in_ply=gs_path,
+                        out_ply=aligned_gs_path,
+                        instance_pose=pose,
+                        device="cpu",
+                    )
+                    color_path = os.path.join(output_root, "color.png")
+                    render_gs_api(
+                        input_gs=aligned_gs_path,
+                        output_path=color_path,
+                        elevation=[30, -30],
+                        num_images=4,
+                    )
+                    color_img = Image.open(color_path)
+                    geo_flag, geo_result = GEO_CHECKER(
+                        [color_img], text=asset_node
+                    )
+                    logger.warning(
+                        f"{GEO_CHECKER.__class__.__name__}: "
+                        f"{geo_result} for {seg_path}"
+                    )
+                    if geo_flag is True or geo_flag is None:
+                        break
+                else:
+                    # Hunyuan3D: no GS quality check — accept first result.
+                    logger.info(
+                        "Hunyuan3D: skipping GS quality check, "
+                        "using first result."
+                    )
                     break
 
                 seed = (
@@ -242,70 +248,86 @@ def entrypoint(**kwargs):
                     else None
                 )
 
-            if gs_model is None:
+            if mesh_model is None:
                 logger.error(
                     f"Exceed image3d retry num, skip {image_path}."
                 )
                 continue
 
-            # ── Stage 2: Video + Mesh export (while model objects exist) ─
-            color_images = render_video(gs_model, r=1.85)["color"]
+            # ── Stage 2: Video + mesh export ──────────────────────────────
+            if gs_model is not None:
+                color_images = render_video(gs_model, r=1.85)["color"]
+            else:
+                color_images = render_video(mesh_model, r=1.85).get(
+                    "color", []
+                )
             normal_images = render_video(mesh_model, r=1.85)["normal"]
             video_path = os.path.join(output_root, "gs_mesh.mp4")
             merge_images_video(color_images, normal_images, video_path)
 
-            mesh = trimesh.Trimesh(
-                vertices=mesh_model.vertices.cpu().numpy(),
-                faces=mesh_model.faces.cpu().numpy(),
-            )
-            mesh.vertices = mesh.vertices @ np.array(mesh_add_rot)
-            mesh.vertices = mesh.vertices @ np.array(rot_matrix)
+            if trimesh_result is not None:
+                # Hunyuan3D already provides a complete trimesh;
+                # apply the same axis rotation used by SAM3D path.
+                mesh = trimesh_result
+                mesh.vertices = (
+                    mesh.vertices
+                    @ np.array(mesh_add_rot)
+                    @ np.array(rot_matrix)
+                )
+            else:
+                mesh = trimesh.Trimesh(
+                    vertices=mesh_model.vertices.cpu().numpy(),
+                    faces=mesh_model.faces.cpu().numpy(),
+                )
+                mesh.vertices = mesh.vertices @ np.array(mesh_add_rot)
+                mesh.vertices = mesh.vertices @ np.array(rot_matrix)
+
             mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
             mesh.export(mesh_obj_path)
 
-            # Release SAM3D output tensors: GS and mesh data are now on
-            # disk. Texture baking reads from files, so these GPU objects
-            # are no longer needed. This frees 3–6 GB before baking.
-            del gs_model, mesh_model, color_images, normal_images
+            # Release large output tensors before texture baking.
+            del color_images, normal_images
+            if gs_model is not None:
+                del gs_model
+            del mesh_model
             free_vram()
-            log_vram("after releasing SAM3D outputs")
+            log_vram("after releasing 3D outputs")
 
-            # ── Stage 3: Texture baking (reads from disk files) ──────────
-            mesh = backproject_api(
-                # delight_model=DELIGHT,
-                # imagesr_model=IMAGESR_MODEL,
-                gs_path=aligned_gs_path,
-                mesh_path=mesh_obj_path,
-                output_path=mesh_obj_path,
-                skip_fix_mesh=False,
-                texture_size=args.texture_size,
-                delight=False,
-            )
+            # ── Stage 3: Texture baking ───────────────────────────────────
+            if aligned_gs_path is not None:
+                # SAM3D / TRELLIS path: project GS colours onto mesh.
+                mesh = backproject_api(
+                    gs_path=aligned_gs_path,
+                    mesh_path=mesh_obj_path,
+                    output_path=mesh_obj_path,
+                    skip_fix_mesh=False,
+                    texture_size=args.texture_size,
+                    delight=False,
+                )
+            # Hunyuan3D path: mesh already textured — skip backproject_api.
 
             mesh_glb_path = os.path.join(output_root, f"{filename}.glb")
             mesh.export(mesh_glb_path)
 
+            # ── Stage 4: URDF ─────────────────────────────────────────────
             urdf_convertor = URDFGenerator(
                 GPT_CLIENT,
                 render_view_num=4,
                 decompose_convex=not args.disable_decompose_convex,
             )
-            asset_attrs = {
-                "version": VERSION,
-                "gs_model": (
+            asset_attrs = {"version": VERSION}
+            if aligned_gs_path is not None:
+                asset_attrs["gs_model"] = (
                     f"{urdf_convertor.output_mesh_dir}/{filename}_gs.ply"
-                ),
-            }
-            if args.height_range:
-                min_height, max_height = map(
-                    float, args.height_range.split("-")
                 )
-                asset_attrs["min_height"] = min_height
-                asset_attrs["max_height"] = max_height
+            if args.height_range:
+                min_h, max_h = map(float, args.height_range.split("-"))
+                asset_attrs["min_height"] = min_h
+                asset_attrs["max_height"] = max_h
             if args.mass_range:
-                min_mass, max_mass = map(float, args.mass_range.split("-"))
-                asset_attrs["min_mass"] = min_mass
-                asset_attrs["max_mass"] = max_mass
+                min_m, max_m = map(float, args.mass_range.split("-"))
+                asset_attrs["min_mass"] = min_m
+                asset_attrs["max_mass"] = max_m
             if isinstance(args.asset_type, list) and args.asset_type[idx]:
                 asset_attrs["category"] = args.asset_type[idx]
             if args.version:
@@ -318,27 +340,30 @@ def entrypoint(**kwargs):
                 **asset_attrs,
             )
 
-            # Rescale GS and save to URDF/mesh folder.
+            # Rescale GS if available.
             real_height = urdf_convertor.get_attr_from_urdf(
                 urdf_path, attr_name="real_height"
             )
-            out_gs = (
-                f"{urdf_root}/{urdf_convertor.output_mesh_dir}"
-                f"/{filename}_gs.ply"
-            )
-            GaussianOperator.resave_ply(
-                in_ply=aligned_gs_path,
-                out_ply=out_gs,
-                real_height=real_height,
-                device="cpu",
-            )
+            if aligned_gs_path is not None:
+                out_gs = (
+                    f"{urdf_root}/{urdf_convertor.output_mesh_dir}"
+                    f"/{filename}_gs.ply"
+                )
+                GaussianOperator.resave_ply(
+                    in_ply=aligned_gs_path,
+                    out_ply=out_gs,
+                    real_height=real_height,
+                    device="cpu",
+                )
 
-            # Quality check and update .urdf file.
-            mesh_out = (
+            # Quality check and update .urdf.
+            mesh_out_final = (
                 f"{urdf_root}/{urdf_convertor.output_mesh_dir}"
                 f"/{filename}.obj"
             )
-            trimesh.load(mesh_out).export(mesh_out.replace(".obj", ".glb"))
+            trimesh.load(mesh_out_final).export(
+                mesh_out_final.replace(".obj", ".glb")
+            )
 
             image_dir = (
                 f"{urdf_root}/{urdf_convertor.output_render_dir}"
@@ -358,7 +383,7 @@ def entrypoint(**kwargs):
             qa_results = BaseChecker.validate(CHECKERS, images_list)
             urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
-            # Organize the final result files.
+            # Organize final results.
             result_dir = f"{output_root}/result"
             if os.path.exists(result_dir):
                 rmtree(result_dir, ignore_errors=True)
