@@ -45,13 +45,16 @@ services:
 
     deploy:
       resources:
+        limits:
+          memory: 9g
         reservations:
+          memory: 4g
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
 
-    shm_size: "4gb"
+    shm_size: "8gb"
 
 volumes:
   weights:
