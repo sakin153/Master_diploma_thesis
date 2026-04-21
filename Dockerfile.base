@@ -72,4 +72,11 @@ RUN git clone --recursive https://github.com/autonomousvision/mip-splatting.git 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install fastapi==0.115.0 "uvicorn[standard]==0.30.0"
 
+# ── 10. Hunyuan3D-2 (3D-генерация) ──────────────────────────────────
+# Клонируем и устанавливаем как обычный пакет (не editable).
+# Оставляем исходники в /opt/Hunyuan3D-2 — hy3dgen их читает при запуске.
+RUN git clone --depth=1 \
+        https://github.com/Tencent-Hunyuan/Hunyuan3D-2 /opt/Hunyuan3D-2 && \
+    pip install --no-cache-dir /opt/Hunyuan3D-2
+
 RUN mkdir -p /app/outputs/jobs /app/weights

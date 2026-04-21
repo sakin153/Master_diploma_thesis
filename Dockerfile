@@ -8,16 +8,11 @@ FROM embodiedgen-base:latest
 
 WORKDIR /app
 
-# Submodules (только нужные)
-COPY .gitmodules .gitmodules
-COPY thirdparty/TRELLIS thirdparty/TRELLIS
-COPY thirdparty/sam3d   thirdparty/sam3d
-
-# Если flexicubes не был инициализирован (вложенный сабмодуль TRELLIS)
-RUN if [ ! -f thirdparty/TRELLIS/trellis/representations/mesh/flexicubes/flexicubes.py ]; then \
-    git clone --depth=1 https://github.com/nv-tlabs/FlexiCubes.git /tmp/fc && \
-    cp /tmp/fc/flexicubes.py thirdparty/TRELLIS/trellis/representations/mesh/flexicubes/ && \
-    rm -rf /tmp/fc; fi
+# Активная 3D-модель: HUNYUAN3D (установлена в базовом образе).
+# Для SAM3D/TRELLIS раскомментировать COPY ниже и пересобрать base-образ.
+# COPY .gitmodules .gitmodules
+# COPY thirdparty/TRELLIS thirdparty/TRELLIS
+# COPY thirdparty/sam3d   thirdparty/sam3d
 
 # Исходный код проекта
 COPY embodied_gen embodied_gen

@@ -24,6 +24,9 @@ services:
       # Text-to-image модель (sdxl-turbo для 8GB GPU)
       TEXT_MODEL: ${TEXT_MODEL:-sdxl-turbo}
 
+      # Hunyuan3D texture pipeline: "1" включить (нужно ~6 GB доп. VRAM), "0" выключить
+      HUNYUAN3D_TEXTURE: ${HUNYUAN3D_TEXTURE:-1}
+
       # Пути внутри контейнера
       OUTPUT_ROOT: /app/outputs/jobs
       HF_HOME: /app/weights/hf_cache
