@@ -359,17 +359,17 @@ class SDXLTurboRunner(BasePipelineRunner):
         return self.pipe(prompt=prompt, **kwargs).images
 
 
-# ===== Stable Diffusion 1.5 (lightweight, ~2 GB VRAM) =====
+# ===== Stable Diffusion 1.5 (lightweight, ~1.7 GB RAM via cpu_offload) =====
 class SD15Loader(BasePipelineLoader):
-    """SD 1.5 — fits in 2 GB VRAM, no offload needed."""
+    """SD 1.5 with cpu_offload — minimal VRAM footprint, avoids fragmentation."""
 
     def load(self):
         pipe = StableDiffusionPipeline.from_pretrained(
             "sd-legacy/stable-diffusion-v1-5",
             torch_dtype=torch.float16,
             safety_checker=None,
-        ).to(self.device)
-        pipe.enable_xformers_memory_efficient_attention()
+        )
+        pipe.enable_model_cpu_offload()
         pipe.enable_attention_slicing()
         pipe.enable_vae_slicing()
         return pipe
