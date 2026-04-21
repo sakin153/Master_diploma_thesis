@@ -1,5 +1,6 @@
 import glob
 import io
+import json
 import logging
 import os
 import sys
@@ -51,7 +52,7 @@ class _TeeStream(io.TextIOBase):
 
 
 class JobManager:
-    """Single-GPU sequential job queue with in-memory state."""
+    """Single-GPU sequential job queue with disk-persisted state."""
 
     def __init__(self, output_root: str = "outputs/jobs"):
         self.output_root = output_root
@@ -60,7 +61,43 @@ class JobManager:
         self._lock = threading.Lock()
         self._worker = threading.Thread(target=self._process_loop, daemon=True)
         self._event = threading.Event()
+        self._load_jobs()
         self._worker.start()
+
+    # ------------------------------------------------------------------
+    # Persistence helpers
+    # ------------------------------------------------------------------
+
+    def _job_path(self, job_id: str) -> str:
+        return os.path.join(self.output_root, job_id, "job.json")
+
+    def _save_job(self, job: JobStatus):
+        path = self._job_path(job.job_id)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(job.model_dump_json(indent=2))
+
+    def _load_jobs(self):
+        """Restore job state from disk on startup."""
+        os.makedirs(self.output_root, exist_ok=True)
+        paths = sorted(
+            glob.glob(os.path.join(self.output_root, "*", "job.json")),
+            key=os.path.getmtime,
+        )
+        for path in paths:
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                job = JobStatus(**data)
+                # Jobs that were processing when server died → mark failed
+                if job.status == JobState.processing:
+                    job.status = JobState.failed
+                    job.error = (job.error or "") + " [server restarted]"
+                    job.finished_at = job.finished_at or datetime.utcnow()
+                    self._save_job(job)
+                self._jobs[job.job_id] = job
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Public interface
@@ -81,6 +118,7 @@ class JobManager:
             self._jobs[job_id] = job
             self._queue.append(job_id)
             job.queue_position = len(self._queue)
+        self._save_job(job)
         self._event.set()
         return job
 
@@ -137,6 +175,7 @@ class JobManager:
                 name=job.name,
                 model=job.model,
             )
+        self._save_job(job)
 
         append = lambda line: self._append_log(job_id, line)
 
@@ -156,11 +195,13 @@ class JobManager:
                 job.status = JobState.completed
                 job.finished_at = datetime.utcnow()
                 job.files = files
+            self._save_job(job)
         except Exception as exc:
             with self._lock:
                 job.status = JobState.failed
                 job.finished_at = datetime.utcnow()
                 job.error = str(exc)
+            self._save_job(job)
         finally:
             sys.stdout, sys.stderr = old_stdout, old_stderr
             root_logger.removeHandler(log_handler)
