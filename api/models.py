@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class ModelChoice(str, Enum):
+    sd15 = "sd15"
     sdxl_turbo = "sdxl-turbo"
     kolors = "kolors"
     sd35 = "sd35"
@@ -21,7 +22,7 @@ class JobState(str, Enum):
 class GenerateRequest(BaseModel):
     prompt: str = Field(..., description="Text description of the object")
     name: Optional[str] = Field(None, description="Asset name (defaults to first word of prompt)")
-    model: ModelChoice = Field(ModelChoice.sdxl_turbo, description="Text-to-image model")
+    model: ModelChoice = Field(ModelChoice.sd15, description="Text-to-image model")
     seed_img: Optional[int] = Field(None, description="Seed for image generation")
     seed_3d: int = Field(0, description="Seed for 3D generation")
     n_image_retry: int = Field(2, ge=1, le=5)
