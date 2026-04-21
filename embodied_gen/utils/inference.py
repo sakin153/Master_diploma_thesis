@@ -2,8 +2,6 @@ import random
 
 import torch
 from PIL import Image
-from embodied_gen.models.sam3d import Sam3dInference
-from embodied_gen.utils.trender import pack_state, unpack_state
 from embodied_gen.utils.vram_utils import free_vram
 
 __all__ = [
@@ -22,16 +20,24 @@ def image3d_model_infer(
             TrellisImageTo3DPipeline,
         )
         _trellis_available = True
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         _trellis_available = False
         TrellisImageTo3DPipeline = type(None)
 
     try:
         from embodied_gen.models.hunyuan3d import Hunyuan3DInference
         _hunyuan_available = True
-    except ImportError:
+    except (ImportError, ModuleNotFoundError):
         _hunyuan_available = False
         Hunyuan3DInference = type(None)
+
+    try:
+        from embodied_gen.models.sam3d import Sam3dInference
+        from embodied_gen.utils.trender import pack_state, unpack_state
+        _sam3d_available = True
+    except (ImportError, ModuleNotFoundError):
+        _sam3d_available = False
+        Sam3dInference = type(None)
 
     _seed = random.randint(0, 100000) if seed is None else seed
 
@@ -52,7 +58,7 @@ def image3d_model_infer(
         # Pipeline already uses @torch.inference_mode() internally.
         outputs = pipe.run(seg_image, seed=_seed, **kwargs)
 
-    elif isinstance(pipe, Sam3dInference):
+    elif _sam3d_available and isinstance(pipe, Sam3dInference):
         # torch.inference_mode reduces peak activation memory ~25-35%.
         with torch.inference_mode():
             outputs = pipe.run(seg_image, seed=_seed, **kwargs)
