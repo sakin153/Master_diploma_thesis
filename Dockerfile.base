@@ -79,4 +79,9 @@ RUN git clone --depth=1 \
         https://github.com/Tencent-Hunyuan/Hunyuan3D-2 /opt/Hunyuan3D-2 && \
     pip install --no-cache-dir /opt/Hunyuan3D-2
 
+# ── 11. Пере-пинить transformers после Hunyuan3D ─────────────────────
+# Hunyuan3D тянет transformers>=4.44 где удалили FLAX_WEIGHTS_NAME,
+# что ломает diffusers==0.30.3. Возвращаем совместимую версию.
+RUN pip install "transformers==4.42.4"
+
 RUN mkdir -p /app/outputs/jobs /app/weights
