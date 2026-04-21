@@ -33,6 +33,7 @@ services:
       MODELSCOPE_CACHE: /app/weights/modelscope_cache
       TORCH_HOME: /app/weights/torch_cache
       TOKENIZERS_PARALLELISM: "false"
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
 
     volumes:
       - weights:/app/weights

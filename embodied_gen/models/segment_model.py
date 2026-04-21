@@ -327,7 +327,10 @@ class RembgRemover(object):
 
     def __init__(self):
         """Initializes the RembgRemover."""
-        self.rembg_session = rembg.new_session("u2net")
+        # Force CPU to avoid taking VRAM away from the diffusion/3D pipelines.
+        self.rembg_session = rembg.new_session(
+            "u2net", providers=["CPUExecutionProvider"]
+        )
 
     def __call__(
         self, image: Union[str, Image.Image, np.ndarray], save_path: str = None
