@@ -273,7 +273,7 @@ def parse_args():
     parser.add_argument(
         "--n_img_sample",
         type=int,
-        default=3,
+        default=1,
         help="Number of image samples to generate",
     )
     parser.add_argument(
