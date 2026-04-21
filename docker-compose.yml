@@ -35,7 +35,7 @@ services:
       # rembg u2net model cache — persisted in volume to avoid re-downloading
       U2NET_HOME: /app/weights/u2net
       TOKENIZERS_PARALLELISM: "false"
-      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:true"
 
     volumes:
       - weights:/app/weights
