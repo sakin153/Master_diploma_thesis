@@ -27,14 +27,27 @@ from tqdm import tqdm
 current_file_path = os.path.abspath(__file__)
 current_dir = os.path.dirname(current_file_path)
 sys.path.append(os.path.join(current_dir, "../.."))
-from thirdparty.TRELLIS.trellis.renderers import GaussianRenderer, MeshRenderer
-from thirdparty.TRELLIS.trellis.representations import (
-    Gaussian,
-    MeshExtractResult,
-)
-from thirdparty.TRELLIS.trellis.utils.render_utils import (
-    yaw_pitch_r_fov_to_extrinsics_intrinsics,
-)
+
+try:
+    from thirdparty.TRELLIS.trellis.renderers import (
+        GaussianRenderer,
+        MeshRenderer,
+    )
+    from thirdparty.TRELLIS.trellis.representations import (
+        Gaussian,
+        MeshExtractResult,
+    )
+    from thirdparty.TRELLIS.trellis.utils.render_utils import (
+        yaw_pitch_r_fov_to_extrinsics_intrinsics,
+    )
+    _TRELLIS_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    _TRELLIS_AVAILABLE = False
+    GaussianRenderer = None
+    MeshRenderer = None
+    Gaussian = None
+    MeshExtractResult = None
+    yaw_pitch_r_fov_to_extrinsics_intrinsics = None
 
 __all__ = [
     "render_video",
@@ -127,6 +140,9 @@ def render_video(
     fov=40,
     **kwargs,
 ):
+    if not _TRELLIS_AVAILABLE:
+        return {"color": [], "normal": []}
+
     yaws = torch.linspace(0, 2 * 3.1415, num_frames)
     yaws = yaws.tolist()
     pitch = [0.5] * num_frames

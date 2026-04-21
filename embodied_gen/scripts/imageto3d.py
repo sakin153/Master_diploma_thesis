@@ -261,9 +261,12 @@ def entrypoint(**kwargs):
                 color_images = render_video(mesh_model, r=1.85).get(
                     "color", []
                 )
-            normal_images = render_video(mesh_model, r=1.85)["normal"]
+            normal_images = render_video(mesh_model, r=1.85).get(
+                "normal", []
+            )
             video_path = os.path.join(output_root, "gs_mesh.mp4")
-            merge_images_video(color_images, normal_images, video_path)
+            if color_images or normal_images:
+                merge_images_video(color_images, normal_images, video_path)
 
             if trimesh_result is not None:
                 # Hunyuan3D already provides a complete trimesh;
@@ -393,7 +396,8 @@ def entrypoint(**kwargs):
                 f"{urdf_root}/{urdf_convertor.output_mesh_dir}",
                 f"{result_dir}/{urdf_convertor.output_mesh_dir}",
             )
-            copy(video_path, f"{result_dir}/video.mp4")
+            if os.path.exists(video_path):
+                copy(video_path, f"{result_dir}/video.mp4")
 
             if not args.keep_intermediate:
                 delete_dir(output_root, keep_subs=["result"])
