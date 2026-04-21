@@ -25,6 +25,7 @@ from diffusers import (
     FluxPipeline,
     KolorsPipeline,
     StableDiffusion3Pipeline,
+    StableDiffusionPipeline,
 )
 from huggingface_hub import snapshot_download
 from PIL import Image
@@ -358,6 +359,33 @@ class SDXLTurboRunner(BasePipelineRunner):
         return self.pipe(prompt=prompt, **kwargs).images
 
 
+# ===== Stable Diffusion 1.5 (lightweight, ~2 GB VRAM) =====
+class SD15Loader(BasePipelineLoader):
+    """SD 1.5 — fits in 2 GB VRAM, no offload needed."""
+
+    def load(self):
+        pipe = StableDiffusionPipeline.from_pretrained(
+            "sd-legacy/stable-diffusion-v1-5",
+            torch_dtype=torch.float16,
+            safety_checker=None,
+        ).to(self.device)
+        pipe.enable_xformers_memory_efficient_attention()
+        pipe.enable_attention_slicing()
+        pipe.enable_vae_slicing()
+        return pipe
+
+
+class SD15Runner(BasePipelineRunner):
+    """Runner for SD 1.5. Native resolution 512x512."""
+
+    def run(self, prompt: str, **kwargs) -> list[Image.Image]:
+        kwargs.setdefault("num_inference_steps", 25)
+        kwargs.setdefault("guidance_scale", 7.5)
+        kwargs["height"] = min(kwargs.get("height", 512), 512)
+        kwargs["width"] = min(kwargs.get("width", 512), 512)
+        return self.pipe(prompt=prompt, **kwargs).images
+
+
 PIPELINE_REGISTRY = {
     "sd35": (SD35Loader, SD35Runner),
     "cosmos": (CosmosLoader, CosmosRunner),
@@ -365,6 +393,7 @@ PIPELINE_REGISTRY = {
     "flux": (FluxLoader, FluxRunner),
     "chroma": (ChromaLoader, ChromaRunner),
     "sdxl-turbo": (SDXLTurboLoader, SDXLTurboRunner),
+    "sd15": (SD15Loader, SD15Runner),
 }
 
 

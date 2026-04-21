@@ -22,7 +22,7 @@ services:
       MODEL_NAME: ${MODEL_NAME:-qwen3.5:cloud}
 
       # Text-to-image модель (sdxl-turbo для 8GB GPU)
-      TEXT_MODEL: ${TEXT_MODEL:-sdxl-turbo}
+      TEXT_MODEL: ${TEXT_MODEL:-sd15}
 
       # Hunyuan3D texture pipeline: "1" включить (нужно ~6 GB доп. VRAM), "0" выключить
       HUNYUAN3D_TEXTURE: ${HUNYUAN3D_TEXTURE:-1}
