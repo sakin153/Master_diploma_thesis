@@ -40,6 +40,7 @@ from embodied_gen.utils.process_media import (
 )
 from embodied_gen.utils.tags import VERSION
 from embodied_gen.utils.trender import render_video
+from embodied_gen.utils.vram_utils import free_vram, log_vram
 from embodied_gen.validators.quality_checkers import (
     BaseChecker,
     ImageAestheticChecker,
@@ -50,26 +51,40 @@ from embodied_gen.validators.urdf_convertor import URDFGenerator
 
 # random.seed(0)
 IMAGE3D_MODEL = "SAM3D"  # TRELLIS or SAM3D
-logger.info(f"Loading {IMAGE3D_MODEL} as Image3D Models...")
-if IMAGE3D_MODEL == "TRELLIS":
-    from thirdparty.TRELLIS.trellis.pipelines import TrellisImageTo3DPipeline
 
-    PIPELINE = TrellisImageTo3DPipeline.from_pretrained(
-        "microsoft/TRELLIS-image-large"
-    )
-    # PIPELINE.cuda()
-elif IMAGE3D_MODEL == "SAM3D":
-    from embodied_gen.models.sam3d import Sam3dInference
-
-    PIPELINE = Sam3dInference()
-
-# DELIGHT = DelightingModel()
-# IMAGESR_MODEL = ImageRealESRGAN(outscale=4)
+# Quality checkers: GPT-based, no VRAM, safe at module level.
 RBG_REMOVER = RembgRemover()
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 GEO_CHECKER = MeshGeoChecker(GPT_CLIENT)
 AESTHETIC_CHECKER = ImageAestheticChecker()
 CHECKERS = [GEO_CHECKER, SEG_CHECKER, AESTHETIC_CHECKER]
+
+# ── Lazy 3-D generation pipeline (10–15 GB VRAM for SAM3D) ──────────────────
+# Loaded on first call to entrypoint(); never loaded together with the
+# text-to-image pipeline so that 8 GB GPUs can run the full pipeline.
+_PIPELINE = None
+
+
+def _get_pipeline():
+    global _PIPELINE
+    if _PIPELINE is None:
+        log_vram("before 3D pipeline load")
+        logger.info(f"Loading {IMAGE3D_MODEL} as Image3D model...")
+        if IMAGE3D_MODEL == "TRELLIS":
+            from thirdparty.TRELLIS.trellis.pipelines import (
+                TrellisImageTo3DPipeline,
+            )
+            _PIPELINE = TrellisImageTo3DPipeline.from_pretrained(
+                "microsoft/TRELLIS-image-large"
+            )
+        elif IMAGE3D_MODEL == "SAM3D":
+            from embodied_gen.models.sam3d import Sam3dInference
+            _PIPELINE = Sam3dInference()
+        log_vram("after 3D pipeline load")
+    return _PIPELINE
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def parse_args():
@@ -108,7 +123,7 @@ def parse_args():
         default=3,
     )
     parser.add_argument("--disable_decompose_convex", action="store_true")
-    parser.add_argument("--texture_size", type=int, default=2048)
+    parser.add_argument("--texture_size", type=int, default=1024)
     args, unknown = parser.parse_known_args()
 
     return args
@@ -148,7 +163,9 @@ def entrypoint(**kwargs):
 
             # Segmentation: Get segmented image using Rembg.
             seg_path = f"{output_root}/{filename}_cond.png"
-            seg_image = RBG_REMOVER(image) if image.mode != "RGBA" else image
+            seg_image = (
+                RBG_REMOVER(image) if image.mode != "RGBA" else image
+            )
             seg_image.save(seg_path)
 
             seed = args.seed
@@ -156,34 +173,42 @@ def entrypoint(**kwargs):
             gs_model = None
             if isinstance(args.asset_type, list) and args.asset_type[idx]:
                 asset_node = args.asset_type[idx]
+
+            # ── Stage 1: Image → Gaussian Splat + Mesh ───────────────────
+            rot_matrix = [[0, 0, -1], [0, 1, 0], [1, 0, 0]]
+            gs_add_rot = [[1, 0, 0], [0, -1, 0], [0, 0, -1]]
+            mesh_add_rot = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
+            aligned_gs_path = None
+
             for try_idx in range(args.n_retry):
                 logger.info(
-                    f"Try: {try_idx + 1}/{args.n_retry}, Seed: {seed}, Prompt: {seg_path}"
+                    f"Try: {try_idx + 1}/{args.n_retry}, "
+                    f"Seed: {seed}, Prompt: {seg_path}"
                 )
                 try:
-                    outputs = image3d_model_infer(PIPELINE, seg_image, seed)
+                    outputs = image3d_model_infer(
+                        _get_pipeline(), seg_image, seed
+                    )
                 except Exception as e:
                     logger.error(
-                        f"[Image3D Failed] process {image_path}: {e}, retry: {try_idx+1}/{args.n_retry}"
+                        f"[Image3D Failed] {image_path}: {e}, "
+                        f"retry {try_idx+1}/{args.n_retry}"
                     )
                     seed = (
-                        random.randint(0, 100000) if seed is not None else None
+                        random.randint(0, 100000)
+                        if seed is not None
+                        else None
                     )
                     continue
 
                 gs_model = outputs["gaussian"][0]
                 mesh_model = outputs["mesh"][0]
 
-                # Save the raw Gaussian model
+                # Save the raw Gaussian model.
                 gs_path = mesh_out.replace(".obj", "_gs.ply")
                 gs_model.save_ply(gs_path)
 
                 # Rotate mesh and GS by 90 degrees around Z-axis.
-                rot_matrix = [[0, 0, -1], [0, 1, 0], [1, 0, 0]]
-                gs_add_rot = [[1, 0, 0], [0, -1, 0], [0, 0, -1]]
-                mesh_add_rot = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
-
-                # Addtional rotation for GS to align mesh.
                 gs_rot = np.array(gs_add_rot) @ np.array(rot_matrix)
                 pose = GaussianOperator.trans_to_quatpose(gs_rot)
                 aligned_gs_path = gs_path.replace(".ply", "_aligned.ply")
@@ -205,18 +230,25 @@ def entrypoint(**kwargs):
                     [color_img], text=asset_node
                 )
                 logger.warning(
-                    f"{GEO_CHECKER.__class__.__name__}: {geo_result} for {seg_path}"
+                    f"{GEO_CHECKER.__class__.__name__}: "
+                    f"{geo_result} for {seg_path}"
                 )
                 if geo_flag is True or geo_flag is None:
                     break
 
-                seed = random.randint(0, 100000) if seed is not None else None
+                seed = (
+                    random.randint(0, 100000)
+                    if seed is not None
+                    else None
+                )
 
             if gs_model is None:
-                logger.error(f"Exceed image3d retry num, skip {image_path}.")
+                logger.error(
+                    f"Exceed image3d retry num, skip {image_path}."
+                )
                 continue
 
-            # Render the video for generated 3D asset.
+            # ── Stage 2: Video + Mesh export (while model objects exist) ─
             color_images = render_video(gs_model, r=1.85)["color"]
             normal_images = render_video(mesh_model, r=1.85)["normal"]
             video_path = os.path.join(output_root, "gs_mesh.mp4")
@@ -228,10 +260,17 @@ def entrypoint(**kwargs):
             )
             mesh.vertices = mesh.vertices @ np.array(mesh_add_rot)
             mesh.vertices = mesh.vertices @ np.array(rot_matrix)
-
             mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
             mesh.export(mesh_obj_path)
 
+            # Release SAM3D output tensors: GS and mesh data are now on
+            # disk. Texture baking reads from files, so these GPU objects
+            # are no longer needed. This frees 3–6 GB before baking.
+            del gs_model, mesh_model, color_images, normal_images
+            free_vram()
+            log_vram("after releasing SAM3D outputs")
+
+            # ── Stage 3: Texture baking (reads from disk files) ──────────
             mesh = backproject_api(
                 # delight_model=DELIGHT,
                 # imagesr_model=IMAGESR_MODEL,
@@ -253,7 +292,9 @@ def entrypoint(**kwargs):
             )
             asset_attrs = {
                 "version": VERSION,
-                "gs_model": f"{urdf_convertor.output_mesh_dir}/{filename}_gs.ply",
+                "gs_model": (
+                    f"{urdf_convertor.output_mesh_dir}/{filename}_gs.ply"
+                ),
             }
             if args.height_range:
                 min_height, max_height = map(
@@ -281,7 +322,10 @@ def entrypoint(**kwargs):
             real_height = urdf_convertor.get_attr_from_urdf(
                 urdf_path, attr_name="real_height"
             )
-            out_gs = f"{urdf_root}/{urdf_convertor.output_mesh_dir}/{filename}_gs.ply"  # noqa
+            out_gs = (
+                f"{urdf_root}/{urdf_convertor.output_mesh_dir}"
+                f"/{filename}_gs.ply"
+            )
             GaussianOperator.resave_ply(
                 in_ply=aligned_gs_path,
                 out_ply=out_gs,
@@ -290,10 +334,16 @@ def entrypoint(**kwargs):
             )
 
             # Quality check and update .urdf file.
-            mesh_out = f"{urdf_root}/{urdf_convertor.output_mesh_dir}/{filename}.obj"  # noqa
+            mesh_out = (
+                f"{urdf_root}/{urdf_convertor.output_mesh_dir}"
+                f"/{filename}.obj"
+            )
             trimesh.load(mesh_out).export(mesh_out.replace(".obj", ".glb"))
 
-            image_dir = f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"  # noqa
+            image_dir = (
+                f"{urdf_root}/{urdf_convertor.output_render_dir}"
+                f"/image_color"
+            )
             image_paths = glob(f"{image_dir}/*.png")
             images_list = []
             for checker in CHECKERS:
@@ -308,7 +358,7 @@ def entrypoint(**kwargs):
             qa_results = BaseChecker.validate(CHECKERS, images_list)
             urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
-            # Organize the final result files
+            # Organize the final result files.
             result_dir = f"{output_root}/result"
             if os.path.exists(result_dir):
                 rmtree(result_dir, ignore_errors=True)

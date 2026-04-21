@@ -99,6 +99,7 @@ class SD35Loader(BasePipelineLoader):
         pipe.enable_model_cpu_offload()
         pipe.enable_xformers_memory_efficient_attention()
         pipe.enable_attention_slicing()
+        pipe.enable_vae_slicing()
         return pipe
 
 
@@ -231,6 +232,7 @@ class KolorsLoader(BasePipelineLoader):
         ).to(self.device)
         pipe.enable_model_cpu_offload()
         pipe.enable_xformers_memory_efficient_attention()
+        pipe.enable_vae_slicing()
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(
             pipe.scheduler.config, use_karras_sigmas=True
         )
@@ -265,11 +267,13 @@ class FluxLoader(BasePipelineLoader):
         """
         os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
         pipe = FluxPipeline.from_pretrained(
-            "black-forest-labs/FLUX.1-schnell", torch_dtype=torch.bfloat16
+            "black-forest-labs/FLUX.1-schnell",
+            torch_dtype=torch.bfloat16,
         )
         pipe.enable_model_cpu_offload()
         pipe.enable_xformers_memory_efficient_attention()
         pipe.enable_attention_slicing()
+        pipe.enable_vae_slicing()
         return pipe.to(self.device)
 
 
@@ -337,11 +341,12 @@ class SDXLTurboLoader(BasePipelineLoader):
         pipe.enable_model_cpu_offload()
         pipe.enable_xformers_memory_efficient_attention()
         pipe.enable_attention_slicing()
+        pipe.enable_vae_slicing()
         return pipe
 
 
 class SDXLTurboRunner(BasePipelineRunner):
-    """Runner for SDXL-Turbo. Uses 4 steps, guidance_scale=0 (distilled model)."""
+    """Runner for SDXL-Turbo. 4 steps, guidance_scale=0 (distilled)."""
 
     def run(self, prompt: str, **kwargs) -> list[Image.Image]:
         # SDXL-Turbo is distilled: fixed 4 steps, no CFG guidance
@@ -375,7 +380,9 @@ def build_hf_image_pipeline(name: str, device="cuda") -> BasePipelineRunner:
 
     Example:
         ```py
-        from embodied_gen.models.image_comm_model import build_hf_image_pipeline
+        from embodied_gen.models.image_comm_model import (
+            build_hf_image_pipeline,
+        )
         runner = build_hf_image_pipeline("sd35")
         images = runner.run(prompt="A robot holding a sign that says 'Hello'")
         ```
@@ -391,7 +398,7 @@ def build_hf_image_pipeline(name: str, device="cuda") -> BasePipelineRunner:
 if __name__ == "__main__":
     model_name = "sd35"
     runner = build_hf_image_pipeline(model_name)
-    # NOTE: Just for pipeline testing, generation quality at low resolution is poor.
+    # NOTE: generation quality at low resolution is poor.
     images = runner.run(
         prompt="A robot holding a sign that says 'Hello'",
         height=512,

@@ -33,6 +33,7 @@ from embodied_gen.utils.process_media import (
     combine_images_to_grid,
     render_asset3d,
 )
+from embodied_gen.utils.vram_utils import free_vram, log_vram
 from embodied_gen.validators.quality_checkers import (
     ImageSegChecker,
     SemanticConsistChecker,
@@ -43,13 +44,43 @@ from embodied_gen.validators.quality_checkers import (
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 random.seed(0)
 
-logger.info("Loading TEXT2IMG_MODEL...")
+# GPT-based validators: no VRAM, safe to keep at module level.
 SEMANTIC_CHECKER = SemanticConsistChecker(GPT_CLIENT)
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 TXTGEN_CHECKER = TextGenAlignChecker(GPT_CLIENT)
-PIPE_IMG = build_hf_image_pipeline(os.environ.get("TEXT_MODEL", "sdxl-turbo"))
+
+# Background remover: tiny ONNX model on CPU (~0 VRAM), keep at module level.
 BG_REMOVER = RembgRemover()
 
+# ── Lazy text-to-image pipeline (4–24 GB VRAM) ───────────────────────────────
+# Loaded on first call to text_to_image(); released before the 3-D stage so
+# that SAM3D never competes with the diffusion model for VRAM.
+_PIPE_IMG = None
+
+
+def _load_pipe_img():
+    global _PIPE_IMG
+    if _PIPE_IMG is None:
+        log_vram("before text2img load")
+        logger.info("Loading TEXT2IMG model...")
+        _PIPE_IMG = build_hf_image_pipeline(
+            os.environ.get("TEXT_MODEL", "sdxl-turbo")
+        )
+        log_vram("after text2img load")
+    return _PIPE_IMG
+
+
+def _release_pipe_img():
+    """Unload the text-to-image pipeline from VRAM before the 3-D stage."""
+    global _PIPE_IMG
+    if _PIPE_IMG is not None:
+        del _PIPE_IMG
+        _PIPE_IMG = None
+        free_vram()
+        log_vram("after text2img release")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 __all__ = [
     "text_to_3d",
@@ -81,7 +112,7 @@ def text_to_image(
             f"Try: {try_idx + 1}/{n_retry}, Seed: {seed}, Prompt: {f_prompt}"
         )
         torch.cuda.empty_cache()
-        images = PIPE_IMG.run(
+        images = _load_pipe_img().run(
             f_prompt,
             num_inference_steps=img_denoise_step,
             guidance_scale=text_guidance_scale,
@@ -108,7 +139,8 @@ def text_to_image(
             image_mask = np.array(image)[..., -1]
             edge_flag = check_object_edge_truncated(image_mask)
             logger.warning(
-                f"SEMANTIC: {semantic_result}. SEG: {seg_result}. EDGE: {edge_flag}"
+                f"SEMANTIC: {semantic_result}. "
+                f"SEG: {seg_result}. EDGE: {edge_flag}"
             )
             if (
                 (edge_flag and semantic_flag and seg_flag)
@@ -145,12 +177,14 @@ def text_to_3d(**kwargs) -> dict:
         while success_flag is False and n_pipe_retry > 0:
             logger.info(
                 f"GEN pipeline for node {node}\n"
-                f"Try round: {args.n_pipe_retry-n_pipe_retry+1}/{args.n_pipe_retry}, Prompt: {prompt}"
+                f"Try round: "
+                f"{args.n_pipe_retry-n_pipe_retry+1}/{args.n_pipe_retry}"
+                f", Prompt: {prompt}"
             )
-            # Text-to-image GEN
+            # ── Stage 1: Text → Image ─────────────────────────────────────
             save_node = node.replace(" ", "_")
             gen_image_path = f"{img_save_dir}/{save_node}.png"
-            textgen_flag = text_to_image(
+            text_to_image(
                 prompt,
                 gen_image_path,
                 args.n_image_retry,
@@ -160,7 +194,13 @@ def text_to_3d(**kwargs) -> dict:
                 seed=seed_img,
             )
 
-            # Asset 3D GEN
+            # Release text-to-image pipeline before loading the 3-D model.
+            # Both SDXL-Turbo (4-8 GB) and SAM3D (10-15 GB) would otherwise
+            # coexist in VRAM. Freeing first saves 4–24 GB depending on the
+            # chosen text2img model.
+            _release_pipe_img()
+
+            # ── Stage 2: Image → 3D Asset ─────────────────────────────────
             node_save_dir = f"{asset_save_dir}/{save_node}"
             asset_type = node if "sample3d_" not in node else None
             imageto3d_api(
@@ -185,7 +225,8 @@ def text_to_3d(**kwargs) -> dict:
             check_text = asset_type if asset_type is not None else prompt
             qa_flag, qa_result = TXTGEN_CHECKER(check_text, image_path)
             logger.warning(
-                f"Node {node}, {TXTGEN_CHECKER.__class__.__name__}: {qa_result}"
+                f"Node {node}, "
+                f"{TXTGEN_CHECKER.__class__.__name__}: {qa_result}"
             )
             results["assets"][node] = f"asset3d/{save_node}/result"
             results["quality"][node] = qa_result
@@ -202,7 +243,7 @@ def text_to_3d(**kwargs) -> dict:
                 random.randint(0, 100000) if seed_3d is not None else None
             )
 
-        torch.cuda.empty_cache()
+        free_vram()
 
     return results
 
