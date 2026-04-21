@@ -1,9 +1,13 @@
-# Запуск EmbodiedGen без Docker (Linux, RTX 8 GB+)
+# Запуск EmbodiedGen без Docker
 
-Пошаговая инструкция для запуска пайплайна **Text → Image → 3D → URDF/MJCF** локально на
-Linux с CUDA-видеокартой. Используемая 3D-модель — **Hunyuan3D-2mini** (~6–10 GB VRAM).
+Пошаговая инструкция для запуска пайплайна **Text → Image → 3D → URDF/MJCF** локально.
+Используемая 3D-модель — **Hunyuan3D-2mini** (~6–10 GB VRAM).
+
+> Выбери платформу: [Linux](#linux) | [Windows](#windows)
 
 ---
+
+# Linux
 
 ## Содержание
 
@@ -504,4 +508,452 @@ python generate.py "a simple wooden cube" --skip_mjcf
 
 # 5. Посмотреть результат
 ls outputs/generated/asset3d/simple/result/
+```
+
+---
+
+---
+
+# Windows
+
+Инструкция для запуска на **Windows 10/11** с NVIDIA GPU.
+Все команды выполняются в **Anaconda PowerShell Prompt** (не в обычном PowerShell и не в CMD).
+
+## Содержание (Windows)
+
+1. [Требования (Windows)](#1-требования-windows)
+2. [Установка инструментов](#2-установка-инструментов)
+3. [Conda-окружение (Windows)](#3-conda-окружение-windows)
+4. [PyTorch с CUDA (Windows)](#4-pytorch-с-cuda-windows)
+5. [Основные зависимости (Windows)](#5-основные-зависимости-windows)
+6. [Git-пакеты (Windows)](#6-git-пакеты-windows)
+7. [Hunyuan3D-2 (Windows)](#7-hunyuan3d-2-windows)
+8. [Git-сабмодули и установка проекта (Windows)](#8-git-сабмодули-и-установка-проекта-windows)
+9. [Настройка LLM (Windows)](#9-настройка-llm-windows)
+10. [Переменные окружения (Windows)](#10-переменные-окружения-windows)
+11. [Запуск (Windows)](#11-запуск-windows)
+12. [Устранение проблем (Windows)](#12-устранение-проблем-windows)
+
+---
+
+## 1. Требования (Windows)
+
+| Компонент | Минимум | Рекомендуется |
+|-----------|---------|---------------|
+| ОС | Windows 10 64-bit | Windows 11 |
+| GPU | NVIDIA 8 GB VRAM (RTX 2070+) | RTX 3080 / 4070+ |
+| CUDA Toolkit | 11.8 | 11.8 |
+| Python | 3.10 | 3.10 |
+| RAM | 16 GB | 32 GB |
+| Диск | 50 GB свободно | 70 GB |
+
+---
+
+## 2. Установка инструментов
+
+Установить по порядку (если ещё не установлено):
+
+### Git
+Скачать и установить с настройками по умолчанию:
+`https://git-scm.com/download/win`
+
+После установки перезапустить Anaconda PowerShell Prompt.
+
+### CUDA Toolkit 11.8
+`https://developer.nvidia.com/cuda-11-8-0-download-archive`
+
+Выбрать: Windows → x86_64 → 10 → exe (network) или exe (local).
+Установить с настройками по умолчанию.
+
+Проверить после установки (новый терминал):
+```powershell
+nvcc --version
+# nvcc: NVIDIA (R) Cuda compiler driver ... release 11.8
+```
+
+### Visual Studio Build Tools (нужен для C++-расширений)
+Скачать **Build Tools for Visual Studio 2022**:
+`https://visualstudio.microsoft.com/visual-cpp-build-tools/`
+
+При установке выбрать компонент:
+**"Desktop development with C++"** (включает MSVC, Windows SDK).
+
+### Miniconda
+Скачать установщик:
+`https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe`
+
+При установке отметить **"Add Miniconda3 to PATH"** (или запускать через
+**Anaconda PowerShell Prompt** из меню Пуск).
+
+---
+
+## 3. Conda-окружение (Windows)
+
+Открыть **Anaconda PowerShell Prompt** из меню Пуск и выполнить:
+
+```powershell
+conda create -n embodiedgen python=3.10.13 -y
+conda activate embodiedgen
+cd C:\Users\ИМЯ_ПОЛЬЗОВАТЕЛЯ\Desktop\EmbodiedGen   # путь к проекту
+```
+
+---
+
+## 4. PyTorch с CUDA (Windows)
+
+```powershell
+pip install torch==2.4.0 torchvision==0.19.0 `
+    xformers==0.0.27.post2 `
+    --index-url https://download.pytorch.org/whl/cu118
+```
+
+Проверка:
+
+```powershell
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+# Ожидаемый вывод: True  NVIDIA GeForce RTX xxxx
+```
+
+---
+
+## 5. Основные зависимости (Windows)
+
+```powershell
+pip install -r requirements.txt --use-deprecated=legacy-resolver
+pip install plyfile tables diffusers==0.30.3
+```
+
+---
+
+## 6. Git-пакеты (Windows)
+
+```powershell
+pip install --no-deps "utils3d @ git+https://github.com/EasternJournalist/utils3d.git@9a4eb15"
+pip install "clip @ git+https://github.com/openai/CLIP.git"
+pip install --no-deps "kolors @ git+https://github.com/HochCC/Kolors.git"
+pip install --no-deps "MoGe @ git+https://github.com/microsoft/MoGe.git@a8c3734"
+pip install gsplat==1.5.3
+pip install "nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@729261d"
+```
+
+> Если при установке `gsplat` или `nvdiffrast` ошибка компилятора — убедись,
+> что установлены **Visual Studio Build Tools** (шаг 2) и **CUDA Toolkit 11.8**.
+
+---
+
+## 7. Hunyuan3D-2 (Windows)
+
+```powershell
+# Перейти в родительскую папку проекта
+cd ..
+git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2
+cd Hunyuan3D-2
+pip install -e .
+cd ..\EmbodiedGen   # вернуться в проект
+```
+
+Проверка:
+
+```powershell
+python -c "from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline; print('OK')"
+```
+
+---
+
+## 8. Git-сабмодули и установка проекта (Windows)
+
+```powershell
+git submodule update --init --recursive
+pip install --no-deps -e .
+```
+
+Проверка:
+
+```powershell
+python -c "import embodied_gen; print('EmbodiedGen OK')"
+```
+
+---
+
+## 9. Настройка LLM (Windows)
+
+Отредактировать файл `embodied_gen\utils\gpt_config.yaml`.
+
+### Вариант А — Ollama (рекомендуется)
+
+Скачать и установить Ollama для Windows:
+`https://ollama.com/download/windows`
+
+Скачать модель (в любом терминале):
+
+```powershell
+ollama pull qwen2.5vl:7b
+```
+
+Убедиться что Ollama запущена (запускается как фоновый сервис при установке):
+
+```powershell
+curl http://localhost:11434/api/tags
+```
+
+Файл `gpt_config.yaml`:
+
+```yaml
+agent_type: "ollama"
+
+ollama:
+  endpoint: http://localhost:11434/v1
+  api_key: ollama
+  api_version: null
+  model_name: qwen2.5vl:7b
+```
+
+### Вариант Б — OpenRouter (облако)
+
+```yaml
+agent_type: "qwen2.5-vl"
+
+qwen2.5-vl:
+  endpoint: https://openrouter.ai/api/v1
+  api_key: sk-or-v1-ВАШ_КЛЮЧ
+  api_version: null
+  model_name: qwen/qwen2.5-vl-72b-instruct:free
+```
+
+---
+
+## 10. Переменные окружения (Windows)
+
+В **Anaconda PowerShell Prompt** перед каждым запуском:
+
+```powershell
+$env:TEXT_MODEL        = "sdxl-turbo"
+$env:OUTPUT_ROOT       = "outputs/jobs"
+$env:TORCH_HOME        = "weights/torch_cache"
+$env:HF_HOME           = "weights/hf_cache"
+$env:HUNYUAN3D_TEXTURE = "1"    # "0" — выключить текстуры (~6 GB экономия)
+```
+
+Чтобы не вводить каждый раз, сохрани их в файл `env.ps1` в папке проекта:
+
+```powershell
+# env.ps1
+$env:TEXT_MODEL        = "sdxl-turbo"
+$env:OUTPUT_ROOT       = "outputs/jobs"
+$env:TORCH_HOME        = "weights/torch_cache"
+$env:HF_HOME           = "weights/hf_cache"
+$env:HUNYUAN3D_TEXTURE = "1"
+```
+
+И запускай перед стартом:
+
+```powershell
+. .\env.ps1
+```
+
+---
+
+## 11. Запуск (Windows)
+
+### Вариант А — API-сервер
+
+```powershell
+conda activate embodiedgen
+. .\env.ps1   # загрузить переменные окружения
+
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 1
+```
+
+**Отправить запрос** (в другом Anaconda PowerShell Prompt):
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/generate `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"prompt": "a wooden chair", "name": "chair"}'
+# Вернёт: job_id
+```
+
+**Проверить статус:**
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/jobs/<job_id>
+```
+
+**Посмотреть логи:**
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/jobs/<job_id>/logs
+```
+
+**Swagger UI** (документация в браузере):
+
+```
+http://localhost:8000/docs
+```
+
+---
+
+### Вариант Б — Прямой запуск generate.py
+
+```powershell
+conda activate embodiedgen
+. .\env.ps1
+
+# Базовый запуск
+python generate.py "a wooden chair"
+
+# С параметрами
+python generate.py "a red ceramic mug" --name mug --output outputs/mug --seed_img 42
+
+# Без текстуры (быстрее, меньше VRAM)
+$env:HUNYUAN3D_TEXTURE = "0"
+python generate.py "a wooden chair" --skip_mjcf
+```
+
+Результат появится в `outputs\generated\`:
+
+```
+outputs\generated\
+└── asset3d\
+    └── chair\
+        └── result\
+            ├── mesh\
+            │   ├── chair.obj       ← 3D-меш
+            │   ├── chair.glb       ← для просмотра в браузере
+            │   └── chair.mtl
+            ├── chair.urdf          ← для симуляторов
+            ├── mjcf\
+            │   └── chair.xml       ← MuJoCo XML
+            └── video.mp4           ← превью 3D-модели
+```
+
+---
+
+### Вариант В — Только Image → 3D
+
+```powershell
+python -m embodied_gen.scripts.imageto3d `
+  --image_path C:\path\to\image.png `
+  --output_root outputs\my_object
+```
+
+---
+
+## 12. Устранение проблем (Windows)
+
+### CUDA out of memory (OOM)
+
+```powershell
+# Отключить texture pipeline
+$env:HUNYUAN3D_TEXTURE = "0"
+python generate.py "a wooden chair"
+```
+
+---
+
+### torch.cuda.is_available() возвращает False
+
+```powershell
+# Проверить версию torch и CUDA
+python -c "import torch; print(torch.__version__, torch.version.cuda)"
+
+# Убедиться, что CUDA Toolkit 11.8 установлен
+nvcc --version
+
+# Переустановить torch если нужно
+pip uninstall torch torchvision xformers -y
+pip install torch==2.4.0 torchvision==0.19.0 xformers==0.0.27.post2 `
+    --index-url https://download.pytorch.org/whl/cu118
+```
+
+---
+
+### Ошибка при сборке C++-расширений
+
+Симптом: `error: Microsoft Visual C++ 14.0 or greater is required`
+
+Решение: Установить **Visual Studio Build Tools** (шаг 2), выбрать
+**"Desktop development with C++"**. После установки **перезапустить** Anaconda
+PowerShell Prompt.
+
+---
+
+### nvdiffrast / gsplat не компилируются
+
+```powershell
+# Убедиться что переменные CUDA выставлены
+$env:CUDA_HOME = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+$env:PATH = "$env:CUDA_HOME\bin;$env:PATH"
+
+# Попробовать установить снова
+pip install "nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@729261d"
+```
+
+Если ошибки продолжаются — попробуй установить через **WSL2** (Windows Subsystem
+for Linux), там компиляция работает надёжнее. Инструкция для WSL2 совпадает
+с [Linux-разделом](#linux) выше.
+
+---
+
+### Ollama не запускается
+
+Ollama на Windows запускается как фоновый сервис. Если сервис не работает:
+
+```powershell
+# Запустить вручную (в отдельном PowerShell-окне)
+& "C:\Users\$env:USERNAME\AppData\Local\Programs\Ollama\ollama.exe" serve
+
+# Проверить
+curl http://localhost:11434/api/tags
+```
+
+---
+
+### DINOv2 не скачивается (РФ)
+
+Скачать через VPN и положить файл:
+
+```
+weights\torch_cache\hub\checkpoints\dinov2_vitl14_reg4_pretrain.pth
+```
+
+```powershell
+# Создать папку
+New-Item -ItemType Directory -Force `
+  -Path "weights\torch_cache\hub\checkpoints"
+```
+
+---
+
+### Медленная загрузка с HuggingFace
+
+```powershell
+$env:HF_ENDPOINT = "https://hf-mirror.com"
+```
+
+---
+
+## Краткий чеклист первого запуска (Windows)
+
+```powershell
+# 1. Открыть Anaconda PowerShell Prompt
+conda activate embodiedgen
+cd C:\Users\ИМЯ\Desktop\EmbodiedGen
+
+# 2. Загрузить переменные окружения
+. .\env.ps1
+
+# 3. Убедиться что Ollama запущена
+curl http://localhost:11434/api/tags
+
+# 4. Проверить GPU
+python -c "import torch; print('GPU:', torch.cuda.get_device_name(0))"
+
+# 5. Первый тест (без текстуры — меньше VRAM)
+$env:HUNYUAN3D_TEXTURE = "0"
+python generate.py "a simple wooden cube" --skip_mjcf
+
+# 6. Посмотреть результат
+dir outputs\generated\asset3d\simple\result\
 ```
