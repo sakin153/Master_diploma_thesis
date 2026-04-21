@@ -28,6 +28,7 @@ services:
       OUTPUT_ROOT: /app/outputs/jobs
       HF_HOME: /app/weights/hf_cache
       MODELSCOPE_CACHE: /app/weights/modelscope_cache
+      TORCH_HOME: /app/weights/torch_cache
       TOKENIZERS_PARALLELISM: "false"
 
     volumes:
