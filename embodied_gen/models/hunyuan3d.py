@@ -65,8 +65,8 @@ class Hunyuan3DInference:
         self,
         image,
         seed: int = None,
-        num_inference_steps: int = 50,
-        octree_resolution: int = 380,
+        num_inference_steps: int = 30,
+        octree_resolution: int = 256,
         guidance_scale: float = 5.0,
         **kwargs,
     ) -> dict:
