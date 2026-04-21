@@ -32,6 +32,8 @@ services:
       HF_HOME: /app/weights/hf_cache
       MODELSCOPE_CACHE: /app/weights/modelscope_cache
       TORCH_HOME: /app/weights/torch_cache
+      # rembg u2net model cache — persisted in volume to avoid re-downloading
+      U2NET_HOME: /app/weights/u2net
       TOKENIZERS_PARALLELISM: "false"
       PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
 
