@@ -25,7 +25,10 @@ from PIL import Image
 from embodied_gen.models.image_comm_model import build_hf_image_pipeline
 from embodied_gen.models.segment_model import RembgRemover
 from embodied_gen.models.text_model import PROMPT_APPEND
-from embodied_gen.scripts.imageto3d import entrypoint as imageto3d_api
+from embodied_gen.scripts.imageto3d import (
+    _release_pipeline as _release_3d_pipeline,
+    entrypoint as imageto3d_api,
+)
 from embodied_gen.utils.gpt_clients import GPT_CLIENT
 from embodied_gen.utils.log import logger
 from embodied_gen.utils.process_media import (
@@ -157,6 +160,9 @@ def text_to_image(
 
 
 def text_to_3d(**kwargs) -> dict:
+    # Release any 3D pipeline left in VRAM from a previous failed job.
+    _release_3d_pipeline()
+
     args = parse_args()
     for k, v in kwargs.items():
         if hasattr(args, k) and v is not None:
@@ -245,6 +251,7 @@ def text_to_3d(**kwargs) -> dict:
 
         free_vram()
 
+    _release_3d_pipeline()
     return results
 
 

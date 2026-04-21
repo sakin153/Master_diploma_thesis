@@ -63,6 +63,15 @@ CHECKERS = [GEO_CHECKER, SEG_CHECKER, AESTHETIC_CHECKER]
 _PIPELINE = None
 
 
+def _release_pipeline():
+    global _PIPELINE
+    if _PIPELINE is not None:
+        del _PIPELINE
+        _PIPELINE = None
+        free_vram()
+        log_vram("after 3D pipeline release")
+
+
 def _get_pipeline():
     global _PIPELINE
     if _PIPELINE is None:
