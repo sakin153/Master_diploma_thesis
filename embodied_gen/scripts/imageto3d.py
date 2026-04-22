@@ -30,8 +30,19 @@ from embodied_gen.validators.urdf_convertor import URDFGenerator
 RBG_REMOVER = RembgRemover()
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 GEO_CHECKER = MeshGeoChecker(GPT_CLIENT)
-AESTHETIC_CHECKER = ImageAestheticChecker()
-CHECKERS = [GEO_CHECKER, SEG_CHECKER, AESTHETIC_CHECKER]
+_AESTHETIC_CHECKER = None
+
+
+def _get_aesthetic_checker():
+    global _AESTHETIC_CHECKER
+    if _AESTHETIC_CHECKER is None:
+        _AESTHETIC_CHECKER = ImageAestheticChecker()
+    return _AESTHETIC_CHECKER
+
+
+def _get_checkers():
+    return [GEO_CHECKER, SEG_CHECKER, _get_aesthetic_checker()]
+
 
 # ── Lazy 3-D generation pipeline (Hunyuan3D-2mini) ───────────────────────────
 _PIPELINE = None
@@ -163,7 +174,8 @@ def process_single_image(
     image_dir = f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
     image_paths = glob(f"{image_dir}/*.png")
     images_list = []
-    for checker in CHECKERS:
+    checkers = _get_checkers()
+    for checker in checkers:
         images = combine_images_to_grid(image_paths)
         if isinstance(checker, ImageSegChecker):
             images = [
@@ -171,7 +183,7 @@ def process_single_image(
                 f"{output_root}/{filename}_cond.png",
             ]
         images_list.append(images)
-    qa_results = BaseChecker.validate(CHECKERS, images_list)
+    qa_results = BaseChecker.validate(checkers, images_list)
     urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
     # ── Stage 5: Organize results ────────────────────────────────────────────
