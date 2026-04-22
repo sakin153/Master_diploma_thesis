@@ -105,15 +105,41 @@ def _generate_image_for_item(
     # ── Already have an image ────────────────────────────────────────────────
     if item.image_b64:
         b64_str = item.image_b64.strip()
+        logger.info(
+            f"Processing image_b64 for '{item.name}': "
+            f"length={len(b64_str)}, first 100 chars: {b64_str[:100]}..."
+        )
         try:
             img_data = base64.b64decode(b64_str, validate=True)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Base64 validation failed: {e}, trying with padding fix...")
             # Add padding if needed
             padding = 4 - (len(b64_str) % 4)
             if padding and padding != 4:
                 b64_str += "=" * padding
             img_data = base64.b64decode(b64_str, validate=False)
-        raw = Image.open(__import__("io").BytesIO(img_data)).convert("RGB")
+
+        logger.info(f"Decoded image data: {len(img_data)} bytes, first 20 bytes: {img_data[:20]}")
+
+        # Debug: save raw data for inspection
+        debug_bin = f"{out_path}.bin"
+        with open(debug_bin, "wb") as f:
+            f.write(img_data)
+        logger.info(f"Saved raw image data to: {debug_bin}")
+
+        try:
+            raw = Image.open(__import__("io").BytesIO(img_data)).convert("RGB")
+        except Exception as e:
+            logger.error(
+                f"Failed to load image from base64 for '{item.name}'. "
+                f"Data size: {len(img_data)} bytes. First 100 bytes: {img_data[:100]!r}. "
+                f"Error: {e}"
+            )
+            raise ValueError(
+                f"Invalid image data for '{item.name}' - data corrupted/incomplete "
+                f"({len(img_data)} bytes). Check {debug_bin} for raw data."
+            )
+
         seg = BG_REMOVER(raw)
         seg.save(out_path)
         return out_path

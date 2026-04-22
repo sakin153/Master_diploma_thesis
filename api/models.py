@@ -29,7 +29,11 @@ class GenerateItemRequest(BaseModel):
         None, description="Text description of the object."
     )
     image_b64: Optional[str] = Field(
-        None, description="Base64-encoded input image (PNG/JPG)."
+        None,
+        description=(
+            "Base64-encoded input image (PNG/JPG). "
+            "Ensure padding with = to length multiple of 4."
+        ),
     )
     asset_type: Optional[str] = Field(
         None, description="Semantic category hint (e.g. 'chair')."
