@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class ModelChoice(str, Enum):
     sd15 = "sd15"
+    sdxl = "sdxl"
     sdxl_turbo = "sdxl-turbo"
     kolors = "kolors"
     sd35 = "sd35"

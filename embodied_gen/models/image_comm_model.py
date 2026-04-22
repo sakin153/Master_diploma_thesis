@@ -369,7 +369,7 @@ class SDXLTurboRunner(BasePipelineRunner):
 
 # ===== Stable Diffusion 1.5 (lightweight, ~1.7 GB RAM via cpu_offload) =====
 class SD15Loader(BasePipelineLoader):
-    """SD 1.5 with cpu_offload — minimal VRAM footprint, avoids fragmentation."""
+    """SD 1.5 with cpu_offload — minimal VRAM footprint."""
 
     def load(self):
         pipe = StableDiffusionPipeline.from_pretrained(
@@ -404,6 +404,44 @@ class SD15Runner(BasePipelineRunner):
         return self.pipe(prompt=prompt, **kwargs).images
 
 
+_SDXL_BASE_NEGATIVE_PROMPT = (
+    "blurry, deformed, distorted, ugly, bad anatomy, extra limbs, "
+    "cropped, out of frame, worst quality, low quality, watermark, "
+    "text, logo, floating, background clutter, multiple objects, "
+    "duplicate, disfigured, extra arms, mutated, artifacts, noise"
+)
+
+
+class SDXLBaseLoader(BasePipelineLoader):
+    """Loader for SDXL Base 1.0. Native 1024x1024, ~6 GB VRAM."""
+
+    def load(self):
+        from diffusers import StableDiffusionXLPipeline
+        pipe = StableDiffusionXLPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-base-1.0",
+            torch_dtype=torch.float16,
+            variant="fp16",
+            use_safetensors=True,
+        )  # ~6.5 GB download
+        pipe.enable_model_cpu_offload()
+        pipe.enable_attention_slicing()
+        pipe.enable_vae_slicing()
+        return pipe
+
+
+class SDXLBaseRunner(BasePipelineRunner):
+    """Runner for SDXL Base 1.0. Native resolution 1024x1024."""
+
+    def run(self, prompt: str, **kwargs) -> list[Image.Image]:
+        kwargs.setdefault("num_inference_steps", 30)
+        kwargs.setdefault("guidance_scale", 7.5)
+        kwargs.setdefault("negative_prompt", _SDXL_BASE_NEGATIVE_PROMPT)
+        # SDXL native resolution is 1024x1024
+        kwargs["height"] = min(kwargs.get("height", 1024), 1024)
+        kwargs["width"] = min(kwargs.get("width", 1024), 1024)
+        return self.pipe(prompt=prompt, **kwargs).images
+
+
 PIPELINE_REGISTRY = {
     "sd35": (SD35Loader, SD35Runner),
     "cosmos": (CosmosLoader, CosmosRunner),
@@ -411,6 +449,7 @@ PIPELINE_REGISTRY = {
     "flux": (FluxLoader, FluxRunner),
     "chroma": (ChromaLoader, ChromaRunner),
     "sdxl-turbo": (SDXLTurboLoader, SDXLTurboRunner),
+    "sdxl": (SDXLBaseLoader, SDXLBaseRunner),
     "sd15": (SD15Loader, SD15Runner),
 }
 
