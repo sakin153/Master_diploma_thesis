@@ -45,10 +45,10 @@ class AestheticPredictor:
         ```
     """
 
-    def __init__(self, clip_model_dir=None, sac_model_path=None, device="cpu", use_fp16=True):
+    def __init__(self, clip_model_dir=None, sac_model_path=None, device="cpu", use_fp16=False):
 
         self.device = device
-        self.use_fp16 = use_fp16 and device == "cpu"
+        self.use_fp16 = use_fp16 and device == "cuda"
 
         if clip_model_dir is None:
             model_path = snapshot_download(

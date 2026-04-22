@@ -78,7 +78,7 @@ class JobManager:
     def _save_job(self, job: JobStatus):
         path = self._job_path(job.job_id)
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(job.model_dump_json(indent=2))
 
     def _load_jobs(self):
@@ -91,7 +91,7 @@ class JobManager:
         )
         for path in paths:
             try:
-                with open(path) as f:
+                with open(path, encoding="utf-8") as f:
                     data = json.load(f)
                 job = JobStatus(**data)
                 if job.status == JobState.processing:
