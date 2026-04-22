@@ -69,12 +69,17 @@ def get_job(job_id: str):
 
 
 @app.get("/api/jobs/{job_id}/logs", tags=["Jobs"])
-def get_job_logs(job_id: str, last: int = 50):
+def get_job_logs(job_id: str, last: int = 200):
     """Return last N log lines for a running or completed job."""
     job = job_manager.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"job_id": job_id, "status": job.status, "logs": job.logs[-last:]}
+    return {
+        "job_id": job_id,
+        "status": job.status,
+        "error": job.error,
+        "logs": job.logs[-last:],
+    }
 
 
 # ──────────────────────────────────────────────

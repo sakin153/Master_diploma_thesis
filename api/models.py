@@ -52,6 +52,12 @@ class GenerateRequest(BaseModel):
     )
     n_image_retry: int = Field(2, ge=1, le=5)
     n_asset_retry: int = Field(2, ge=1, le=5)
+    n_pipe_retry: int = Field(1, ge=1, le=5)
+    img_denoise_step: int = Field(25, ge=4, le=80)
+    text_guidance_scale: float = Field(7.0, ge=1.0, le=20.0)
+    n_img_sample: int = Field(1, ge=1, le=4)
+    image_height: int = Field(768, ge=256, le=2048)
+    image_width: int = Field(768, ge=256, le=2048)
 
 
 class ItemFiles(BaseModel):

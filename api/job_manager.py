@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import threading
+import traceback
 import uuid
 from collections import OrderedDict
 from datetime import datetime
@@ -17,7 +18,7 @@ from api.models import (
     JobStatus,
 )
 
-MAX_LOG_LINES = 200
+MAX_LOG_LINES = 2000
 
 
 class _JobLogHandler(logging.Handler):
@@ -204,10 +205,19 @@ class JobManager:
                 job.results = results
             self._save_job(job)
         except Exception as exc:
+            err_msg = (
+                f"{type(exc).__name__}: {exc}"
+                if str(exc)
+                else type(exc).__name__
+            )
+            append(f"ERROR: {err_msg}")
+            append("Traceback (most recent call last):")
+            for line in traceback.format_exc().strip().splitlines()[1:]:
+                append(line)
             with self._lock:
                 job.status = JobState.failed
                 job.finished_at = datetime.utcnow()
-                job.error = str(exc)
+                job.error = err_msg
             self._save_job(job)
         finally:
             sys.stdout, sys.stderr = old_stdout, old_stderr
@@ -230,6 +240,31 @@ class JobManager:
             req_data = json.load(f)
 
         os.environ["TEXT_MODEL"] = req_data.get("model", "sd15")
+
+        n_image_retry = int(req_data.get("n_image_retry", 2))
+        n_asset_retry = int(req_data.get("n_asset_retry", 2))
+        n_pipe_retry = int(req_data.get("n_pipe_retry", 1))
+        img_denoise_step = int(req_data.get("img_denoise_step", 25))
+        text_guidance_scale = float(req_data.get("text_guidance_scale", 7.0))
+        n_img_sample = int(req_data.get("n_img_sample", 1))
+        image_height = int(req_data.get("image_height", 768))
+        image_width = int(req_data.get("image_width", 768))
+
+        logging.getLogger(__name__).info(
+            (
+                "request settings: model=%s image=%sx%s steps=%s "
+                "retries=%s/%s/%s samples=%s guidance=%.2f"
+            ),
+            os.environ["TEXT_MODEL"],
+            image_width,
+            image_height,
+            img_denoise_step,
+            n_image_retry,
+            n_asset_retry,
+            n_pipe_retry,
+            n_img_sample,
+            text_guidance_scale,
+        )
 
         output_root = os.path.join(self.output_root, job_id)
 
@@ -255,6 +290,14 @@ class JobManager:
         batch_results = text_to_3d(
             items=gen_items,
             output_root=output_root,
+            n_image_retry=n_image_retry,
+            n_asset_retry=n_asset_retry,
+            n_pipe_retry=n_pipe_retry,
+            img_denoise_step=img_denoise_step,
+            text_guidance_scale=text_guidance_scale,
+            n_img_sample=n_img_sample,
+            image_height=image_height,
+            image_width=image_width,
         )
 
         # Convert URDF → MJCF and build ItemFiles for each object

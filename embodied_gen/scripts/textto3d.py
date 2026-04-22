@@ -92,6 +92,8 @@ def _generate_image_for_item(
     img_denoise_step: int,
     text_guidance_scale: float,
     n_img_sample: int,
+    image_height: int,
+    image_width: int,
 ) -> Optional[str]:
     """
     Return path to a ready background-removed PNG for this item.
@@ -129,7 +131,8 @@ def _generate_image_for_item(
         logger.info(
             f"Image GEN for '{item.name}' "
             f"try {try_idx + 1}/{n_image_retry}, "
-            f"seed={seed}, prompt={f_prompt}"
+            f"seed={seed}, size={image_width}x{image_height}, "
+            f"steps={img_denoise_step}, prompt={f_prompt}"
         )
         torch.cuda.empty_cache()
         images = _load_pipe_img().run(
@@ -137,8 +140,8 @@ def _generate_image_for_item(
             num_inference_steps=img_denoise_step,
             guidance_scale=text_guidance_scale,
             num_images_per_prompt=n_img_sample,
-            height=1024,
-            width=1024,
+            height=image_height,
+            width=image_width,
             generator=(
                 torch.Generator().manual_seed(seed)
                 if seed is not None else None
@@ -193,6 +196,8 @@ def text_to_3d(
     img_denoise_step: int = 25,
     text_guidance_scale: float = 7.0,
     n_img_sample: int = 1,
+    image_height: int = 768,
+    image_width: int = 768,
     keep_intermediate: bool = False,
     disable_decompose_convex: bool = False,
 ) -> dict:
@@ -218,6 +223,15 @@ def text_to_3d(
 
     results: dict = defaultdict(dict)
 
+    logger.info(
+        "text_to_3d settings: "
+        f"model={os.environ.get('TEXT_MODEL', 'sd15')}, "
+        f"image_size={image_width}x{image_height}, "
+        f"img_steps={img_denoise_step}, "
+        f"n_image_retry={n_image_retry}, n_asset_retry={n_asset_retry}, "
+        f"n_pipe_retry={n_pipe_retry}, n_img_sample={n_img_sample}"
+    )
+
     # ── Phase 1: generate ALL images ────────────────────────────────────────
     image_paths: dict[str, Optional[str]] = {}
     for item in items:
@@ -228,6 +242,8 @@ def text_to_3d(
             img_denoise_step=img_denoise_step,
             text_guidance_scale=text_guidance_scale,
             n_img_sample=n_img_sample,
+            image_height=image_height,
+            image_width=image_width,
         )
 
     _release_pipe_img()
