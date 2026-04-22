@@ -68,13 +68,41 @@ class Hunyuan3DInference:
             raise
 
         self.model_path = model_path
-        self._shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
-            model_path,
-            subfolder=subfolder,
-            use_safetensors=True,
-            variant="fp16",
-            device="cuda",
-        )
+
+        # Check GPU memory before loading
+        print("[DEBUG] Checking GPU memory...")
+        if torch.cuda.is_available():
+            gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            allocated = torch.cuda.memory_allocated(0) / (1024**3)
+            print(f"[DEBUG] GPU Memory: {gpu_mem:.1f} GB total, {allocated:.1f} GB allocated")
+        else:
+            print("[WARNING] CUDA not available, loading on CPU (very slow!)")
+
+        try:
+            print(f"[DEBUG] Loading Hunyuan3D model from {model_path}/{subfolder}...")
+            self._shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
+                model_path,
+                subfolder=subfolder,
+                use_safetensors=True,
+                variant="fp16",
+                device="cuda" if torch.cuda.is_available() else "cpu",
+            )
+            print("[DEBUG] ✓ Hunyuan3D model loaded successfully")
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
+                print(f"[ERROR] GPU Memory Error: {e}")
+                print("[ERROR] Try clearing GPU cache or reducing batch size")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                raise RuntimeError(
+                    f"Failed to load Hunyuan3D model due to GPU memory: {e}"
+                )
+            raise
+        except Exception as e:
+            print(f"[ERROR] Failed to load Hunyuan3D model: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def run(
         self,
@@ -85,24 +113,35 @@ class Hunyuan3DInference:
         guidance_scale: float = 5.0,
         **kwargs,
     ) -> dict:
-        gen = (
-            torch.Generator(device="cuda").manual_seed(seed)
-            if seed is not None
-            else None
-        )
+        try:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            gen = (
+                torch.Generator(device=device).manual_seed(seed)
+                if seed is not None
+                else None
+            )
 
-        meshes = self._shape(
-            image=image,
-            num_inference_steps=num_inference_steps,
-            octree_resolution=octree_resolution,
-            guidance_scale=guidance_scale,
-            generator=gen,
-            output_type="trimesh",
-        )
-        mesh = meshes[0]
+            print(f"[DEBUG] Running Hunyuan3D inference on {device}...")
+            meshes = self._shape(
+                image=image,
+                num_inference_steps=num_inference_steps,
+                octree_resolution=octree_resolution,
+                guidance_scale=guidance_scale,
+                generator=gen,
+                output_type="trimesh",
+            )
+            mesh = meshes[0]
+            print("[DEBUG] ✓ Hunyuan3D inference completed")
 
-        return {
-            "gaussian": [None],
-            "mesh": [_MeshAdapter(mesh)],
-            "trimesh": [mesh],
-        }
+            return {
+                "gaussian": [None],
+                "mesh": [_MeshAdapter(mesh)],
+                "trimesh": [mesh],
+            }
+        except RuntimeError as e:
+            if "cuda" in str(e).lower() or "out of memory" in str(e).lower():
+                print(f"[ERROR] CUDA/GPU Error: {e}")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    print("[DEBUG] GPU cache cleared")
+            raise
