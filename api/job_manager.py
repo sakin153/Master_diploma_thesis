@@ -1,4 +1,4 @@
-import glob
+import glob as glob_module
 import io
 import json
 import logging
@@ -10,14 +10,17 @@ from collections import OrderedDict
 from datetime import datetime
 from typing import Optional
 
-from api.models import GenerateRequest, JobFiles, JobState, JobStatus
+from api.models import (
+    GenerateRequest,
+    ItemFiles,
+    JobState,
+    JobStatus,
+)
 
 MAX_LOG_LINES = 200
 
 
 class _JobLogHandler(logging.Handler):
-    """Forwards Python logging records to the job's log buffer."""
-
     def __init__(self, append_fn):
         super().__init__()
         self._append = append_fn
@@ -30,8 +33,6 @@ class _JobLogHandler(logging.Handler):
 
 
 class _TeeStream(io.TextIOBase):
-    """Tees writes to original stream and job log buffer."""
-
     def __init__(self, original, append_fn):
         self._original = original
         self._append = append_fn
@@ -59,13 +60,15 @@ class JobManager:
         self._jobs: OrderedDict[str, JobStatus] = OrderedDict()
         self._queue: list[str] = []
         self._lock = threading.Lock()
-        self._worker = threading.Thread(target=self._process_loop, daemon=True)
+        self._worker = threading.Thread(
+            target=self._process_loop, daemon=True
+        )
         self._event = threading.Event()
         self._load_jobs()
         self._worker.start()
 
     # ------------------------------------------------------------------
-    # Persistence helpers
+    # Persistence
     # ------------------------------------------------------------------
 
     def _job_path(self, job_id: str) -> str:
@@ -78,10 +81,11 @@ class JobManager:
             f.write(job.model_dump_json(indent=2))
 
     def _load_jobs(self):
-        """Restore job state from disk on startup."""
         os.makedirs(self.output_root, exist_ok=True)
         paths = sorted(
-            glob.glob(os.path.join(self.output_root, "*", "job.json")),
+            glob_module.glob(
+                os.path.join(self.output_root, "*", "job.json")
+            ),
             key=os.path.getmtime,
         )
         for path in paths:
@@ -89,11 +93,14 @@ class JobManager:
                 with open(path) as f:
                     data = json.load(f)
                 job = JobStatus(**data)
-                # Jobs that were processing when server died → mark failed
                 if job.status == JobState.processing:
                     job.status = JobState.failed
-                    job.error = (job.error or "") + " [server restarted]"
-                    job.finished_at = job.finished_at or datetime.utcnow()
+                    job.error = (
+                        (job.error or "") + " [server restarted]"
+                    )
+                    job.finished_at = (
+                        job.finished_at or datetime.utcnow()
+                    )
                     self._save_job(job)
                 self._jobs[job.job_id] = job
             except Exception:
@@ -105,12 +112,10 @@ class JobManager:
 
     def submit(self, request: GenerateRequest) -> JobStatus:
         job_id = str(uuid.uuid4())
-        name = request.name or request.prompt.split()[0].lower().replace(",", "")
         job = JobStatus(
             job_id=job_id,
             status=JobState.queued,
-            prompt=request.prompt,
-            name=name,
+            item_count=len(request.items),
             model=request.model,
             created_at=datetime.utcnow(),
         )
@@ -119,6 +124,13 @@ class JobManager:
             self._queue.append(job_id)
             job.queue_position = len(self._queue)
         self._save_job(job)
+        # Store request for later execution
+        req_path = os.path.join(
+            self.output_root, job_id, "request.json"
+        )
+        os.makedirs(os.path.dirname(req_path), exist_ok=True)
+        with open(req_path, "w") as f:
+            f.write(request.model_dump_json(indent=2))
         self._event.set()
         return job
 
@@ -149,9 +161,7 @@ class JobManager:
                     if not self._queue:
                         break
                     job_id = self._queue[0]
-
                 self._run_job(job_id)
-
                 with self._lock:
                     if self._queue and self._queue[0] == job_id:
                         self._queue.pop(0)
@@ -170,31 +180,28 @@ class JobManager:
             job.status = JobState.processing
             job.started_at = datetime.utcnow()
             job.queue_position = None
-            request = GenerateRequest(
-                prompt=job.prompt,
-                name=job.name,
-                model=job.model,
-            )
         self._save_job(job)
 
-        append = lambda line: self._append_log(job_id, line)
+        def append(line: str):
+            self._append_log(job_id, line)
 
-        # Intercept stdout/stderr and Python root logger
         tee_out = _TeeStream(sys.stdout, append)
         tee_err = _TeeStream(sys.stderr, append)
         log_handler = _JobLogHandler(append)
-        log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+        log_handler.setFormatter(
+            logging.Formatter("%(name)s: %(message)s")
+        )
         root_logger = logging.getLogger()
         root_logger.addHandler(log_handler)
         old_stdout, old_stderr = sys.stdout, sys.stderr
         sys.stdout, sys.stderr = tee_out, tee_err
 
         try:
-            files = self._execute(job_id, request)
+            results = self._execute(job_id)
             with self._lock:
                 job.status = JobState.completed
                 job.finished_at = datetime.utcnow()
-                job.files = files
+                job.results = results
             self._save_job(job)
         except Exception as exc:
             with self._lock:
@@ -206,63 +213,83 @@ class JobManager:
             sys.stdout, sys.stderr = old_stdout, old_stderr
             root_logger.removeHandler(log_handler)
 
-    def _execute(self, job_id: str, request: GenerateRequest) -> JobFiles:
-        # Import here so models are loaded once at server startup, not import time
-        import os
-        os.environ["TEXT_MODEL"] = request.model.value
-
-        from embodied_gen.data.asset_converter import cvt_embodiedgen_asset_to_anysim
-        from embodied_gen.scripts.textto3d import text_to_3d
+    def _execute(self, job_id: str) -> dict[str, ItemFiles]:
+        from embodied_gen.data.asset_converter import (
+            cvt_embodiedgen_asset_to_anysim,
+        )
+        from embodied_gen.scripts.textto3d import (
+            GenerateItem,
+            text_to_3d,
+        )
         from embodied_gen.utils.enum import AssetType
 
+        req_path = os.path.join(
+            self.output_root, job_id, "request.json"
+        )
+        with open(req_path) as f:
+            req_data = json.load(f)
+
+        os.environ["TEXT_MODEL"] = req_data.get("model", "sd15")
+
         output_root = os.path.join(self.output_root, job_id)
-        os.makedirs(output_root, exist_ok=True)
 
-        results = text_to_3d(
-            prompts=[request.prompt],
-            asset_names=[request.name],
+        # Build GenerateItem list from stored request
+        gen_items: list[GenerateItem] = []
+        for raw in req_data.get("items", []):
+            name = raw.get("name") or (
+                raw.get("prompt", "object").split()[0]
+                .lower()
+                .replace(",", "")
+            )
+            gen_items.append(
+                GenerateItem(
+                    name=name,
+                    prompt=raw.get("prompt"),
+                    image_b64=raw.get("image_b64"),
+                    asset_type=raw.get("asset_type"),
+                    seed_img=raw.get("seed_img"),
+                    seed_3d=raw.get("seed_3d", 0),
+                )
+            )
+
+        batch_results = text_to_3d(
+            items=gen_items,
             output_root=output_root,
-            seed_img=request.seed_img,
-            seed_3d=request.seed_3d,
-            n_image_retry=request.n_image_retry,
-            n_asset_retry=request.n_asset_retry,
-            n_pipe_retry=1,
         )
 
-        asset_rel = results.get("assets", {}).get(request.name)
-        if not asset_rel:
-            raise RuntimeError("Pipeline produced no output asset")
+        # Convert URDF → MJCF and build ItemFiles for each object
+        item_files: dict[str, ItemFiles] = {}
+        for item in gen_items:
+            file_paths = batch_results.get("files", {}).get(item.name)
+            if not file_paths:
+                item_files[item.name] = ItemFiles()
+                continue
 
-        asset_dir = os.path.join(output_root, asset_rel)
+            urdf_path = file_paths.get("urdf")
+            obj_path = file_paths.get("obj")
+            glb_path = file_paths.get("glb")
+            mjcf_path = None
 
-        # Find URDF
-        urdf_matches = glob.glob(os.path.join(asset_dir, "**", "*.urdf"), recursive=True)
-        if not urdf_matches:
-            raise RuntimeError(f"URDF not found in {asset_dir}")
-        urdf_path = next(
-            (p for p in urdf_matches if os.path.basename(p) == f"{request.name}.urdf"),
-            urdf_matches[0],
-        )
+            if urdf_path and os.path.exists(urdf_path):
+                mjcf_dir = os.path.join(
+                    os.path.dirname(urdf_path), "mjcf"
+                )
+                asset_paths = cvt_embodiedgen_asset_to_anysim(
+                    urdf_files=[urdf_path],
+                    target_dirs=[mjcf_dir],
+                    target_type=AssetType.MJCF,
+                    source_type=AssetType.MESH,
+                )
+                mjcf_path = asset_paths.get(urdf_path)
 
-        # Find OBJ
-        obj_matches = glob.glob(os.path.join(asset_dir, "mesh", "*.obj"))
-        obj_path = obj_matches[0] if obj_matches else None
+            item_files[item.name] = ItemFiles(
+                obj=obj_path,
+                glb=glb_path,
+                urdf=urdf_path,
+                mjcf=mjcf_path,
+            )
 
-        # Convert URDF → MJCF
-        mjcf_dir = os.path.join(os.path.dirname(urdf_path), "mjcf")
-        asset_paths = cvt_embodiedgen_asset_to_anysim(
-            urdf_files=[urdf_path],
-            target_dirs=[mjcf_dir],
-            target_type=AssetType.MJCF,
-            source_type=AssetType.MESH,
-        )
-        mjcf_path = asset_paths.get(urdf_path)
-
-        return JobFiles(
-            obj=obj_path,
-            urdf=urdf_path,
-            mjcf=mjcf_path,
-        )
+        return item_files
 
 
 job_manager = JobManager(

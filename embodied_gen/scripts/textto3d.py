@@ -1,25 +1,21 @@
-# Project EmbodiedGen
-#
-# Copyright (c) 2025 Horizon Robotics. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#       http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-# implied. See the License for the specific language governing
-# permissions and limitations under the License.
+"""Text/image → 3D pipeline with batch-optimised VRAM usage.
 
-import argparse
+Batch strategy:
+  Phase 1 — generate ALL images (text prompts only), text2image model
+             stays loaded in VRAM for the whole batch, then is released.
+  Phase 2 — generate ALL meshes (Hunyuan3D), 3D model stays loaded in
+             VRAM for the whole batch, then is released.
+
+This avoids reloading heavy models for every object.
+"""
+
+import base64
 import os
 import random
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Optional
 
-import numpy as np
 import torch
 from PIL import Image
 from embodied_gen.models.image_comm_model import build_hf_image_pipeline
@@ -27,7 +23,7 @@ from embodied_gen.models.segment_model import RembgRemover
 from embodied_gen.models.text_model import PROMPT_APPEND
 from embodied_gen.scripts.imageto3d import (
     _release_pipeline as _release_3d_pipeline,
-    entrypoint as imageto3d_api,
+    process_single_image,
 )
 from embodied_gen.utils.gpt_clients import GPT_CLIENT
 from embodied_gen.utils.log import logger
@@ -38,26 +34,18 @@ from embodied_gen.utils.process_media import (
 )
 from embodied_gen.utils.vram_utils import free_vram, log_vram
 from embodied_gen.validators.quality_checkers import (
-    ImageSegChecker,
     SemanticConsistChecker,
+    ImageSegChecker,
     TextGenAlignChecker,
 )
 
-# Avoid huggingface/tokenizers: The current process just got forked.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-random.seed(0)
 
-# GPT-based validators: no VRAM, safe to keep at module level.
 SEMANTIC_CHECKER = SemanticConsistChecker(GPT_CLIENT)
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 TXTGEN_CHECKER = TextGenAlignChecker(GPT_CLIENT)
-
-# Background remover: tiny ONNX model on CPU (~0 VRAM), keep at module level.
 BG_REMOVER = RembgRemover()
 
-# ── Lazy text-to-image pipeline (4–24 GB VRAM) ───────────────────────────────
-# Loaded on first call to text_to_image(); released before the 3-D stage so
-# that SAM3D never competes with the diffusion model for VRAM.
 _PIPE_IMG = None
 
 
@@ -67,14 +55,13 @@ def _load_pipe_img():
         log_vram("before text2img load")
         logger.info("Loading TEXT2IMG model...")
         _PIPE_IMG = build_hf_image_pipeline(
-            os.environ.get("TEXT_MODEL", "sdxl-turbo")
+            os.environ.get("TEXT_MODEL", "sd15")
         )
         log_vram("after text2img load")
     return _PIPE_IMG
 
 
 def _release_pipe_img():
-    """Unload the text-to-image pipeline from VRAM before the 3-D stage."""
     global _PIPE_IMG
     if _PIPE_IMG is not None:
         del _PIPE_IMG
@@ -83,36 +70,66 @@ def _release_pipe_img():
         log_vram("after text2img release")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-
-__all__ = [
-    "text_to_3d",
-]
+__all__ = ["text_to_3d", "GenerateItem"]
 
 
-def text_to_image(
-    prompt: str,
-    save_path: str,
-    n_retry: int,
+@dataclass
+class GenerateItem:
+    """One item to generate: either text prompt or ready image."""
+    name: str
+    prompt: Optional[str] = None        # text prompt
+    image_path: Optional[str] = None    # path to existing image
+    image_b64: Optional[str] = None     # base64-encoded image
+    asset_type: Optional[str] = None    # semantic category hint
+    seed_img: Optional[int] = None
+    seed_3d: int = 0
+
+
+def _generate_image_for_item(
+    item: GenerateItem,
+    img_save_dir: str,
+    n_image_retry: int,
     img_denoise_step: int,
     text_guidance_scale: float,
     n_img_sample: int,
-    image_hw: tuple[int, int] = (1024, 1024),
-    seed: int = None,
-) -> bool:
-    select_image = None
-    success_flag = False
-    assert save_path.endswith(".png"), "Image save path must end with `.png`."
-    for try_idx in range(n_retry):
-        if select_image is not None:
-            select_image[0].save(save_path.replace(".png", "_raw.png"))
-            select_image[1].save(save_path)
-            break
+) -> Optional[str]:
+    """
+    Return path to a ready background-removed PNG for this item.
+    For image inputs: copy/decode and return. For text: generate via SD.
+    """
+    save_node = item.name.replace(" ", "_")
+    out_path = os.path.join(img_save_dir, f"{save_node}.png")
 
-        f_prompt = PROMPT_APPEND.format(object=prompt)
+    # ── Already have an image ────────────────────────────────────────────────
+    if item.image_b64:
+        img_data = base64.b64decode(item.image_b64)
+        raw = Image.open(__import__("io").BytesIO(img_data)).convert("RGB")
+        seg = BG_REMOVER(raw)
+        seg.save(out_path)
+        return out_path
+
+    if item.image_path:
+        raw = Image.open(item.image_path).convert("RGB")
+        seg = BG_REMOVER(raw) if raw.mode != "RGBA" else raw
+        seg.save(out_path)
+        return out_path
+
+    # ── Generate from text ───────────────────────────────────────────────────
+    if not item.prompt:
+        logger.error(f"Item '{item.name}' has no prompt or image, skipping.")
+        return None
+
+    f_prompt = PROMPT_APPEND.format(object=item.prompt)
+    seed = item.seed_img
+    select_image = None
+
+    for try_idx in range(n_image_retry):
+        if select_image is not None:
+            break
         logger.info(
-            f"Image GEN for {os.path.basename(save_path)}\n"
-            f"Try: {try_idx + 1}/{n_retry}, Seed: {seed}, Prompt: {f_prompt}"
+            f"Image GEN for '{item.name}' "
+            f"try {try_idx + 1}/{n_image_retry}, "
+            f"seed={seed}, prompt={f_prompt}"
         )
         torch.cuda.empty_cache()
         images = _load_pipe_img().run(
@@ -120,211 +137,167 @@ def text_to_image(
             num_inference_steps=img_denoise_step,
             guidance_scale=text_guidance_scale,
             num_images_per_prompt=n_img_sample,
-            height=image_hw[0],
-            width=image_hw[1],
+            height=1024,
+            width=1024,
             generator=(
                 torch.Generator().manual_seed(seed)
-                if seed is not None
-                else None
+                if seed is not None else None
             ),
         )
-
-        for idx in range(len(images)):
-            raw_image: Image.Image = images[idx]
-            image = BG_REMOVER(raw_image)
-            image.save(save_path)
-            semantic_flag, semantic_result = SEMANTIC_CHECKER(
-                prompt, [image.convert("RGB")]
+        for raw_image in images:
+            seg_image = BG_REMOVER(raw_image)
+            semantic_flag, sem_res = SEMANTIC_CHECKER(
+                item.prompt, [seg_image.convert("RGB")]
             )
-            seg_flag, seg_result = SEG_CHECKER(
-                [raw_image, image.convert("RGB")]
+            seg_flag, seg_res = SEG_CHECKER(
+                [raw_image, seg_image.convert("RGB")]
             )
-            image_mask = np.array(image)[..., -1]
-            edge_flag = check_object_edge_truncated(image_mask)
+            edge_flag = check_object_edge_truncated(
+                __import__("numpy").array(seg_image)[..., -1]
+            )
             logger.warning(
-                f"SEMANTIC: {semantic_result}. "
-                f"SEG: {seg_result}. EDGE: {edge_flag}"
+                f"SEMANTIC: {sem_res}. SEG: {seg_res}. EDGE: {edge_flag}"
             )
             if (
                 (edge_flag and semantic_flag and seg_flag)
                 or (edge_flag and semantic_flag is None)
                 or (edge_flag and seg_flag is None)
             ):
-                select_image = [raw_image, image]
-                success_flag = True
+                raw_image.save(out_path.replace(".png", "_raw.png"))
+                seg_image.save(out_path)
+                select_image = seg_image
                 break
 
         seed = random.randint(0, 100000) if seed is not None else None
 
-    return success_flag
+    if select_image is None:
+        logger.warning(
+            f"Image generation for '{item.name}' did not pass QA, "
+            "using last generated image."
+        )
+        if images:
+            seg_image = BG_REMOVER(images[-1])
+            seg_image.save(out_path)
+            return out_path
+        return None
+
+    return out_path
 
 
-def text_to_3d(**kwargs) -> dict:
-    # Release any 3D pipeline left in VRAM from a previous failed job.
+def text_to_3d(
+    items: list[GenerateItem],
+    output_root: str,
+    n_image_retry: int = 2,
+    n_asset_retry: int = 2,
+    n_pipe_retry: int = 1,
+    img_denoise_step: int = 25,
+    text_guidance_scale: float = 7.0,
+    n_img_sample: int = 1,
+    keep_intermediate: bool = False,
+    disable_decompose_convex: bool = False,
+) -> dict:
+    """
+    Batch generate 3D assets from a list of GenerateItem.
+
+    Phase 1: Generate all images (text2img loaded once).
+    Phase 2: Generate all 3D meshes (Hunyuan3D loaded once).
+
+    Returns:
+        {
+          "assets": { name: "asset3d/<name>/result" },
+          "files":  { name: {"obj": ..., "glb": ..., "urdf": ...} },
+          "quality": { name: qa_result },
+        }
+    """
     _release_3d_pipeline()
 
-    args = parse_args()
-    for k, v in kwargs.items():
-        if hasattr(args, k) and v is not None:
-            setattr(args, k, v)
-
-    if args.asset_names is None or len(args.asset_names) == 0:
-        args.asset_names = [f"sample3d_{i}" for i in range(len(args.prompts))]
-    img_save_dir = os.path.join(args.output_root, "images")
-    asset_save_dir = os.path.join(args.output_root, "asset3d")
+    img_save_dir = os.path.join(output_root, "images")
+    asset_save_dir = os.path.join(output_root, "asset3d")
     os.makedirs(img_save_dir, exist_ok=True)
     os.makedirs(asset_save_dir, exist_ok=True)
-    results = defaultdict(dict)
-    for prompt, node in zip(args.prompts, args.asset_names):
-        success_flag = False
-        n_pipe_retry = args.n_pipe_retry
-        seed_img = args.seed_img
-        seed_3d = args.seed_3d
-        while success_flag is False and n_pipe_retry > 0:
+
+    results: dict = defaultdict(dict)
+
+    # ── Phase 1: generate ALL images ────────────────────────────────────────
+    image_paths: dict[str, Optional[str]] = {}
+    for item in items:
+        image_paths[item.name] = _generate_image_for_item(
+            item=item,
+            img_save_dir=img_save_dir,
+            n_image_retry=n_image_retry,
+            img_denoise_step=img_denoise_step,
+            text_guidance_scale=text_guidance_scale,
+            n_img_sample=n_img_sample,
+        )
+
+    _release_pipe_img()
+
+    # ── Phase 2: generate ALL 3D meshes ─────────────────────────────────────
+    for item in items:
+        img_path = image_paths.get(item.name)
+        if not img_path or not os.path.exists(img_path):
+            logger.error(
+                f"No image for '{item.name}', skipping 3D generation."
+            )
+            continue
+
+        save_node = item.name.replace(" ", "_")
+        node_save_dir = os.path.join(asset_save_dir, save_node)
+
+        success = False
+        current_seed_3d = item.seed_3d
+        for pipe_try in range(n_pipe_retry):
             logger.info(
-                f"GEN pipeline for node {node}\n"
-                f"Try round: "
-                f"{args.n_pipe_retry-n_pipe_retry+1}/{args.n_pipe_retry}"
-                f", Prompt: {prompt}"
+                f"3D pipeline for '{item.name}' "
+                f"attempt {pipe_try + 1}/{n_pipe_retry}"
             )
-            # ── Stage 1: Text → Image ─────────────────────────────────────
-            save_node = node.replace(" ", "_")
-            gen_image_path = f"{img_save_dir}/{save_node}.png"
-            text_to_image(
-                prompt,
-                gen_image_path,
-                args.n_image_retry,
-                args.img_denoise_step,
-                args.text_guidance_scale,
-                args.n_img_sample,
-                seed=seed_img,
-            )
-
-            # Release text-to-image pipeline before loading the 3-D model.
-            # Both SDXL-Turbo (4-8 GB) and SAM3D (10-15 GB) would otherwise
-            # coexist in VRAM. Freeing first saves 4–24 GB depending on the
-            # chosen text2img model.
-            _release_pipe_img()
-
-            # ── Stage 2: Image → 3D Asset ─────────────────────────────────
-            node_save_dir = f"{asset_save_dir}/{save_node}"
-            asset_type = node if "sample3d_" not in node else None
-            imageto3d_api(
-                image_path=[gen_image_path],
+            file_paths = process_single_image(
+                image_path=img_path,
                 output_root=node_save_dir,
-                asset_type=[asset_type],
-                seed=random.randint(0, 100000) if seed_3d is None else seed_3d,
-                n_retry=args.n_asset_retry,
-                keep_intermediate=args.keep_intermediate,
-                disable_decompose_convex=args.disable_decompose_convex,
+                asset_type=item.asset_type,
+                seed=current_seed_3d,
+                n_retry=n_asset_retry,
+                keep_intermediate=keep_intermediate,
+                disable_decompose_convex=disable_decompose_convex,
             )
-            mesh_path = f"{node_save_dir}/result/mesh/{save_node}.obj"
-            image_path = render_asset3d(
-                mesh_path,
-                output_root=f"{node_save_dir}/result",
-                num_images=4,
-                elevation=(30, -30),
-                output_subdir="renders",
-                no_index_file=True,
-            )
-            image_path = combine_images_to_grid(image_path)
-            check_text = asset_type if asset_type is not None else prompt
-            qa_flag, qa_result = TXTGEN_CHECKER(check_text, image_path)
-            logger.warning(
-                f"Node {node}, "
-                f"{TXTGEN_CHECKER.__class__.__name__}: {qa_result}"
-            )
-            results["assets"][node] = f"asset3d/{save_node}/result"
-            results["quality"][node] = qa_result
+            if not file_paths:
+                current_seed_3d = random.randint(0, 100000)
+                continue
 
-            if qa_flag is None or qa_flag is True:
-                success_flag = True
+            # QA on rendered views
+            result_dir = file_paths.get("result_dir", "")
+            obj_path = file_paths.get("obj")
+            if obj_path and os.path.exists(obj_path):
+                image_path_list = render_asset3d(
+                    obj_path,
+                    output_root=result_dir,
+                    num_images=4,
+                    elevation=(30, -30),
+                    output_subdir="renders",
+                    no_index_file=True,
+                )
+                grid = combine_images_to_grid(image_path_list)
+                check_text = item.asset_type or item.prompt or item.name
+                qa_flag, qa_result = TXTGEN_CHECKER(check_text, grid)
+                logger.warning(
+                    f"'{item.name}' QA: {qa_result}"
+                )
+                results["quality"][item.name] = qa_result
+                if qa_flag is None or qa_flag is True:
+                    success = True
+            else:
+                success = True
+
+            results["assets"][item.name] = (
+                f"asset3d/{save_node}/result"
+            )
+            results["files"][item.name] = file_paths
+            if success:
                 break
 
-            n_pipe_retry -= 1
-            seed_img = (
-                random.randint(0, 100000) if seed_img is not None else None
-            )
-            seed_3d = (
-                random.randint(0, 100000) if seed_3d is not None else None
-            )
+            current_seed_3d = random.randint(0, 100000)
 
         free_vram()
 
     _release_3d_pipeline()
     return results
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="3D Layout Generation Config")
-    parser.add_argument("--prompts", nargs="+", help="text descriptions")
-    parser.add_argument(
-        "--output_root",
-        type=str,
-        help="Directory to save outputs",
-    )
-    parser.add_argument(
-        "--asset_names",
-        type=str,
-        nargs="+",
-        default=None,
-        help="Asset names to generate",
-    )
-    parser.add_argument(
-        "--n_img_sample",
-        type=int,
-        default=1,
-        help="Number of image samples to generate",
-    )
-    parser.add_argument(
-        "--text_guidance_scale",
-        type=float,
-        default=7,
-        help="Text-to-image guidance scale",
-    )
-    parser.add_argument(
-        "--img_denoise_step",
-        type=int,
-        default=25,
-        help="Denoising steps for image generation",
-    )
-    parser.add_argument(
-        "--n_image_retry",
-        type=int,
-        default=2,
-        help="Max retry count for image generation",
-    )
-    parser.add_argument(
-        "--n_asset_retry",
-        type=int,
-        default=2,
-        help="Max retry count for 3D generation",
-    )
-    parser.add_argument(
-        "--n_pipe_retry",
-        type=int,
-        default=1,
-        help="Max retry count for 3D asset generation",
-    )
-    parser.add_argument(
-        "--seed_img",
-        type=int,
-        default=None,
-        help="Random seed for image generation",
-    )
-    parser.add_argument(
-        "--seed_3d",
-        type=int,
-        default=0,
-        help="Random seed for 3D generation",
-    )
-    parser.add_argument("--keep_intermediate", action="store_true")
-    parser.add_argument("--disable_decompose_convex", action="store_true")
-
-    args, unknown = parser.parse_known_args()
-
-    return args
-
-
-if __name__ == "__main__":
-    text_to_3d()

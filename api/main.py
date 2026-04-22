@@ -1,5 +1,4 @@
 import io
-import os
 import zipfile
 from pathlib import Path
 
@@ -11,8 +10,8 @@ from api.models import GenerateRequest, GenerateResponse, JobState, JobStatus
 
 app = FastAPI(
     title="EmbodiedGen API",
-    description="Text prompt → 3D model (OBJ + URDF + MuJoCo MJCF)",
-    version="1.0.0",
+    description="Text/image → 3D model (OBJ + GLB + URDF + MuJoCo MJCF)",
+    version="2.0.0",
 )
 
 
@@ -29,16 +28,19 @@ def health():
 # Generation
 # ──────────────────────────────────────────────
 
-@app.post("/api/generate", response_model=GenerateResponse, tags=["Generation"])
+@app.post(
+    "/api/generate", response_model=GenerateResponse, tags=["Generation"]
+)
 def generate(request: GenerateRequest):
     """
-    Submit a text prompt for 3D object generation.
+    Submit a batch of objects for 3D generation.
 
-    Returns a `job_id` to track progress. Generation takes 3–10 minutes.
+    Each item can be a text prompt or a base64-encoded image.
+    All images are generated first (text2img stays loaded), then
+    all 3D meshes (Hunyuan3D stays loaded) — efficient VRAM usage.
+
+    Returns a `job_id` to track progress.
     """
-    if not request.name:
-        request.name = request.prompt.split()[0].lower().replace(",", "").replace(".", "")
-
     job = job_manager.submit(request)
     return GenerateResponse(
         job_id=job.job_id,
@@ -76,7 +78,7 @@ def get_job_logs(job_id: str, last: int = 50):
 
 
 # ──────────────────────────────────────────────
-# Downloads
+# Downloads (per object within a job)
 # ──────────────────────────────────────────────
 
 def _require_completed(job_id: str):
@@ -85,63 +87,136 @@ def _require_completed(job_id: str):
         raise HTTPException(404, "Job not found")
     if job.status != JobState.completed:
         raise HTTPException(400, f"Job is {job.status}, not completed")
-    if not job.files:
+    if not job.results:
         raise HTTPException(500, "Job completed but no files recorded")
     return job
 
 
-@app.get("/api/jobs/{job_id}/download/obj", tags=["Download"])
-def download_obj(job_id: str):
-    """Download the generated OBJ mesh."""
+def _get_item_files(job_id: str, name: str):
     job = _require_completed(job_id)
-    path = job.files.obj
+    item = job.results.get(name)
+    if not item:
+        raise HTTPException(
+            404, f"Object '{name}' not found in job. "
+            f"Available: {list(job.results.keys())}"
+        )
+    return item
+
+
+@app.get(
+    "/api/jobs/{job_id}/objects/{name}/download/obj",
+    tags=["Download"],
+)
+def download_obj(job_id: str, name: str):
+    """Download OBJ mesh for a specific object."""
+    item = _get_item_files(job_id, name)
+    path = item.obj
     if not path or not Path(path).exists():
         raise HTTPException(404, "OBJ file not found")
-    return FileResponse(path, media_type="model/obj", filename=Path(path).name)
+    return FileResponse(
+        path, media_type="model/obj", filename=Path(path).name
+    )
 
 
-@app.get("/api/jobs/{job_id}/download/urdf", tags=["Download"])
-def download_urdf(job_id: str):
-    """Download the URDF file with physics parameters."""
-    job = _require_completed(job_id)
-    path = job.files.urdf
+@app.get(
+    "/api/jobs/{job_id}/objects/{name}/download/glb",
+    tags=["Download"],
+)
+def download_glb(job_id: str, name: str):
+    """Download GLB mesh for a specific object."""
+    item = _get_item_files(job_id, name)
+    path = item.glb
+    if not path or not Path(path).exists():
+        raise HTTPException(404, "GLB file not found")
+    return FileResponse(
+        path, media_type="model/gltf-binary", filename=Path(path).name
+    )
+
+
+@app.get(
+    "/api/jobs/{job_id}/objects/{name}/download/urdf",
+    tags=["Download"],
+)
+def download_urdf(job_id: str, name: str):
+    """Download URDF file with physics parameters."""
+    item = _get_item_files(job_id, name)
+    path = item.urdf
     if not path or not Path(path).exists():
         raise HTTPException(404, "URDF file not found")
-    return FileResponse(path, media_type="application/xml", filename=Path(path).name)
+    return FileResponse(
+        path, media_type="application/xml", filename=Path(path).name
+    )
 
 
-@app.get("/api/jobs/{job_id}/download/mjcf", tags=["Download"])
-def download_mjcf(job_id: str):
-    """Download the MuJoCo MJCF XML file."""
-    job = _require_completed(job_id)
-    path = job.files.mjcf
+@app.get(
+    "/api/jobs/{job_id}/objects/{name}/download/mjcf",
+    tags=["Download"],
+)
+def download_mjcf(job_id: str, name: str):
+    """Download MuJoCo MJCF XML file."""
+    item = _get_item_files(job_id, name)
+    path = item.mjcf
     if not path or not Path(path).exists():
         raise HTTPException(404, "MJCF file not found")
-    return FileResponse(path, media_type="application/xml", filename=Path(path).name)
+    return FileResponse(
+        path, media_type="application/xml", filename=Path(path).name
+    )
 
 
-@app.get("/api/jobs/{job_id}/download/all", tags=["Download"])
-def download_all(job_id: str):
-    """Download all generated files as a ZIP archive (OBJ + MTL + textures + URDF + MJCF)."""
-    job = _require_completed(job_id)
-
-    # Collect the result directory
-    urdf_path = job.files.urdf
+@app.get(
+    "/api/jobs/{job_id}/objects/{name}/download/all",
+    tags=["Download"],
+)
+def download_all_for_object(job_id: str, name: str):
+    """Download ZIP with all files for a specific object."""
+    item = _get_item_files(job_id, name)
+    urdf_path = item.urdf or item.obj
     if not urdf_path:
         raise HTTPException(404, "Result files not found")
 
     result_dir = Path(urdf_path).parent
-
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path in result_dir.rglob("*"):
             if file_path.is_file():
                 zf.write(file_path, file_path.relative_to(result_dir))
     buf.seek(0)
-
-    filename = f"{job.name}_3d_asset.zip"
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={name}_3d_asset.zip"
+            )
+        },
+    )
+
+
+@app.get("/api/jobs/{job_id}/download/all", tags=["Download"])
+def download_all_job(job_id: str):
+    """Download ZIP with all files for every object in the job."""
+    job = _require_completed(job_id)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for obj_name, item_files in job.results.items():
+            ref_path = item_files.urdf or item_files.obj
+            if not ref_path:
+                continue
+            result_dir = Path(ref_path).parent
+            for file_path in result_dir.rglob("*"):
+                if file_path.is_file():
+                    arc_name = Path(obj_name) / file_path.relative_to(
+                        result_dir
+                    )
+                    zf.write(file_path, arc_name)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=job_{job_id}_all.zip"
+            )
+        },
     )

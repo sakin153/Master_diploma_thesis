@@ -25,7 +25,7 @@ services:
       TEXT_MODEL: ${TEXT_MODEL:-sd15}
 
       # Hunyuan3D texture pipeline: "1" включить (нужно ~6 GB доп. VRAM), "0" выключить
-      HUNYUAN3D_TEXTURE: ${HUNYUAN3D_TEXTURE:-1}
+      HUNYUAN3D_TEXTURE: ${HUNYUAN3D_TEXTURE:-0}
 
       # Пути внутри контейнера
       OUTPUT_ROOT: /app/outputs/jobs
