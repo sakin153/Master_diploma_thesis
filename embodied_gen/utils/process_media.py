@@ -1,43 +1,16 @@
-# Project EmbodiedGen
-#
-# Copyright (c) 2025 Horizon Robotics. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#       http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-# implied. See the License for the specific language governing
-# permissions and limitations under the License.
-
-
 import logging
 import math
 import mimetypes
 import os
-import textwrap
-from glob import glob
 from typing import Union
 
 import cv2
 import imageio
-import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
-import spaces
-from matplotlib.patches import Patch
-from moviepy.editor import VideoFileClip, clips_array
 from PIL import Image
-from embodied_gen.data.differentiable_render import entrypoint as render_api
-from embodied_gen.utils.enum import LayoutInfo, Scene3DItemEnum
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 __all__ = [
     "render_asset3d",
@@ -45,128 +18,103 @@ __all__ = [
     "filter_small_connected_components",
     "filter_image_small_connected_components",
     "combine_images_to_grid",
-    "SceneTreeVisualizer",
     "is_image_file",
-    "parse_text_prompts",
     "check_object_edge_truncated",
     "vcat_pil_images",
 ]
 
 
-@spaces.GPU
 def render_asset3d(
     mesh_path: str,
     output_root: str,
-    distance: float = 5.0,
-    num_images: int = 1,
-    elevation: list[float] = (0.0,),
-    pbr_light_factor: float = 1.2,
-    return_key: str = "image_color/*",
+    num_images: int = 4,
+    elevation: Union[tuple, float] = (30.0, -30.0),
     output_subdir: str = "renders",
-    gen_color_mp4: bool = False,
-    gen_viewnormal_mp4: bool = False,
-    gen_glonormal_mp4: bool = False,
     no_index_file: bool = False,
-    with_mtl: bool = True,
+    **kwargs,
 ) -> list[str]:
-    """Renders a 3D mesh asset and returns output image paths.
+    """Render a mesh from multiple viewpoints using Open3D.
 
-    Args:
-        mesh_path (str): Path to the mesh file.
-        output_root (str): Directory to save outputs.
-        distance (float, optional): Camera distance.
-        num_images (int, optional): Number of views to render.
-        elevation (list[float], optional): Camera elevation angles.
-        pbr_light_factor (float, optional): PBR lighting factor.
-        return_key (str, optional): Glob pattern for output images.
-        output_subdir (str, optional): Subdirectory for outputs.
-        gen_color_mp4 (bool, optional): Generate color MP4 video.
-        gen_viewnormal_mp4 (bool, optional): Generate view normal MP4.
-        gen_glonormal_mp4 (bool, optional): Generate global normal MP4.
-        no_index_file (bool, optional): Skip index file saving.
-        with_mtl (bool, optional): Use mesh material.
-
-    Returns:
-        list[str]: List of output image file paths.
-
-    Example:
-        ```py
-        from embodied_gen.utils.process_media import render_asset3d
-
-        image_paths = render_asset3d(
-            mesh_path="path_to_mesh.obj",
-            output_root="path_to_save_dir",
-            num_images=4,
-            elevation=(30, -30),
-            output_subdir="renders",
-            no_index_file=True,
-        )
-        ```
+    Saves images to {output_root}/{output_subdir}/image_color/view_XXXX.png
+    Returns list of saved image paths.
     """
-    input_args = dict(
-        mesh_path=mesh_path,
-        output_root=output_root,
-        uuid=output_subdir,
-        distance=distance,
-        num_images=num_images,
-        elevation=elevation,
-        pbr_light_factor=pbr_light_factor,
-        with_mtl=with_mtl,
-        gen_color_mp4=gen_color_mp4,
-        gen_viewnormal_mp4=gen_viewnormal_mp4,
-        gen_glonormal_mp4=gen_glonormal_mp4,
-        no_index_file=no_index_file,
-    )
+    import open3d as o3d
+
+    out_dir = os.path.join(output_root, output_subdir, "image_color")
+    os.makedirs(out_dir, exist_ok=True)
 
     try:
-        _ = render_api(**input_args)
+        mesh = o3d.io.read_triangle_mesh(
+            mesh_path, enable_post_processing=True
+        )
+        if not mesh.has_vertex_normals():
+            mesh.compute_vertex_normals()
+
+        W, H = 512, 512
+        renderer = o3d.visualization.rendering.OffscreenRenderer(W, H)
+        renderer.scene.set_background([0.85, 0.85, 0.85, 1.0])
+
+        mat = o3d.visualization.rendering.MaterialRecord()
+        mat.shader = "defaultLit"
+        renderer.scene.add_geometry("mesh", mesh, mat)
+
+        bbox = mesh.get_axis_aligned_bounding_box()
+        center = bbox.get_center()
+        extent = bbox.get_extent()
+        radius = float(np.linalg.norm(extent)) * 1.5
+
+        if isinstance(elevation, (tuple, list)):
+            elev_angles = list(elevation)
+        else:
+            elev_angles = [elevation]
+        # Cycle through elevations across the requested views
+        azimuths = [i * 360.0 / num_images for i in range(num_images)]
+
+        paths = []
+        for i, azimuth in enumerate(azimuths):
+            elev = elev_angles[i % len(elev_angles)]
+            rad_az = np.radians(azimuth)
+            rad_el = np.radians(elev)
+
+            eye = np.array([
+                center[0] + radius * np.cos(rad_el) * np.cos(rad_az),
+                center[1] + radius * np.cos(rad_el) * np.sin(rad_az),
+                center[2] + radius * np.sin(rad_el),
+            ])
+            up = np.array([0.0, 0.0, 1.0])
+            renderer.setup_camera(
+                60.0,
+                center.tolist(),
+                eye.tolist(),
+                up.tolist(),
+            )
+
+            img = renderer.render_to_image()
+            path = os.path.join(out_dir, f"view_{i:04d}.png")
+            o3d.io.write_image(path, img)
+            paths.append(path)
+
     except Exception as e:
-        logger.error(f"Error occurred during rendering: {e}.")
+        logger.error(f"render_asset3d failed for {mesh_path}: {e}")
+        return []
 
-    dst_paths = glob(os.path.join(output_root, output_subdir, return_key))
-
-    return dst_paths
-
-
-def merge_images_video(color_images, normal_images, output_path) -> None:
-    """Merges color and normal images into a video.
-
-    Args:
-        color_images (list[np.ndarray]): List of color images.
-        normal_images (list[np.ndarray]): List of normal images.
-        output_path (str): Path to save the output video.
-    """
-    width = color_images[0].shape[1]
-    combined_video = [
-        np.hstack([rgb_img[:, : width // 2], normal_img[:, width // 2 :]])
-        for rgb_img, normal_img in zip(color_images, normal_images)
-    ]
-    imageio.mimsave(output_path, combined_video, fps=50)
-
-    return
+    return paths
 
 
-def merge_video_video(
-    video_path1: str, video_path2: str, output_path: str
+def merge_images_video(
+    color_images: list,
+    normal_images: list,
+    output_path: str,
 ) -> None:
-    """Merges two videos by combining their left and right halves.
-
-    Args:
-        video_path1 (str): Path to first video.
-        video_path2 (str): Path to second video.
-        output_path (str): Path to save the merged video.
-    """
-    clip1 = VideoFileClip(video_path1)
-    clip2 = VideoFileClip(video_path2)
-
-    if clip1.size != clip2.size:
-        raise ValueError("The resolutions of the two videos do not match.")
-
-    width, height = clip1.size
-    clip1_half = clip1.crop(x1=0, y1=0, x2=width // 2, y2=height)
-    clip2_half = clip2.crop(x1=width // 2, y1=0, x2=width, y2=height)
-    final_clip = clips_array([[clip1_half, clip2_half]])
-    final_clip.write_videofile(output_path, codec="libx264")
+    """Merge color and normal image lists into a side-by-side video."""
+    if not color_images:
+        return
+    width = color_images[0].shape[1]
+    combined = [
+        np.hstack([c[:, : width // 2], n[:, width // 2 :]])
+        for c, n in zip(color_images, normal_images)
+    ]
+    imageio.mimsave(output_path, combined, fps=50)
 
 
 def filter_small_connected_components(
@@ -174,34 +122,18 @@ def filter_small_connected_components(
     area_ratio: float,
     connectivity: int = 8,
 ) -> np.ndarray:
-    """Removes small connected components from a binary mask.
-
-    Args:
-        mask (Union[Image.Image, np.ndarray]): Input mask.
-        area_ratio (float): Minimum area ratio for components.
-        connectivity (int, optional): Connectivity for labeling.
-
-    Returns:
-        np.ndarray: Mask with small components removed.
-    """
     if isinstance(mask, Image.Image):
         mask = np.array(mask)
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-        mask,
-        connectivity=connectivity,
+        mask, connectivity=connectivity
     )
-
-    small_components = np.zeros_like(mask, dtype=np.uint8)
+    small = np.zeros_like(mask, dtype=np.uint8)
     mask_area = (mask != 0).sum()
     min_area = mask_area // area_ratio
     for label in range(1, num_labels):
-        area = stats[label, cv2.CC_STAT_AREA]
-        if area < min_area:
-            small_components[labels == label] = 255
-
-    mask = cv2.bitwise_and(mask, cv2.bitwise_not(small_components))
-
-    return mask
+        if stats[label, cv2.CC_STAT_AREA] < min_area:
+            small[labels == label] = 255
+    return cv2.bitwise_and(mask, cv2.bitwise_not(small))
 
 
 def filter_image_small_connected_components(
@@ -209,431 +141,71 @@ def filter_image_small_connected_components(
     area_ratio: float = 10,
     connectivity: int = 8,
 ) -> np.ndarray:
-    """Removes small connected components from the alpha channel of an image.
-
-    Args:
-        image (Union[Image.Image, np.ndarray]): Input image.
-        area_ratio (float, optional): Minimum area ratio.
-        connectivity (int, optional): Connectivity for labeling.
-
-    Returns:
-        np.ndarray: Image with filtered alpha channel.
-    """
     if isinstance(image, Image.Image):
-        image = image.convert("RGBA")
-        image = np.array(image)
-
+        image = np.array(image.convert("RGBA"))
     mask = image[..., 3]
     mask = filter_small_connected_components(mask, area_ratio, connectivity)
     image[..., 3] = mask
-
     return image
 
 
-def keep_largest_connected_component(pil_img: Image.Image) -> Image.Image:
-    if pil_img.mode != "RGBA":
-        pil_img = pil_img.convert("RGBA")
-
-    img_arr = np.array(pil_img)
-    alpha_channel = img_arr[:, :, 3]
-
-    _, binary_mask = cv2.threshold(alpha_channel, 0, 255, cv2.THRESH_BINARY)
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        binary_mask, connectivity=8
-    )
-    if num_labels < 2:
-        return pil_img
-
-    largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-    new_alpha = np.where(labels == largest_label, alpha_channel, 0).astype(
-        np.uint8
-    )
-    img_arr[:, :, 3] = new_alpha
-
-    return Image.fromarray(img_arr)
-
-
 def combine_images_to_grid(
-    images: list[str | Image.Image],
-    cat_row_col: tuple[int, int] = None,
-    target_wh: tuple[int, int] = (512, 512),
+    images: list,
+    cat_row_col: tuple = None,
+    target_wh: tuple = (512, 512),
     image_mode: str = "RGB",
-) -> list[Image.Image]:
-    """Combines multiple images into a grid.
-
-    Args:
-        images (list[str | Image.Image]): List of image paths or PIL Images.
-        cat_row_col (tuple[int, int], optional): Grid rows and columns.
-        target_wh (tuple[int, int], optional): Target image size.
-        image_mode (str, optional): Image mode.
-
-    Returns:
-        list[Image.Image]: List containing the grid image.
-
-    Example:
-        ```py
-        from embodied_gen.utils.process_media import combine_images_to_grid
-        grid = combine_images_to_grid(["img1.png", "img2.png"])
-        grid[0].save("grid.png")
-        ```
-    """
-    n_images = len(images)
-    if n_images == 1:
+) -> list:
+    n = len(images)
+    if n == 0:
+        return []
+    if n == 1:
         return images
 
     if cat_row_col is None:
-        n_col = math.ceil(math.sqrt(n_images))
-        n_row = math.ceil(n_images / n_col)
+        n_col = math.ceil(math.sqrt(n))
+        n_row = math.ceil(n / n_col)
     else:
         n_row, n_col = cat_row_col
 
-    images = [
+    imgs = [
         Image.open(p).convert(image_mode) if isinstance(p, str) else p
         for p in images
     ]
-    images = [img.resize(target_wh) for img in images]
+    imgs = [img.resize(target_wh) for img in imgs]
 
     grid_w, grid_h = n_col * target_wh[0], n_row * target_wh[1]
     grid = Image.new(image_mode, (grid_w, grid_h), (0, 0, 0))
-
-    for idx, img in enumerate(images):
+    for idx, img in enumerate(imgs):
         row, col = divmod(idx, n_col)
         grid.paste(img, (col * target_wh[0], row * target_wh[1]))
 
     return [grid]
 
 
-class SceneTreeVisualizer:
-    """Visualizes a scene tree layout using networkx and matplotlib.
-
-    Args:
-        layout_info (LayoutInfo): Layout information for the scene.
-
-    Example:
-        ```py
-        from embodied_gen.utils.process_media import SceneTreeVisualizer
-        visualizer = SceneTreeVisualizer(layout_info)
-        visualizer.render(save_path="tree.png")
-        ```
-    """
-
-    def __init__(self, layout_info: LayoutInfo) -> None:
-        self.tree = layout_info.tree
-        self.relation = layout_info.relation
-        self.objs_desc = layout_info.objs_desc
-        self.G = nx.DiGraph()
-        self.root = self._find_root()
-        self._build_graph()
-
-        self.role_colors = {
-            Scene3DItemEnum.BACKGROUND.value: "plum",
-            Scene3DItemEnum.CONTEXT.value: "lightblue",
-            Scene3DItemEnum.ROBOT.value: "lightcoral",
-            Scene3DItemEnum.MANIPULATED_OBJS.value: "lightgreen",
-            Scene3DItemEnum.DISTRACTOR_OBJS.value: "lightgray",
-            Scene3DItemEnum.OTHERS.value: "orange",
-        }
-
-    def _find_root(self) -> str:
-        children = {c for cs in self.tree.values() for c, _ in cs}
-        parents = set(self.tree.keys())
-        roots = parents - children
-        if not roots:
-            raise ValueError("No root node found.")
-        return next(iter(roots))
-
-    def _build_graph(self):
-        for parent, children in self.tree.items():
-            for child, relation in children:
-                self.G.add_edge(parent, child, relation=relation)
-
-    def _get_node_role(self, node: str) -> str:
-        if node == self.relation.get(Scene3DItemEnum.BACKGROUND.value):
-            return Scene3DItemEnum.BACKGROUND.value
-        if node == self.relation.get(Scene3DItemEnum.CONTEXT.value):
-            return Scene3DItemEnum.CONTEXT.value
-        if node == self.relation.get(Scene3DItemEnum.ROBOT.value):
-            return Scene3DItemEnum.ROBOT.value
-        if node in self.relation.get(
-            Scene3DItemEnum.MANIPULATED_OBJS.value, []
-        ):
-            return Scene3DItemEnum.MANIPULATED_OBJS.value
-        if node in self.relation.get(
-            Scene3DItemEnum.DISTRACTOR_OBJS.value, []
-        ):
-            return Scene3DItemEnum.DISTRACTOR_OBJS.value
-        return Scene3DItemEnum.OTHERS.value
-
-    def _get_positions(
-        self, root, width=1.0, vert_gap=0.1, vert_loc=1, xcenter=0.5, pos=None
-    ):
-        if pos is None:
-            pos = {root: (xcenter, vert_loc)}
-        else:
-            pos[root] = (xcenter, vert_loc)
-
-        children = list(self.G.successors(root))
-        if children:
-            dx = width / len(children)
-            next_x = xcenter - width / 2 - dx / 2
-            for child in children:
-                next_x += dx
-                pos = self._get_positions(
-                    child,
-                    width=dx,
-                    vert_gap=vert_gap,
-                    vert_loc=vert_loc - vert_gap,
-                    xcenter=next_x,
-                    pos=pos,
-                )
-        return pos
-
-    def render(
-        self,
-        save_path: str,
-        figsize=(8, 6),
-        dpi=300,
-        title: str = "Scene 3D Hierarchy Tree",
-    ):
-        """Renders the scene tree and saves to file.
-
-        Args:
-            save_path (str): Path to save the rendered image.
-            figsize (tuple, optional): Figure size.
-            dpi (int, optional): Image DPI.
-            title (str, optional): Plot image title.
-        """
-        node_colors = [
-            self.role_colors[self._get_node_role(n)] for n in self.G.nodes
-        ]
-        pos = self._get_positions(self.root)
-
-        plt.figure(figsize=figsize)
-        nx.draw(
-            self.G,
-            pos,
-            with_labels=True,
-            arrows=False,
-            node_size=2000,
-            node_color=node_colors,
-            font_size=10,
-            font_weight="bold",
-        )
-
-        # Draw edge labels
-        edge_labels = nx.get_edge_attributes(self.G, "relation")
-        nx.draw_networkx_edge_labels(
-            self.G,
-            pos,
-            edge_labels=edge_labels,
-            font_size=9,
-            font_color="black",
-        )
-
-        # Draw small description text under each node (if available)
-        for node, (x, y) in pos.items():
-            desc = self.objs_desc.get(node)
-            if desc:
-                wrapped = "\n".join(textwrap.wrap(desc, width=30))
-                plt.text(
-                    x,
-                    y - 0.006,
-                    wrapped,
-                    fontsize=6,
-                    ha="center",
-                    va="top",
-                    wrap=True,
-                    color="black",
-                    bbox=dict(
-                        facecolor="dimgray",
-                        edgecolor="darkgray",
-                        alpha=0.1,
-                        boxstyle="round,pad=0.2",
-                    ),
-                )
-
-        plt.title(title, fontsize=12)
-        task_desc = self.relation.get("task_desc", "")
-        if task_desc:
-            plt.suptitle(
-                f"Task Description: {task_desc}", fontsize=10, y=0.999
-            )
-
-        plt.axis("off")
-
-        legend_handles = [
-            Patch(facecolor=color, edgecolor="black", label=role)
-            for role, color in self.role_colors.items()
-        ]
-        plt.legend(
-            handles=legend_handles,
-            loc="lower center",
-            ncol=3,
-            bbox_to_anchor=(0.5, -0.1),
-            fontsize=9,
-        )
-
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=dpi, bbox_inches="tight")
-        plt.close()
-
-
-def load_scene_dict(file_path: str) -> dict:
-    """Loads a scene description dictionary from a file.
-
-    Args:
-        file_path (str): Path to the scene description file.
-
-    Returns:
-        dict: Mapping from scene ID to description.
-    """
-    scene_dict = {}
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line or ":" not in line:
-                continue
-            scene_id, desc = line.split(":", 1)
-            scene_dict[scene_id.strip()] = desc.strip()
-
-    return scene_dict
-
-
 def is_image_file(filename: str) -> bool:
-    """Checks if a filename is an image file.
-
-    Args:
-        filename (str): Filename to check.
-
-    Returns:
-        bool: True if image file, False otherwise.
-    """
     mime_type, _ = mimetypes.guess_type(filename)
-
     return mime_type is not None and mime_type.startswith("image")
-
-
-def parse_text_prompts(prompts: list[str]) -> list[str]:
-    """Parses text prompts from a list or file.
-
-    Args:
-        prompts (list[str]): List of prompts or a file path.
-
-    Returns:
-        list[str]: List of parsed prompts.
-    """
-    if len(prompts) == 1 and prompts[0].endswith(".txt"):
-        with open(prompts[0], "r") as f:
-            prompts = [
-                line.strip()
-                for line in f
-                if line.strip() and not line.strip().startswith("#")
-            ]
-    return prompts
-
-
-def alpha_blend_rgba(
-    fg_image: Union[str, Image.Image, np.ndarray],
-    bg_image: Union[str, Image.Image, np.ndarray],
-) -> Image.Image:
-    """Alpha blends a foreground RGBA image over a background RGBA image.
-
-    Args:
-        fg_image: Foreground image (str, PIL Image, or ndarray).
-        bg_image: Background image (str, PIL Image, or ndarray).
-
-    Returns:
-        Image.Image: Alpha-blended RGBA image.
-
-    Example:
-        ```py
-        from embodied_gen.utils.process_media import alpha_blend_rgba
-        result = alpha_blend_rgba("fg.png", "bg.png")
-        result.save("blended.png")
-        ```
-    """
-    if isinstance(fg_image, str):
-        fg_image = Image.open(fg_image)
-    elif isinstance(fg_image, np.ndarray):
-        fg_image = Image.fromarray(fg_image)
-
-    if isinstance(bg_image, str):
-        bg_image = Image.open(bg_image)
-    elif isinstance(bg_image, np.ndarray):
-        bg_image = Image.fromarray(bg_image)
-
-    if fg_image.size != bg_image.size:
-        raise ValueError(
-            f"Image sizes not match {fg_image.size} v.s. {bg_image.size}."
-        )
-
-    fg = fg_image.convert("RGBA")
-    bg = bg_image.convert("RGBA")
-
-    return Image.alpha_composite(bg, fg)
 
 
 def check_object_edge_truncated(
     mask: np.ndarray, edge_threshold: int = 5
 ) -> bool:
-    """Checks if a binary object mask is truncated at the image edges.
-
-    Args:
-        mask (np.ndarray): 2D binary mask.
-        edge_threshold (int, optional): Edge pixel threshold.
-
-    Returns:
-        bool: True if object is fully enclosed, False if truncated.
-    """
     top = mask[:edge_threshold, :].any()
     bottom = mask[-edge_threshold:, :].any()
     left = mask[:, :edge_threshold].any()
     right = mask[:, -edge_threshold:].any()
-
     return not (top or bottom or left or right)
 
 
 def vcat_pil_images(
-    images: list[Image.Image], image_mode: str = "RGB"
+    images: list, image_mode: str = "RGB"
 ) -> Image.Image:
-    """Vertically concatenates a list of PIL images.
-
-    Args:
-        images (list[Image.Image]): List of images.
-        image_mode (str, optional): Image mode.
-
-    Returns:
-        Image.Image: Vertically concatenated image.
-
-    Example:
-        ```py
-        from embodied_gen.utils.process_media import vcat_pil_images
-        img = vcat_pil_images([Image.open("a.png"), Image.open("b.png")])
-        img.save("vcat.png")
-        ```
-    """
     widths, heights = zip(*(img.size for img in images))
-    total_height = sum(heights)
-    max_width = max(widths)
-    new_image = Image.new(image_mode, (max_width, total_height))
-    y_offset = 0
-    for image in images:
-        new_image.paste(image, (0, y_offset))
-        y_offset += image.size[1]
-
-    return new_image
-
-
-if __name__ == "__main__":
-    image_paths = [
-        "outputs/layouts_sim/task_0000/images/pen.png",
-        "outputs/layouts_sim/task_0000/images/notebook.png",
-        "outputs/layouts_sim/task_0000/images/mug.png",
-        "outputs/layouts_sim/task_0000/images/lamp.png",
-        "outputs/layouts_sim2/task_0014/images/cloth.png",  # TODO
-    ]
-    for image_path in image_paths:
-        image = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
-        mask = image[..., -1]
-        flag = check_object_edge_truncated(mask)
-        print(flag, image_path)
+    total_h = sum(heights)
+    max_w = max(widths)
+    out = Image.new(image_mode, (max_w, total_h))
+    y = 0
+    for img in images:
+        out.paste(img, (0, y))
+        y += img.size[1]
+    return out
