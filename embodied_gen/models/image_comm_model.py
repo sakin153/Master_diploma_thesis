@@ -346,6 +346,13 @@ class SDXLTurboLoader(BasePipelineLoader):
         return pipe
 
 
+_SDXL_NEGATIVE_PROMPT = (
+    "blurry, deformed, distorted, ugly, bad anatomy, extra limbs, "
+    "cropped, out of frame, worst quality, low quality, watermark, "
+    "text, logo, floating, background clutter, multiple objects"
+)
+
+
 class SDXLTurboRunner(BasePipelineRunner):
     """Runner for SDXL-Turbo. 4 steps, guidance_scale=0 (distilled)."""
 
@@ -353,6 +360,7 @@ class SDXLTurboRunner(BasePipelineRunner):
         # SDXL-Turbo is distilled: fixed 4 steps, no CFG guidance
         kwargs["num_inference_steps"] = 4
         kwargs["guidance_scale"] = 0.0
+        kwargs.setdefault("negative_prompt", _SDXL_NEGATIVE_PROMPT)
         # Native resolution is 512x512; clamp to avoid OOM
         kwargs["height"] = min(kwargs.get("height", 512), 512)
         kwargs["width"] = min(kwargs.get("width", 512), 512)
@@ -375,14 +383,24 @@ class SD15Loader(BasePipelineLoader):
         return pipe
 
 
+_SD15_NEGATIVE_PROMPT = (
+    "blurry, deformed, distorted, ugly, bad anatomy, extra limbs, "
+    "cropped, out of frame, worst quality, low quality, watermark, "
+    "text, logo, floating, background clutter, multiple objects, "
+    "duplicate, disfigured, extra arms, mutated, artifacts, noise"
+)
+
+
 class SD15Runner(BasePipelineRunner):
     """Runner for SD 1.5. Native resolution 512x512."""
 
     def run(self, prompt: str, **kwargs) -> list[Image.Image]:
-        kwargs.setdefault("num_inference_steps", 25)
-        kwargs.setdefault("guidance_scale", 7.5)
-        kwargs["height"] = min(kwargs.get("height", 512), 512)
-        kwargs["width"] = min(kwargs.get("width", 512), 512)
+        kwargs.setdefault("num_inference_steps", 30)
+        kwargs.setdefault("guidance_scale", 8.5)
+        kwargs.setdefault("negative_prompt", _SD15_NEGATIVE_PROMPT)
+        # SD 1.5 native res is 512x512 — force it to avoid artifacts
+        kwargs["height"] = 512
+        kwargs["width"] = 512
         return self.pipe(prompt=prompt, **kwargs).images
 
 
