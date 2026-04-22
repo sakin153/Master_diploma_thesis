@@ -28,16 +28,23 @@ __all__ = ["Hunyuan3DInference"]
 
 
 class _MeshAdapter:
-    """Wraps trimesh.Trimesh so render_video() can read .vertices/.faces."""
+    """Wraps trimesh.Trimesh so render_video() can read vertices/faces."""
 
     def __init__(self, mesh):
-        self.vertices = torch.from_numpy(
-            mesh.vertices.astype("float32")
-        ).cuda()
-        self.faces = torch.from_numpy(
-            mesh.faces.astype("int64")
-        ).cuda()
-        self._mesh = mesh
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        try:
+            vertices = mesh.vertices.astype("float32")
+            faces = mesh.faces.astype("int64")
+
+            if vertices.size == 0 or faces.size == 0:
+                print("[WARNING] Empty mesh detected")
+
+            self.vertices = torch.from_numpy(vertices).to(device)
+            self.faces = torch.from_numpy(faces).to(device)
+            self._mesh = mesh
+        except Exception as e:
+            print(f"[ERROR] Failed to adapt mesh: {e}")
+            raise
 
 
 class Hunyuan3DInference:
