@@ -16,6 +16,12 @@ _PROJECT_ROOT = os.path.abspath(
 _HY3D_LOCAL = os.path.join(_PROJECT_ROOT, "Hunyuan3D-2")
 if os.path.isdir(_HY3D_LOCAL) and _HY3D_LOCAL not in sys.path:
     sys.path.insert(0, _HY3D_LOCAL)
+    print(f"[DEBUG] Added Hunyuan3D-2 to sys.path: {_HY3D_LOCAL}")
+else:
+    if not os.path.isdir(_HY3D_LOCAL):
+        print(f"[ERROR] Hunyuan3D-2 not found at: {_HY3D_LOCAL}")
+    if _HY3D_LOCAL in sys.path:
+        print(f"[DEBUG] Hunyuan3D-2 already in sys.path")
 
 __all__ = ["Hunyuan3DInference"]
 
@@ -45,7 +51,21 @@ class Hunyuan3DInference:
         model_path: str = "tencent/Hunyuan3D-2mini",
         subfolder: str = "hunyuan3d-dit-v2-mini",
     ) -> None:
-        from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+        # Ensure Hunyuan3D-2 is in path (may be needed in different execution contexts)
+        if _HY3D_LOCAL not in sys.path:
+            sys.path.insert(0, _HY3D_LOCAL)
+
+        try:
+            from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+        except ImportError as e:
+            print(f"[ERROR] Failed to import hy3dgen.shapegen: {e}")
+            print(f"[DEBUG] sys.path (first 3): {sys.path[:3]}")
+            print(f"[DEBUG] Hunyuan3D-2 path exists: {os.path.isdir(_HY3D_LOCAL)}")
+            hy3dgen_path = os.path.join(_HY3D_LOCAL, 'hy3dgen')
+            print(f"[DEBUG] hy3dgen exists: {os.path.isdir(hy3dgen_path)}")
+            if os.path.isdir(hy3dgen_path):
+                print(f"[DEBUG] hy3dgen contents: {os.listdir(hy3dgen_path)}")
+            raise
 
         self.model_path = model_path
         self._shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
