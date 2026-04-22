@@ -45,9 +45,10 @@ class AestheticPredictor:
         ```
     """
 
-    def __init__(self, clip_model_dir=None, sac_model_path=None, device="cpu"):
+    def __init__(self, clip_model_dir=None, sac_model_path=None, device="cpu", use_fp16=True):
 
         self.device = device
+        self.use_fp16 = use_fp16 and device == "cpu"
 
         if clip_model_dir is None:
             model_path = snapshot_download(
@@ -105,6 +106,8 @@ class AestheticPredictor:
         model, preprocess = clip.load(
             model_name, download_root=model_dir, device=self.device
         )
+        if self.use_fp16:
+            model = model.half()
         return model, preprocess
 
     def _load_sac_model(self, model_path, input_size):
@@ -131,6 +134,8 @@ class AestheticPredictor:
             pil_image = image_path
 
         image = self.preprocess(pil_image).unsqueeze(0).to(self.device)
+        if self.use_fp16:
+            image = image.half()
 
         with torch.no_grad():
             # Extract CLIP features
