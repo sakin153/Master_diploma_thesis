@@ -19,9 +19,10 @@ if os.path.isdir(_HY3D_LOCAL) and _HY3D_LOCAL not in sys.path:
     print(f"[DEBUG] Added Hunyuan3D-2 to sys.path: {_HY3D_LOCAL}")
 else:
     if not os.path.isdir(_HY3D_LOCAL):
-        print(f"[ERROR] Hunyuan3D-2 not found at: {_HY3D_LOCAL}")
+        msg = f"[ERROR] Hunyuan3D-2 not found at: {_HY3D_LOCAL}"
+        print(msg)
     if _HY3D_LOCAL in sys.path:
-        print(f"[DEBUG] Hunyuan3D-2 already in sys.path")
+        print("[DEBUG] Hunyuan3D-2 already in sys.path")
 
 __all__ = ["Hunyuan3DInference"]
 
@@ -56,15 +57,20 @@ class Hunyuan3DInference:
             sys.path.insert(0, _HY3D_LOCAL)
 
         try:
-            from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline
+            from hy3dgen.shapegen import (
+                Hunyuan3DDiTFlowMatchingPipeline
+            )
         except ImportError as e:
             print(f"[ERROR] Failed to import hy3dgen.shapegen: {e}")
             print(f"[DEBUG] sys.path (first 3): {sys.path[:3]}")
-            print(f"[DEBUG] Hunyuan3D-2 path exists: {os.path.isdir(_HY3D_LOCAL)}")
-            hy3dgen_path = os.path.join(_HY3D_LOCAL, 'hy3dgen')
-            print(f"[DEBUG] hy3dgen exists: {os.path.isdir(hy3dgen_path)}")
-            if os.path.isdir(hy3dgen_path):
-                print(f"[DEBUG] hy3dgen contents: {os.listdir(hy3dgen_path)}")
+            exists = os.path.isdir(_HY3D_LOCAL)
+            print(f"[DEBUG] Hunyuan3D-2 path exists: {exists}")
+            hy3dgen_path = os.path.join(_HY3D_LOCAL, "hy3dgen")
+            exists_hy = os.path.isdir(hy3dgen_path)
+            print(f"[DEBUG] hy3dgen exists: {exists_hy}")
+            if exists_hy:
+                contents = os.listdir(hy3dgen_path)
+                print(f"[DEBUG] hy3dgen contents: {contents}")
             raise
 
         self.model_path = model_path
@@ -79,23 +85,41 @@ class Hunyuan3DInference:
             print("[WARNING] CUDA not available, loading on CPU (very slow!)")
 
         try:
-            print(f"[DEBUG] Loading Hunyuan3D model from {model_path}/{subfolder}...")
-            self._shape = Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
-                model_path,
-                subfolder=subfolder,
-                use_safetensors=True,
-                variant="fp16",
-                device="cuda" if torch.cuda.is_available() else "cpu",
+            # Allow forcing CPU via env var (for debugging CUDA issues)
+            force_cpu_env = os.environ.get("HY3D_FORCE_CPU", "0")
+            force_cpu = force_cpu_env.lower() in ("1", "true", "yes")
+            if force_cpu:
+                device = "cpu"
+            else:
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+
+            print(
+                f"[DEBUG] Loading Hunyuan3D model "
+                f"from {model_path}/{subfolder}..."
+            )
+            print(f"[DEBUG] Using device: {device}")
+
+            variant = "fp16" if device == "cuda" else "fp32"
+            self._shape = (
+                Hunyuan3DDiTFlowMatchingPipeline.from_pretrained(
+                    model_path,
+                    subfolder=subfolder,
+                    use_safetensors=True,
+                    variant=variant,
+                    device=device,
+                )
             )
             print("[DEBUG] ✓ Hunyuan3D model loaded successfully")
         except RuntimeError as e:
-            if "out of memory" in str(e).lower() or "cuda" in str(e).lower():
+            err_str = str(e).lower()
+            if "out of memory" in err_str or "cuda" in err_str:
                 print(f"[ERROR] GPU Memory Error: {e}")
-                print("[ERROR] Try clearing GPU cache or reducing batch size")
+                msg = "[ERROR] Try clearing GPU cache or reducing batch size"
+                print(msg)
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 raise RuntimeError(
-                    f"Failed to load Hunyuan3D model due to GPU memory: {e}"
+                    f"Failed to load Hunyuan3D model due to GPU: {e}"
                 )
             raise
         except Exception as e:
