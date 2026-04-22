@@ -104,7 +104,15 @@ def _generate_image_for_item(
 
     # ── Already have an image ────────────────────────────────────────────────
     if item.image_b64:
-        img_data = base64.b64decode(item.image_b64)
+        b64_str = item.image_b64.strip()
+        try:
+            img_data = base64.b64decode(b64_str, validate=True)
+        except Exception:
+            # Add padding if needed
+            padding = 4 - (len(b64_str) % 4)
+            if padding and padding != 4:
+                b64_str += "=" * padding
+            img_data = base64.b64decode(b64_str, validate=False)
         raw = Image.open(__import__("io").BytesIO(img_data)).convert("RGB")
         seg = BG_REMOVER(raw)
         seg.save(out_path)
