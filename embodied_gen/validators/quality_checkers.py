@@ -264,7 +264,13 @@ class ImageAestheticChecker(BaseChecker):
         self.predictor = AestheticPredictor(clip_model_dir, sac_model_path)
 
     def query(self, image_paths: list[str]) -> float:
+        if not image_paths:
+            print("[WARNING] No images provided for aesthetic scoring")
+            return 0.0
         scores = [self.predictor.predict(img_path) for img_path in image_paths]
+        if not scores:
+            print("[WARNING] No valid scores computed")
+            return 0.0
         return sum(scores) / len(scores)
 
     def __call__(self, image_paths: list[str], **kwargs) -> bool:
