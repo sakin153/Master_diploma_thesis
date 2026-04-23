@@ -36,6 +36,8 @@ services:
       U2NET_HOME: /app/weights/u2net
       TOKENIZERS_PARALLELISM: "false"
       PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
 
     volumes:
       - weights:/app/weights
