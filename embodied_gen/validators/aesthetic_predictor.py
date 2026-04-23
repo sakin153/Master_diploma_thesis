@@ -15,15 +15,27 @@
 # permissions and limitations under the License.
 
 
+from __future__ import annotations
+
 import os
 
-import clip
 import numpy as np
-import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from huggingface_hub import snapshot_download
 from PIL import Image
+
+try:
+    import clip  # OpenAI CLIP (pip install git+https://github.com/openai/CLIP.git)
+except ImportError:
+    clip = None
+
+try:
+    import pytorch_lightning as pl
+    _MLP_BASE = pl.LightningModule
+except ImportError:
+    pl = None
+    _MLP_BASE = nn.Module  # fallback: plain nn.Module works fine for inference
 
 
 class AestheticPredictor:
@@ -49,6 +61,12 @@ class AestheticPredictor:
 
         self.device = device
         self.use_fp16 = use_fp16 and device == "cuda"
+
+        if clip is None:
+            raise ImportError(
+                "OpenAI CLIP is required for AestheticPredictor. "
+                "Install with: pip install git+https://github.com/openai/CLIP.git"
+            )
 
         if clip_model_dir is None:
             model_path = snapshot_download(
@@ -77,7 +95,7 @@ class AestheticPredictor:
         )
         self.sac_model = self._load_sac_model(sac_model_path, input_size=768)
 
-    class MLP(pl.LightningModule):  # noqa
+    class MLP(_MLP_BASE):  # noqa
         def __init__(self, input_size):
             super().__init__()
             self.layers = nn.Sequential(

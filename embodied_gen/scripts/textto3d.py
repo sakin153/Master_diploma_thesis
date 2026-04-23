@@ -34,8 +34,9 @@ from embodied_gen.utils.process_media import (
 )
 from embodied_gen.utils.vram_utils import free_vram, log_vram
 from embodied_gen.validators.quality_checkers import (
-    SemanticConsistChecker,
+    ImageAestheticChecker,
     ImageSegChecker,
+    SemanticConsistChecker,
     TextGenAlignChecker,
 )
 
@@ -45,6 +46,18 @@ SEMANTIC_CHECKER = SemanticConsistChecker(GPT_CLIENT)
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 TXTGEN_CHECKER = TextGenAlignChecker(GPT_CLIENT)
 BG_REMOVER = RembgRemover()
+
+# Aesthetic ranker — CLIP + MLP, loaded lazily (~1.7 GB once).
+# Only used to pick the best candidate when n_img_sample > 1.
+_AESTHETIC_RANKER: Optional[ImageAestheticChecker] = None
+
+
+def _get_aesthetic_ranker() -> ImageAestheticChecker:
+    global _AESTHETIC_RANKER
+    if _AESTHETIC_RANKER is None:
+        logger.info("Loading aesthetic ranker (CLIP + MLP)...")
+        _AESTHETIC_RANKER = ImageAestheticChecker()
+    return _AESTHETIC_RANKER
 
 _PIPE_IMG = None
 
@@ -155,10 +168,9 @@ def _generate_image_for_item(
     f_prompt = PROMPT_APPEND.format(object=item.prompt)
     seed = item.seed_img
     select_image = None
+    passers: list[tuple[Image.Image, Image.Image]] = []  # (raw, seg) that passed QA
 
     for try_idx in range(n_image_retry):
-        if select_image is not None:
-            break
         logger.info(
             f"Image GEN for '{item.name}' "
             f"try {try_idx + 1}/{n_image_retry}, "
@@ -192,30 +204,55 @@ def _generate_image_for_item(
             logger.warning(
                 f"SEMANTIC: {sem_res}. SEG: {seg_res}. EDGE: {edge_flag}"
             )
-            if (
+            gate_passed = (
                 (edge_flag and semantic_flag and seg_flag)
                 or (edge_flag and semantic_flag is None)
                 or (edge_flag and seg_flag is None)
-            ):
-                raw_image.save(out_path.replace(".png", "_raw.png"))
-                seg_image.save(out_path)
-                select_image = seg_image
-                break
+            )
+            if gate_passed:
+                passers.append((raw_image, seg_image))
 
+        if passers:
+            break  # rank and select below
         seed = random.randint(0, 100000) if seed is not None else None
 
-    if select_image is None:
-        logger.warning(
-            f"Image generation for '{item.name}' did not pass QA, "
-            "using last generated image."
-        )
-        if images:
-            seg_image = BG_REMOVER(images[-1])
-            seg_image.save(out_path)
-            return out_path
-        return None
+    if passers:
+        if len(passers) == 1:
+            raw_image, seg_image = passers[0]
+        else:
+            # Rank by aesthetic score (CLIP + MLP, local, ~50 ms / image).
+            try:
+                ranker = _get_aesthetic_ranker()
+                scores = [
+                    ranker.query([seg.convert("RGB")])
+                    for _, seg in passers
+                ]
+                best_idx = max(range(len(scores)), key=scores.__getitem__)
+                raw_image, seg_image = passers[best_idx]
+                logger.info(
+                    f"Aesthetic ranking for '{item.name}': "
+                    f"scores={[round(s, 2) for s in scores]} → pick #{best_idx}"
+                )
+            except Exception as e:
+                logger.warning(
+                    "Aesthetic ranker unavailable/failed (%s); "
+                    "falling back to first passing candidate.",
+                    e,
+                )
+                raw_image, seg_image = passers[0]
+        raw_image.save(out_path.replace(".png", "_raw.png"))
+        seg_image.save(out_path)
+        return out_path
 
-    return out_path
+    logger.warning(
+        f"Image generation for '{item.name}' did not pass QA, "
+        "using last generated image."
+    )
+    if images:
+        seg_image = BG_REMOVER(images[-1])
+        seg_image.save(out_path)
+        return out_path
+    return None
 
 
 def text_to_3d(

@@ -11,12 +11,8 @@ from embodied_gen.models.segment_model import RembgRemover
 from embodied_gen.utils.gpt_clients import GPT_CLIENT
 from embodied_gen.utils.inference import image3d_model_infer
 from embodied_gen.utils.log import logger
-from embodied_gen.utils.process_media import (
-    combine_images_to_grid,
-    merge_images_video,
-)
+from embodied_gen.utils.process_media import combine_images_to_grid
 from embodied_gen.utils.tags import VERSION
-from embodied_gen.utils.trender import render_video
 from embodied_gen.utils.vram_utils import free_vram, log_vram
 from embodied_gen.validators.quality_checkers import (
     BaseChecker,
@@ -126,13 +122,6 @@ def process_single_image(
         return {}
 
     # ── Stage 2: Mesh export ─────────────────────────────────────────────────
-    _rv = render_video(mesh_model, r=1.85)
-    color_images = _rv.get("color", [])
-    normal_images = _rv.get("normal", [])
-    video_path = os.path.join(output_root, "gs_mesh.mp4")
-    if color_images or normal_images:
-        merge_images_video(color_images, normal_images, video_path)
-
     mesh = trimesh_result
     mesh.vertices = (
         mesh.vertices @ np.array(mesh_add_rot) @ np.array(rot_matrix)
@@ -141,7 +130,7 @@ def process_single_image(
     mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
     mesh.export(mesh_obj_path)
 
-    del color_images, normal_images, mesh_model
+    del mesh_model
     free_vram()
     log_vram("after releasing 3D outputs")
 

@@ -14,6 +14,7 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
+from __future__ import annotations
 
 import logging
 import os
@@ -25,11 +26,16 @@ import rembg
 import torch
 from huggingface_hub import snapshot_download
 from PIL import Image
-from segment_anything import (
-    SamAutomaticMaskGenerator,
-    SamPredictor,
-    sam_model_registry,
-)
+try:
+    from segment_anything import (
+        SamAutomaticMaskGenerator,
+        SamPredictor,
+        sam_model_registry,
+    )
+except ImportError:
+    SamAutomaticMaskGenerator = None
+    SamPredictor = None
+    sam_model_registry = None
 from transformers import pipeline
 from embodied_gen.data.utils import resize_pil, trellis_preprocess
 from embodied_gen.utils.process_media import filter_small_connected_components
