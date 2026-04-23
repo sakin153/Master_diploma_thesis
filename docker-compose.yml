@@ -41,6 +41,9 @@ services:
       - weights:/app/weights
       - outputs:/app/outputs
       - ./embodied_gen/utils/gpt_config.yaml:/app/embodied_gen/utils/gpt_config.yaml
+      # Reuse models already downloaded on Windows — avoids HuggingFace SSL issues
+      - C:\Users\slva_\.cache\huggingface:/app/weights/hf_cache
+      - C:\Users\slva_\.cache\hy3dgen:/root/.cache/hy3dgen
 
     # Позволяет контейнеру обращаться к хостовому localhost (Ollama)
     extra_hosts:
