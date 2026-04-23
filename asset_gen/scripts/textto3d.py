@@ -227,12 +227,12 @@ def text_to_3d(
     n_image_retry: int = 2,
     n_asset_retry: int = 2,
     n_pipe_retry: int = 1,
-    img_denoise_step: int = 25,
+    img_denoise_step: int = 50,
     text_guidance_scale: float = 7.0,
-    n_img_sample: int = 1,
+    n_img_sample: int = 3,
     image_height: int = 768,
     image_width: int = 768,
-    keep_intermediate: bool = False,
+    keep_intermediate: bool = True,
     disable_decompose_convex: bool = False,
 ) -> dict:
     """
