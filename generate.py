@@ -84,14 +84,17 @@ def main():
 
     # Step 1: Text → Image → 3D mesh → URDF
     print("\n[1/2] Generating 3D asset from prompt...")
-    from embodied_gen.scripts.textto3d import text_to_3d
+    from embodied_gen.scripts.textto3d import GenerateItem, text_to_3d
 
-    results = text_to_3d(
-        prompts=[args.prompt],
-        asset_names=[args.name],
-        output_root=args.output,
+    item = GenerateItem(
+        name=args.name,
+        prompt=args.prompt,
         seed_img=args.seed_img,
         seed_3d=args.seed_3d,
+    )
+    results = text_to_3d(
+        items=[item],
+        output_root=args.output,
         n_image_retry=args.n_image_retry,
         n_asset_retry=args.n_asset_retry,
         n_pipe_retry=1,

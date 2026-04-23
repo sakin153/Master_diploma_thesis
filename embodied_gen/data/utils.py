@@ -26,14 +26,20 @@ from shutil import rmtree
 from typing import List, Tuple, Union
 
 import cv2
-import kaolin as kal
 import numpy as np
-import nvdiffrast.torch as dr
 import torch
 import torch.nn.functional as F
 import trimesh
-from kaolin.render.camera import Camera
 from PIL import Image, ImageEnhance
+
+try:
+    import kaolin as kal
+    from kaolin.render.camera import Camera
+    import nvdiffrast.torch as dr
+except ImportError:
+    kal = None
+    Camera = None
+    dr = None
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +64,8 @@ __all__ = [
     "delete_dir",
     "kaolin_to_opencv_view",
     "model_device_ctx",
+    # NOTE: DiffrastRender, render_pbr, import_kaolin_mesh, CameraSetting,
+    # kaolin_to_opencv_view require kaolin/nvdiffrast (optional, unused in pipeline).
 ]
 
 

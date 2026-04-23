@@ -17,22 +17,11 @@ requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = [
-    "cpplint",
-    "pre-commit",
-    "pydocstyle",
-    "black",
-    "isort",
     "pytest",
     "pytest-mock",
-    "mkdocs",
-    "mkdocs-material",
-    "mkdocstrings[python]",
-    "mkdocs-git-revision-date-localized-plugin",
 ]
 
 [project.scripts]
-drender-cli = "embodied_gen.data.differentiable_render:entrypoint"
-backproject-cli = "embodied_gen.data.backproject_v2:entrypoint"
 img3d-cli = "embodied_gen.scripts.imageto3d:entrypoint"
 text3d-cli = "embodied_gen.scripts.textto3d:text_to_3d"
 

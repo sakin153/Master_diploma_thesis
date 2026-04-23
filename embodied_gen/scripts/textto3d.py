@@ -121,15 +121,12 @@ def _generate_image_for_item(
 
         logger.info(f"Decoded image data: {len(img_data)} bytes, first 20 bytes: {img_data[:20]}")
 
-        # Debug: save raw data for inspection
-        debug_bin = f"{out_path}.bin"
-        with open(debug_bin, "wb") as f:
-            f.write(img_data)
-        logger.info(f"Saved raw image data to: {debug_bin}")
-
         try:
             raw = Image.open(__import__("io").BytesIO(img_data)).convert("RGB")
         except Exception as e:
+            debug_bin = f"{out_path}.bin"
+            with open(debug_bin, "wb") as f:
+                f.write(img_data)
             logger.error(
                 f"Failed to load image from base64 for '{item.name}'. "
                 f"Data size: {len(img_data)} bytes. First 100 bytes: {img_data[:100]!r}. "
@@ -314,11 +311,11 @@ def text_to_3d(
                 current_seed_3d = random.randint(0, 100000)
                 continue
 
-            # QA on rendered views
+            # QA on rendered views — reuse renders from process_single_image if available
             result_dir = file_paths.get("result_dir", "")
             obj_path = file_paths.get("obj")
             if obj_path and os.path.exists(obj_path):
-                image_path_list = render_asset3d(
+                image_path_list = file_paths.get("renders") or render_asset3d(
                     obj_path,
                     output_root=result_dir,
                     num_images=4,

@@ -80,7 +80,7 @@ class BaseChecker:
     def validate(
         checkers: list["BaseChecker"], images_list: list[list[str]]
     ) -> list:
-        """Validates a list of checkers against corresponding image lists.
+        """Validates checkers in parallel against corresponding image lists.
 
         Args:
             checkers (list[BaseChecker]): List of checker instances.
@@ -89,19 +89,31 @@ class BaseChecker:
         Returns:
             list: Validation results with overall outcome.
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         assert len(checkers) == len(images_list)
-        results = []
+
+        results = [None] * len(checkers)
         overall_result = True
-        for checker, images in zip(checkers, images_list):
+
+        def _run(idx, checker, images):
             qa_flag, qa_info = checker(images)
-            if isinstance(qa_info, str):
-                qa_info = qa_info.replace("\n", ".")
-            results.append([checker.__class__.__name__, qa_info])
-            if qa_flag is False:
-                overall_result = False
+            return idx, qa_flag, qa_info
+
+        with ThreadPoolExecutor(max_workers=len(checkers)) as executor:
+            futures = {
+                executor.submit(_run, idx, checker, images): idx
+                for idx, (checker, images) in enumerate(zip(checkers, images_list))
+            }
+            for future in as_completed(futures):
+                idx, qa_flag, qa_info = future.result()
+                if isinstance(qa_info, str):
+                    qa_info = qa_info.replace("\n", ".")
+                results[idx] = [checkers[idx].__class__.__name__, qa_info]
+                if qa_flag is False:
+                    overall_result = False
 
         results.append(["overall", "YES" if overall_result else "NO"])
-
         return results
 
 

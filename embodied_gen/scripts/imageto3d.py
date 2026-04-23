@@ -126,8 +126,9 @@ def process_single_image(
         return {}
 
     # ── Stage 2: Mesh export ─────────────────────────────────────────────────
-    color_images = render_video(mesh_model, r=1.85).get("color", [])
-    normal_images = render_video(mesh_model, r=1.85).get("normal", [])
+    _rv = render_video(mesh_model, r=1.85)
+    color_images = _rv.get("color", [])
+    normal_images = _rv.get("normal", [])
     video_path = os.path.join(output_root, "gs_mesh.mp4")
     if color_images or normal_images:
         merge_images_video(color_images, normal_images, video_path)
@@ -139,9 +140,6 @@ def process_single_image(
 
     mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
     mesh.export(mesh_obj_path)
-
-    mesh_glb_path = os.path.join(output_root, f"{filename}.glb")
-    mesh.export(mesh_glb_path)
 
     del color_images, normal_images, mesh_model
     free_vram()
@@ -199,6 +197,14 @@ def process_single_image(
     if os.path.exists(video_path):
         copy(video_path, f"{result_dir}/video.mp4")
 
+    # Copy renders so textto3d QA can reuse them without a second render pass
+    render_src = os.path.join(urdf_root, urdf_convertor.output_render_dir, "image_color")
+    render_dst = os.path.join(result_dir, "renders", "image_color")
+    saved_renders: list[str] = []
+    if os.path.exists(render_src):
+        copytree(render_src, render_dst)
+        saved_renders = sorted(glob(f"{render_dst}/*.png"))
+
     if not keep_intermediate:
         delete_dir(output_root, keep_subs=["result"])
 
@@ -213,6 +219,7 @@ def process_single_image(
         "glb": final_glb if os.path.exists(final_glb) else None,
         "urdf": final_urdf if os.path.exists(final_urdf) else None,
         "result_dir": result_dir,
+        "renders": saved_renders,
     }
 
 
