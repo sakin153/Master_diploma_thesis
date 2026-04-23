@@ -422,8 +422,10 @@ class SDXLBaseLoader(BasePipelineLoader):
             torch_dtype=torch.float16,
             variant="fp16",
             use_safetensors=True,
-        )  # ~6.5 GB download
+            low_cpu_mem_usage=True,
+        )
         pipe.enable_model_cpu_offload()
+        pipe.enable_xformers_memory_efficient_attention()
         pipe.enable_attention_slicing()
         pipe.enable_vae_slicing()
         return pipe

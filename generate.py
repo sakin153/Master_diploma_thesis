@@ -44,7 +44,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model", type=str, default="sdxl-turbo",
-        choices=["sdxl-turbo", "kolors", "sd35", "flux", "chroma", "cosmos"],
+        choices=["sdxl-turbo", "sdxl", "kolors", "sd35", "flux", "chroma", "cosmos"],
         help="Text-to-image model. Use 'sdxl-turbo' for 8GB GPUs (default).",
     )
     parser.add_argument(
