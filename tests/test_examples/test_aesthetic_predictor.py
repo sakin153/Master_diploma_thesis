@@ -16,7 +16,7 @@
 
 import logging
 
-from embodied_gen.validators.aesthetic_predictor import AestheticPredictor
+from asset_gen.validators.aesthetic_predictor import AestheticPredictor
 
 logger = logging.getLogger(__name__)
 

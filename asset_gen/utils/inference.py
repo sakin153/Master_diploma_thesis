@@ -1,6 +1,6 @@
 import torch
 from PIL import Image
-from embodied_gen.utils.vram_utils import free_vram
+from asset_gen.utils.vram_utils import free_vram
 
 __all__ = ["image3d_model_infer"]
 
@@ -11,7 +11,7 @@ def image3d_model_infer(
     seed: int = None,
     **kwargs,
 ) -> dict:
-    from embodied_gen.models.hunyuan3d import Hunyuan3DInference
+    from asset_gen.models.hunyuan3d import Hunyuan3DInference
 
     if not isinstance(pipe, Hunyuan3DInference):
         raise ValueError(f"Unsupported pipeline type: {type(pipe)}")

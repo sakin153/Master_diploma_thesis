@@ -18,22 +18,22 @@ from typing import Optional
 
 import torch
 from PIL import Image
-from embodied_gen.models.image_comm_model import build_hf_image_pipeline
-from embodied_gen.models.segment_model import RembgRemover
-from embodied_gen.models.text_model import PROMPT_APPEND
-from embodied_gen.scripts.imageto3d import (
+from asset_gen.models.image_comm_model import build_hf_image_pipeline
+from asset_gen.models.segment_model import RembgRemover
+from asset_gen.models.text_model import PROMPT_APPEND
+from asset_gen.scripts.imageto3d import (
     _release_pipeline as _release_3d_pipeline,
     process_single_image,
 )
-from embodied_gen.utils.gpt_clients import GPT_CLIENT
-from embodied_gen.utils.log import logger
-from embodied_gen.utils.process_media import (
+from asset_gen.utils.gpt_clients import GPT_CLIENT
+from asset_gen.utils.log import logger
+from asset_gen.utils.process_media import (
     check_object_edge_truncated,
     combine_images_to_grid,
     render_asset3d,
 )
-from embodied_gen.utils.vram_utils import free_vram, log_vram
-from embodied_gen.validators.quality_checkers import (
+from asset_gen.utils.vram_utils import free_vram, log_vram
+from asset_gen.validators.quality_checkers import (
     SemanticConsistChecker,
     ImageSegChecker,
     TextGenAlignChecker,

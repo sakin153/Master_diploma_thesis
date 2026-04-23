@@ -31,7 +31,7 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
-from embodied_gen.utils.process_media import combine_images_to_grid
+from asset_gen.utils.process_media import combine_images_to_grid
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.basicConfig(level=logging.WARNING)
@@ -67,7 +67,7 @@ class GPTclient:
         export MODEL_NAME="yfb-gpt-4o-sweden"
         ```
         ```py
-        from embodied_gen.utils.gpt_clients import GPT_CLIENT
+        from asset_gen.utils.gpt_clients import GPT_CLIENT
 
         response = GPT_CLIENT.query("Describe the physics of a falling apple.")
         response = GPT_CLIENT.query(

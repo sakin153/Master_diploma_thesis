@@ -5,7 +5,7 @@
 [![📄 arXiv](https://img.shields.io/badge/📄-arXiv-b31b1b)](https://arxiv.org/abs/2506.10600)
 [![🎥 Video](https://img.shields.io/badge/🎥-Video-red)](https://www.youtube.com/watch?v=rG4odybuJRk)
 [![中文介绍](https://img.shields.io/badge/中文介绍-07C160?logo=wechat&logoColor=white)](https://mp.weixin.qq.com/s/HH1cPBhK2xcDbyCK4BBTbw)
-<!-- [![🌐 Project Page](https://img.shields.io/badge/🌐-Project_Page-blue)](https://horizonrobotics.github.io/robot_lab/embodied_gen/index.html) -->
+<!-- [![🌐 Project Page](https://img.shields.io/badge/🌐-Project_Page-blue)](https://horizonrobotics.github.io/robot_lab/asset_gen/index.html) -->
 [![🤗 Hugging Face](https://img.shields.io/badge/🤗-EmbodiedGen_Asset_Gallery-blue)](https://huggingface.co/spaces/HorizonRobotics/EmbodiedGen-Gallery-Explorer)
 [![🤗 Hugging Face](https://img.shields.io/badge/🤗-Image_to_3D_Demo-blue)](https://huggingface.co/spaces/HorizonRobotics/EmbodiedGen-Image-to-3D)
 [![🤗 Hugging Face](https://img.shields.io/badge/🤗-Text_to_3D_Demo-blue)](https://huggingface.co/spaces/HorizonRobotics/EmbodiedGen-Text-to-3D)
@@ -63,12 +63,12 @@ docker exec -it ${CONTAINER} bash
 
 ### ✅ Setup GPT Agent
 
-Update the API key in file: `embodied_gen/utils/gpt_config.yaml`.
+Update the API key in file: `asset_gen/utils/gpt_config.yaml`.
 
 You can choose between two backends for the GPT agent:
 
 - **`gpt-4o`** (Recommended) – Use this if you have access to **Azure OpenAI**.
-- **`qwen2.5-vl`** – An alternative with free usage via OpenRouter, apply a free key [here](https://openrouter.ai/settings/keys) and update `api_key` in `embodied_gen/utils/gpt_config.yaml` (50 free requests per day)
+- **`qwen2.5-vl`** – An alternative with free usage via OpenRouter, apply a free key [here](https://openrouter.ai/settings/keys) and update `api_key` in `asset_gen/utils/gpt_config.yaml` (50 free requests per day)
 
 
 ### 📸 Directly use EmbodiedGen All-Simulators-Ready Assets
@@ -103,7 +103,7 @@ img3d-cli --image_path apps/assets/example_image/sample_00.jpg apps/assets/examp
 # See result(.urdf/mesh.obj/mesh.glb/gs.ply) in ${output_root}/sample_xx/result
 ```
 
-Support the use of [SAM3D](https://github.com/facebookresearch/sam-3d-objects) or [TRELLIS](https://github.com/microsoft/TRELLIS) as 3D generation model, modify `IMAGE3D_MODEL` in `embodied_gen/scripts/imageto3d.py` to switch model.
+Support the use of [SAM3D](https://github.com/facebookresearch/sam-3d-objects) or [TRELLIS](https://github.com/microsoft/TRELLIS) as 3D generation model, modify `IMAGE3D_MODEL` in `asset_gen/scripts/imageto3d.py` to switch model.
 
 ---
 
@@ -137,11 +137,11 @@ text3d-cli --prompts "small bronze figurine of a lion" "A globe with wooden base
 
 Text-to-image model based on the Kolors model.
 ```sh
-bash embodied_gen/scripts/textto3d.sh \
+bash asset_gen/scripts/textto3d.sh \
     --prompts "A globe with wooden base and latitude and longitude lines" "橙色电动手钻，有磨损细节" \
     --output_root outputs/textto3d_k
 ```
-ps: models with more permissive licenses found in `embodied_gen/models/image_comm_model.py`
+ps: models with more permissive licenses found in `asset_gen/models/image_comm_model.py`
 
 ---
 
@@ -260,7 +260,7 @@ CUDA_VISIBLE_DEVICES=0 nohup layout-cli \
 
 Using `compose_layout.py`, you can recompose the layout of the generated interactive 3D scenes.
 ```sh
-python embodied_gen/scripts/compose_layout.py \
+python asset_gen/scripts/compose_layout.py \
 --layout_path "outputs/layouts_gens/task_0000/layout.json" \
 --output_dir "outputs/layouts_gens/task_0000/recompose" \
 --insert_robot
@@ -283,7 +283,7 @@ Example: generate multiple parallel simulation envs with `gym.make` and record s
 </table>
 
 ```sh
-python embodied_gen/scripts/parallel_sim.py \
+python asset_gen/scripts/parallel_sim.py \
 --layout_file "outputs/layouts_gen/task_0000/layout.json" \
 --output_dir "outputs/parallel_sim/task_0000" \
 --num_envs 16

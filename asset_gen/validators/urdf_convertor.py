@@ -25,13 +25,13 @@ from xml.dom.minidom import parseString
 import numpy as np
 import trimesh
 from scipy.spatial.transform import Rotation
-from embodied_gen.data.convex_decomposer import decompose_convex_mesh
-from embodied_gen.utils.gpt_clients import GPT_CLIENT, GPTclient
-from embodied_gen.utils.process_media import (
+from asset_gen.data.convex_decomposer import decompose_convex_mesh
+from asset_gen.utils.gpt_clients import GPT_CLIENT, GPTclient
+from asset_gen.utils.process_media import (
     combine_images_to_grid,
     render_asset3d,
 )
-from embodied_gen.utils.tags import VERSION
+from asset_gen.utils.tags import VERSION
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,8 +99,8 @@ class URDFGenerator(object):
 
     Example:
         ```py
-        from embodied_gen.validators.urdf_convertor import URDFGenerator
-        from embodied_gen.utils.gpt_clients import GPT_CLIENT
+        from asset_gen.validators.urdf_convertor import URDFGenerator
+        from asset_gen.utils.gpt_clients import GPT_CLIENT
 
         urdf_gen = URDFGenerator(GPT_CLIENT, render_view_num=4)
         urdf_path = urdf_gen(mesh_path="mesh.obj", output_root="output_dir")

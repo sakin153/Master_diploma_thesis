@@ -34,7 +34,7 @@ extra:
     - icon: simple/arxiv
       link: https://arxiv.org/abs/2506.10600
     - icon: fontawesome/solid/globe
-      link: https://horizonrobotics.github.io/robot_lab/embodied_gen/index.html
+      link: https://horizonrobotics.github.io/robot_lab/asset_gen/index.html
     - icon: fontawesome/brands/youtube
       link: https://www.youtube.com/watch?v=rG4odybuJRk
 
@@ -76,7 +76,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [embodied_gen]
+          paths: [asset_gen]
           options:
             show_signature_annotations: true
             separate_signature: true

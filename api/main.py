@@ -9,25 +9,18 @@ from api.job_manager import job_manager
 from api.models import GenerateRequest, GenerateResponse, JobState, JobStatus
 
 app = FastAPI(
-    title="EmbodiedGen API",
-    description="Text/image → 3D model (OBJ + GLB + URDF + MuJoCo MJCF)",
+    title="asset_generator API",
+    description="Text/image → 3D model (OBJ GLB URDF and MuJoCo MJCF)",
     version="2.0.0",
 )
 
-
-# ──────────────────────────────────────────────
 # Health
-# ──────────────────────────────────────────────
-
 @app.get("/health", tags=["System"])
 def health():
-    return {"status": "ok"}
+    return {"status": "КАЙФ БРАТОК"}
 
 
-# ──────────────────────────────────────────────
 # Generation
-# ──────────────────────────────────────────────
-
 @app.post(
     "/api/generate", response_model=GenerateResponse, tags=["Generation"]
 )
@@ -36,9 +29,6 @@ def generate(request: GenerateRequest):
     Submit a batch of objects for 3D generation.
 
     Each item can be a text prompt or a base64-encoded image.
-    All images are generated first (text2img stays loaded), then
-    all 3D meshes (Hunyuan3D stays loaded) — efficient VRAM usage.
-
     Returns a `job_id` to track progress.
     """
     job = job_manager.submit(request)
@@ -49,10 +39,8 @@ def generate(request: GenerateRequest):
     )
 
 
-# ──────────────────────────────────────────────
-# Jobs
-# ──────────────────────────────────────────────
 
+# Jobs
 @app.get("/api/jobs", response_model=list[JobStatus], tags=["Jobs"])
 def list_jobs():
     """List all jobs (newest first)."""

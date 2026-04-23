@@ -38,7 +38,7 @@ class AestheticPredictor:
 
     Example:
         ```py
-        from embodied_gen.validators.aesthetic_predictor import AestheticPredictor
+        from asset_gen.validators.aesthetic_predictor import AestheticPredictor
         predictor = AestheticPredictor(device="cuda")
         score = predictor.predict("image.png")
         print("Aesthetic score:", score)

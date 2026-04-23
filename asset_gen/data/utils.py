@@ -1,3 +1,4 @@
+
 # Project EmbodiedGen
 #
 # Copyright (c) 2025 Horizon Robotics. All Rights Reserved.
@@ -23,19 +24,32 @@ import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from shutil import rmtree
-from typing import List, Tuple, Union
+from typing import Any, List, Tuple, Union
 
 import cv2
-import kaolin as kal
 import numpy as np
 import nvdiffrast.torch as dr
 import torch
 import torch.nn.functional as F
 import trimesh
-from kaolin.render.camera import Camera
 from PIL import Image, ImageEnhance
 
+try:
+    import kaolin as kal
+    from kaolin.render.camera import Camera
+except ImportError:
+    kal = None
+    Camera = Any
+
 logger = logging.getLogger(__name__)
+
+
+def _require_kaolin() -> None:
+    if kal is None:
+        raise ModuleNotFoundError(
+            "No module named 'kaolin'. Install kaolin to use rendering/mesh "
+            "utilities from asset_gen.data.utils."
+        )
 
 
 __all__ = [
@@ -261,6 +275,7 @@ class DiffrastRender(object):
         faces: torch.Tensor,
         vertice_normals: torch.Tensor,
     ) -> Union[torch.Tensor, torch.Tensor]:
+        _require_kaolin()
         # NOTE: vertice_normals in [-1, 1],  return normal in [0, 1].
         # vertices / vertice_normals in model coordinate system.
         faces = faces.to(torch.int32)
@@ -447,6 +462,7 @@ def _current_lighting(
     light_factor: float = 1.0,
     device: str = "cuda",
 ):
+    _require_kaolin()
     # azimuths, elevations in degress.
     directions = []
     for az, el in zip(azimuths, elevations):
@@ -479,6 +495,7 @@ def render_pbr(
     custom_materials=None,
     light_factor=1.0,
 ):
+    _require_kaolin()
     if cxt is None:
         cxt = dr.RasterizeCudaContext()
 
@@ -639,6 +656,7 @@ def init_kal_camera(
     camera_params: CameraSetting,
     flip_az: bool = False,
 ) -> Camera:
+    _require_kaolin()
     azimuths, elevations = _compute_az_el_by_camera_params(
         camera_params, flip_az
     )
@@ -669,6 +687,7 @@ def init_kal_camera(
 
 
 def import_kaolin_mesh(mesh_path: str, with_mtl: bool = False):
+    _require_kaolin()
     if mesh_path.endswith(".glb"):
         mesh = kal.io.gltf.import_mesh(mesh_path)
     elif mesh_path.endswith(".obj"):

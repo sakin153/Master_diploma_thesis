@@ -40,7 +40,7 @@ services:
     volumes:
       - weights:/app/weights
       - outputs:/app/outputs
-      - ./embodied_gen/utils/gpt_config.yaml:/app/embodied_gen/utils/gpt_config.yaml
+      - ./asset_gen/utils/gpt_config.yaml:/app/asset_gen/utils/gpt_config.yaml
 
     # Позволяет контейнеру обращаться к хостовому localhost (Ollama)
     extra_hosts:

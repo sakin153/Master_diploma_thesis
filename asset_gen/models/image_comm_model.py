@@ -466,7 +466,7 @@ def build_hf_image_pipeline(name: str, device="cuda") -> BasePipelineRunner:
 
     Example:
         ```py
-        from embodied_gen.models.image_comm_model import (
+        from asset_gen.models.image_comm_model import (
             build_hf_image_pipeline,
         )
         runner = build_hf_image_pipeline("sd35")

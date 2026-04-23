@@ -6,25 +6,25 @@ from shutil import copy, copytree, rmtree
 import numpy as np
 import trimesh
 from PIL import Image
-from embodied_gen.data.utils import delete_dir
-from embodied_gen.models.segment_model import RembgRemover
-from embodied_gen.utils.gpt_clients import GPT_CLIENT
-from embodied_gen.utils.inference import image3d_model_infer
-from embodied_gen.utils.log import logger
-from embodied_gen.utils.process_media import (
+from asset_gen.data.utils import delete_dir
+from asset_gen.models.segment_model import RembgRemover
+from asset_gen.utils.gpt_clients import GPT_CLIENT
+from asset_gen.utils.inference import image3d_model_infer
+from asset_gen.utils.log import logger
+from asset_gen.utils.process_media import (
     combine_images_to_grid,
     merge_images_video,
 )
-from embodied_gen.utils.tags import VERSION
-from embodied_gen.utils.trender import render_video
-from embodied_gen.utils.vram_utils import free_vram, log_vram
-from embodied_gen.validators.quality_checkers import (
+from asset_gen.utils.tags import VERSION
+from asset_gen.utils.trender import render_video
+from asset_gen.utils.vram_utils import free_vram, log_vram
+from asset_gen.validators.quality_checkers import (
     BaseChecker,
     ImageAestheticChecker,
     ImageSegChecker,
     MeshGeoChecker,
 )
-from embodied_gen.validators.urdf_convertor import URDFGenerator
+from asset_gen.validators.urdf_convertor import URDFGenerator
 
 # Quality checkers: GPT/Ollama-based, no VRAM, safe at module level.
 RBG_REMOVER = RembgRemover()
@@ -62,7 +62,7 @@ def _get_pipeline():
     if _PIPELINE is None:
         log_vram("before 3D pipeline load")
         logger.info("Loading Hunyuan3D-2mini pipeline...")
-        from embodied_gen.models.hunyuan3d import Hunyuan3DInference
+        from asset_gen.models.hunyuan3d import Hunyuan3DInference
         _PIPELINE = Hunyuan3DInference()
         log_vram("after 3D pipeline load")
     return _PIPELINE

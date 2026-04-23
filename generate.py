@@ -84,7 +84,7 @@ def main():
 
     # Step 1: Text → Image → 3D mesh → URDF
     print("\n[1/2] Generating 3D asset from prompt...")
-    from embodied_gen.scripts.textto3d import text_to_3d
+    from asset_gen.scripts.textto3d import text_to_3d
 
     results = text_to_3d(
         prompts=[args.prompt],
@@ -116,11 +116,11 @@ def main():
 
     # Step 2: URDF → MJCF for MuJoCo
     print("\n[2/2] Converting URDF → MJCF for MuJoCo...")
-    from embodied_gen.data.asset_converter import cvt_embodiedgen_asset_to_anysim
-    from embodied_gen.utils.enum import AssetType
+    from asset_gen.data.asset_converter import cvt_asset_gen_asset_to_anysim
+    from asset_gen.utils.enum import AssetType
 
     mjcf_dir = os.path.join(os.path.dirname(urdf_path), "mjcf")
-    asset_paths = cvt_embodiedgen_asset_to_anysim(
+    asset_paths = cvt_asset_gen_asset_to_anysim(
         urdf_files=[urdf_path],
         target_dirs=[mjcf_dir],
         target_type=AssetType.MJCF,

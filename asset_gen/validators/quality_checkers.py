@@ -20,8 +20,8 @@ import random
 
 import json_repair
 from PIL import Image
-from embodied_gen.utils.gpt_clients import GPT_CLIENT, GPTclient
-from embodied_gen.validators.aesthetic_predictor import AestheticPredictor
+from asset_gen.utils.gpt_clients import GPT_CLIENT, GPTclient
+from asset_gen.validators.aesthetic_predictor import AestheticPredictor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class BaseChecker:
             flag = None
             response = (
                 "Error when calling GPT api, check config in "
-                "`embodied_gen/utils/gpt_config.yaml` or net connection."
+                "`asset_gen/utils/gpt_config.yaml` or net connection."
             )
         else:
             flag = "YES" in response
@@ -243,7 +243,7 @@ class ImageAestheticChecker(BaseChecker):
 
     Example:
         ```py
-        from embodied_gen.validators.quality_checkers import ImageAestheticChecker
+        from asset_gen.validators.quality_checkers import ImageAestheticChecker
         checker = ImageAestheticChecker(thresh=4.5)
         flag, score = checker(["image1.png", "image2.png"])
         print("Aesthetic OK:", flag, "Score:", score)

@@ -33,9 +33,9 @@ docker exec -it ${CONTAINER} bash
 
 ## ✅ Setup GPT Agent
 
-Update the API key in file: `embodied_gen/utils/gpt_config.yaml`.
+Update the API key in file: `asset_gen/utils/gpt_config.yaml`.
 
 You can choose between two backends for the GPT agent:
 
 - **`gpt-4o`** (Recommended) – Use this if you have access to **Azure OpenAI**.
-- **`qwen2.5-vl`** – An alternative with free usage via OpenRouter, apply a free key [here](https://openrouter.ai/settings/keys) and update `api_key` in `embodied_gen/utils/gpt_config.yaml` (50 free requests per day)
+- **`qwen2.5-vl`** – An alternative with free usage via OpenRouter, apply a free key [here](https://openrouter.ai/settings/keys) and update `api_key` in `asset_gen/utils/gpt_config.yaml` (50 free requests per day)

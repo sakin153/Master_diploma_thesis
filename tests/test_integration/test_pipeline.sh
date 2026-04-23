@@ -24,6 +24,6 @@ layout-cli --task_descs "Place the pen in the mug on the desk" \
 --output_root "${output_dir}/layouts_gen" --insert_robot
 
 
-python embodied_gen/scripts/compose_layout.py \
+python asset_gen/scripts/compose_layout.py \
 --layout_path "outputs/layouts_gen/task_0000/layout.json" \
 --output_dir "outputs/layouts_gen/task_0000/recompose" --insert_robot

@@ -82,13 +82,13 @@ done
 
 # Step 1: Text-to-Image
 echo ${prompt_args}
-eval python3 embodied_gen/scripts/text2image.py \
+eval python3 asset_gen/scripts/text2image.py \
     --prompts ${prompt_args} \
     --output_root "${output_root}/images" \
     --seed ${seed}
 
 # Step 2: Image-to-3D
-python3 embodied_gen/scripts/imageto3d.py \
+python3 asset_gen/scripts/imageto3d.py \
     --image_root "${output_root}/images" \
     --output_root "${output_root}/asset3d" \
     --asset_type ${asset_type_args}

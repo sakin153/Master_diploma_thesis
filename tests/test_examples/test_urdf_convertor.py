@@ -14,8 +14,8 @@
 # implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-from embodied_gen.utils.gpt_clients import GPT_CLIENT
-from embodied_gen.validators.urdf_convertor import URDFGenerator
+from asset_gen.utils.gpt_clients import GPT_CLIENT
+from asset_gen.validators.urdf_convertor import URDFGenerator
 
 
 def test_urdf_convertor():

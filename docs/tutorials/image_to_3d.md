@@ -5,7 +5,7 @@ Generate **physically plausible 3D assets** from a single input image, supportin
 ---
 
 ## ⚡ Command-Line Usage
-Support the use of [SAM3D](https://github.com/facebookresearch/sam-3d-objects) or [TRELLIS](https://github.com/microsoft/TRELLIS) as 3D generation model, modify `IMAGE3D_MODEL` in `embodied_gen/scripts/imageto3d.py` to switch model.
+Support the use of [SAM3D](https://github.com/facebookresearch/sam-3d-objects) or [TRELLIS](https://github.com/microsoft/TRELLIS) as 3D generation model, modify `IMAGE3D_MODEL` in `asset_gen/scripts/imageto3d.py` to switch model.
 
 ```bash
 img3d-cli --image_path apps/assets/example_image/sample_00.jpg \

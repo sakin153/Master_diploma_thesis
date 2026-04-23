@@ -20,7 +20,7 @@ import tempfile
 from time import time
 
 import pytest
-from embodied_gen.data.convex_decomposer import decompose_convex_mesh
+from asset_gen.data.convex_decomposer import decompose_convex_mesh
 
 logger = logging.getLogger(__name__)
 

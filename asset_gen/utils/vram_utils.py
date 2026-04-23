@@ -2,7 +2,7 @@ import gc
 
 import torch
 
-from embodied_gen.utils.log import logger
+from asset_gen.utils.log import logger
 
 __all__ = ["log_vram", "free_vram"]
 

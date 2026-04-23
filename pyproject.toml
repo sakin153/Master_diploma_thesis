@@ -3,10 +3,10 @@ requires = ["setuptools", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["embodied_gen"]
+packages = ["asset_gen"]
 
 [project]
-name = "embodied_gen"
+name = "asset_gen"
 version = "v0.1.7"
 readme = "README.md"
 license = "Apache-2.0"
@@ -31,10 +31,10 @@ dev = [
 ]
 
 [project.scripts]
-drender-cli = "embodied_gen.data.differentiable_render:entrypoint"
-backproject-cli = "embodied_gen.data.backproject_v2:entrypoint"
-img3d-cli = "embodied_gen.scripts.imageto3d:entrypoint"
-text3d-cli = "embodied_gen.scripts.textto3d:text_to_3d"
+drender-cli = "asset_gen.data.differentiable_render:entrypoint"
+backproject-cli = "asset_gen.data.backproject_v2:entrypoint"
+img3d-cli = "asset_gen.scripts.imageto3d:entrypoint"
+text3d-cli = "asset_gen.scripts.textto3d:text_to_3d"
 
 [tool.pydocstyle]
 match = '(?!test_).*(?!_pb2)\.py'
@@ -55,5 +55,5 @@ skip-string-normalization = true
 line_length = 79
 profile = 'black'
 no_lines_before = 'FIRSTPARTY'
-known_first_party = ['embodied_gen']
+known_first_party = ['asset_gen']
 skip = "thirdparty/"

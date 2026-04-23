@@ -2,11 +2,11 @@ from typing import Literal
 
 import pytest
 from huggingface_hub import snapshot_download
-from embodied_gen.data.asset_converter import (
+from asset_gen.data.asset_converter import (
     AssetConverterFactory,
-    cvt_embodiedgen_asset_to_anysim,
+    cvt_asset_gen_asset_to_anysim,
 )
-from embodied_gen.utils.enum import AssetType, SimAssetMapper
+from asset_gen.utils.enum import AssetType, SimAssetMapper
 
 
 @pytest.fixture(scope="session")
@@ -64,7 +64,7 @@ def test_MeshtoUSDConverter(data_dir):
     assert output_file.stat().st_size > 0
 
 
-def test_cvt_embodiedgen_asset_to_anysim(
+def test_cvt_asset_gen_asset_to_anysim(
     simulator_name: Literal[
         "isaacsim",
         "isaacgym",
@@ -74,7 +74,7 @@ def test_cvt_embodiedgen_asset_to_anysim(
         "mujoco",
     ] = "mujoco",
 ):
-    dst_asset_path = cvt_embodiedgen_asset_to_anysim(
+    dst_asset_path = cvt_asset_gen_asset_to_anysim(
         urdf_files=[
             "outputs/embodiedgen_assets/demo_assets/remote_control/result/remote_control.urdf",
         ],

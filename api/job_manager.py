@@ -224,14 +224,14 @@ class JobManager:
             root_logger.removeHandler(log_handler)
 
     def _execute(self, job_id: str) -> dict[str, ItemFiles]:
-        from embodied_gen.data.asset_converter import (
-            cvt_embodiedgen_asset_to_anysim,
+        from asset_gen.data.asset_converter import (
+            cvt_asset_gen_asset_to_anysim,
         )
-        from embodied_gen.scripts.textto3d import (
+        from asset_gen.scripts.textto3d import (
             GenerateItem,
             text_to_3d,
         )
-        from embodied_gen.utils.enum import AssetType
+        from asset_gen.utils.enum import AssetType
 
         req_path = os.path.join(
             self.output_root, job_id, "request.json"
@@ -317,7 +317,7 @@ class JobManager:
                 mjcf_dir = os.path.join(
                     os.path.dirname(urdf_path), "mjcf"
                 )
-                asset_paths = cvt_embodiedgen_asset_to_anysim(
+                asset_paths = cvt_asset_gen_asset_to_anysim(
                     urdf_files=[urdf_path],
                     target_dirs=[mjcf_dir],
                     target_type=AssetType.MJCF,

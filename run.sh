@@ -32,8 +32,8 @@ if ! python -c "import torch" 2>/dev/null; then
 fi
 
 # Убеждаемся, что пакет установлен в режиме разработки
-if ! python -c "import embodied_gen" 2>/dev/null; then
-    echo "[INFO] Устанавливаем embodied_gen..."
+if ! python -c "import asset_gen" 2>/dev/null; then
+    echo "[INFO] Устанавливаем asset_gen..."
     pip install --no-deps -e .
 fi
 

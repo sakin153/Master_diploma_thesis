@@ -139,7 +139,7 @@ pip install --no-deps -e .
 Проверка установки проекта:
 
 ```bash
-python -c "import embodied_gen; print('EmbodiedGen OK')"
+python -c "import asset_gen; print('EmbodiedGen OK')"
 ```
 
 ---
@@ -170,7 +170,7 @@ ollama pull qwen3:8b        # ~5 GB, текстовая
 curl http://localhost:11434/api/tags   # должен вернуть JSON со списком моделей
 ```
 
-4. Отредактировать [embodied_gen/utils/gpt_config.yaml](embodied_gen/utils/gpt_config.yaml):
+4. Отредактировать [asset_gen/utils/gpt_config.yaml](asset_gen/utils/gpt_config.yaml):
 
 ```yaml
 agent_type: "ollama"
@@ -346,7 +346,7 @@ outputs/generated/
 Если у тебя уже есть изображение:
 
 ```bash
-python -m embodied_gen.scripts.imageto3d \
+python -m asset_gen.scripts.imageto3d \
   --image_path /path/to/your/image.png \
   --output_root outputs/my_object
 ```
@@ -355,7 +355,7 @@ python -m embodied_gen.scripts.imageto3d \
 
 ## 12. Переключение 3D-модели
 
-В файле [embodied_gen/scripts/imageto3d.py](embodied_gen/scripts/imageto3d.py) строка 53:
+В файле [asset_gen/scripts/imageto3d.py](asset_gen/scripts/imageto3d.py) строка 53:
 
 ```python
 IMAGE3D_MODEL = "HUNYUAN3D"   # активная модель (рекомендуется для 8 GB)
@@ -391,7 +391,7 @@ python generate.py "a wooden chair"
 
 2. Уменьшить размер текстуры (по умолчанию 1024):
    ```bash
-   python -m embodied_gen.scripts.imageto3d \
+   python -m asset_gen.scripts.imageto3d \
      --image_path image.png \
      --output_root output \
      --texture_size 512
@@ -670,14 +670,14 @@ pip install --no-deps -e .
 Проверка:
 
 ```powershell
-python -c "import embodied_gen; print('EmbodiedGen OK')"
+python -c "import asset_gen; print('EmbodiedGen OK')"
 ```
 
 ---
 
 ## 9. Настройка LLM (Windows)
 
-Отредактировать файл `embodied_gen\utils\gpt_config.yaml`.
+Отредактировать файл `asset_gen\utils\gpt_config.yaml`.
 
 ### Вариант А — Ollama (рекомендуется)
 
@@ -833,7 +833,7 @@ outputs\generated\
 ### Вариант В — Только Image → 3D
 
 ```powershell
-python -m embodied_gen.scripts.imageto3d `
+python -m asset_gen.scripts.imageto3d `
   --image_path C:\path\to\image.png `
   --output_root outputs\my_object
 ```
@@ -1017,7 +1017,7 @@ Windows: скачать с `https://ollama.com/download/windows`, затем `ol
 
 ## Шаг 3 — Настроить LLM
 
-Отредактировать [embodied_gen/utils/gpt_config.yaml](embodied_gen/utils/gpt_config.yaml)
+Отредактировать [asset_gen/utils/gpt_config.yaml](asset_gen/utils/gpt_config.yaml)
 (монтируется в контейнер как volume — пересборки не нужно):
 
 ```yaml

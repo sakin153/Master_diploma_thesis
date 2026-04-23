@@ -26,7 +26,7 @@ from shutil import copy, copytree, rmtree
 
 import trimesh
 from scipy.spatial.transform import Rotation
-from embodied_gen.utils.enum import AssetType
+from asset_gen.utils.enum import AssetType
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,12 +37,12 @@ __all__ = [
     "MeshtoMJCFConverter",
     "MeshtoUSDConverter",
     "URDFtoUSDConverter",
-    "cvt_embodiedgen_asset_to_anysim",
+    "cvt_asset_gen_asset_to_anysim",
     "PhysicsUSDAdder",
 ]
 
 
-def cvt_embodiedgen_asset_to_anysim(
+def cvt_asset_gen_asset_to_anysim(
     urdf_files: list[str],
     target_dirs: list[str],
     target_type: AssetType,
@@ -57,10 +57,10 @@ def cvt_embodiedgen_asset_to_anysim(
 
     Example:
         ```py
-        from embodied_gen.data.asset_converter import cvt_embodiedgen_asset_to_anysim
-        from embodied_gen.utils.enum import AssetType
+        from asset_gen.data.asset_converter import cvt_asset_gen_asset_to_anysim
+        from asset_gen.utils.enum import AssetType
 
-        dst_asset_path = cvt_embodiedgen_asset_to_anysim(
+        dst_asset_path = cvt_asset_gen_asset_to_anysim(
             urdf_files=[
                 "path1_to_embodiedgen_asset/asset.urdf",
                 "path2_to_embodiedgen_asset/asset.urdf",
@@ -868,8 +868,8 @@ class AssetConverterFactory:
 
     Example:
         ```py
-        from embodied_gen.data.asset_converter import AssetConverterFactory
-        from embodied_gen.utils.enum import AssetType
+        from asset_gen.data.asset_converter import AssetConverterFactory
+        from asset_gen.utils.enum import AssetType
 
         converter = AssetConverterFactory.create(
             target_type=AssetType.USD, source_type=AssetType.MESH

@@ -15,7 +15,7 @@ WORKDIR /app
 # COPY thirdparty/sam3d   thirdparty/sam3d
 
 # Исходный код проекта
-COPY embodied_gen embodied_gen
+COPY asset_gen asset_gen
 COPY api          api
 COPY generate.py  generate.py
 COPY pyproject.toml setup.cfg MANIFEST.in ./

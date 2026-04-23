@@ -20,7 +20,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 from PIL import Image
-from embodied_gen.utils.gpt_clients import CONFIG_FILE, GPTclient
+from asset_gen.utils.gpt_clients import CONFIG_FILE, GPTclient
 
 
 @pytest.fixture(scope="module")

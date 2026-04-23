@@ -20,12 +20,12 @@ import tempfile
 from glob import glob
 
 import pytest
-from embodied_gen.utils.gpt_clients import GPT_CLIENT
-from embodied_gen.utils.process_media import (
+from asset_gen.utils.gpt_clients import GPT_CLIENT
+from asset_gen.utils.process_media import (
     combine_images_to_grid,
     render_asset3d,
 )
-from embodied_gen.validators.quality_checkers import (
+from asset_gen.validators.quality_checkers import (
     ImageAestheticChecker,
     ImageSegChecker,
     MeshGeoChecker,
@@ -80,7 +80,7 @@ def panoocc_checker():
 
 
 def test_geo_checker(geo_checker):
-    from embodied_gen.utils.process_media import combine_images_to_grid
+    from asset_gen.utils.process_media import combine_images_to_grid
 
     image_paths = glob(
         "outputs/layouts_gens3/task_0000/asset3d/pen/result/renders/image_color/*png"

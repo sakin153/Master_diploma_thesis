@@ -31,9 +31,9 @@ from segment_anything import (
     sam_model_registry,
 )
 from transformers import pipeline
-from embodied_gen.data.utils import resize_pil, trellis_preprocess
-from embodied_gen.utils.process_media import filter_small_connected_components
-from embodied_gen.validators.quality_checkers import ImageSegChecker
+from asset_gen.data.utils import resize_pil, trellis_preprocess
+from asset_gen.utils.process_media import filter_small_connected_components
+from asset_gen.validators.quality_checkers import ImageSegChecker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class SAMRemover(object):
 
     Example:
         ```py
-        from embodied_gen.models.segment_model import SAMRemover
+        from asset_gen.models.segment_model import SAMRemover
         remover = SAMRemover(model_type="vit_h")
         result = remover("input.jpg", "output.png")
         ```
@@ -319,7 +319,7 @@ class RembgRemover(object):
 
     Example:
         ```py
-        from embodied_gen.models.segment_model import RembgRemover
+        from asset_gen.models.segment_model import RembgRemover
         remover = RembgRemover()
         result = remover("input.jpg", "output.png")
         ```
@@ -364,7 +364,7 @@ class BMGG14Remover(object):
 
     Example:
         ```py
-        from embodied_gen.models.segment_model import BMGG14Remover
+        from asset_gen.models.segment_model import BMGG14Remover
         remover = BMGG14Remover()
         result = remover("input.jpg", "output.png")
         ```
@@ -510,7 +510,7 @@ if __name__ == "__main__":
 
     remover = BMGG14Remover()
     clean_image = remover("./camera.jpeg", "./seg.png")
-    from embodied_gen.utils.process_media import (
+    from asset_gen.utils.process_media import (
         keep_largest_connected_component,
     )
 

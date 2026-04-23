@@ -73,12 +73,12 @@ You will get the following results:
 
 Kolors Model CLI (Supports Chinese & English Prompts):
 ```bash
-bash embodied_gen/scripts/textto3d.sh \
+bash asset_gen/scripts/textto3d.sh \
     --prompts "A globe with wooden base and latitude and longitude lines" "橙色电动手钻，有磨损细节" \
     --output_root outputs/textto3d_k
 ```
 
-> Models with more permissive licenses can be found in `embodied_gen/models/image_comm_model.py`.
+> Models with more permissive licenses can be found in `asset_gen/models/image_comm_model.py`.
 
 
 The generated results are organized as follows:

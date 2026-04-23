@@ -110,7 +110,7 @@ def build_text2img_ip_pipeline(
 
     Example:
         ```py
-        from embodied_gen.models.text_model import build_text2img_ip_pipeline
+        from asset_gen.models.text_model import build_text2img_ip_pipeline
         pipe = build_text2img_ip_pipeline("weights/Kolors", ref_scale=0.3)
         ```
     """
@@ -178,7 +178,7 @@ def build_text2img_pipeline(
 
     Example:
         ```py
-        from embodied_gen.models.text_model import build_text2img_pipeline
+        from asset_gen.models.text_model import build_text2img_pipeline
         pipe = build_text2img_pipeline("weights/Kolors")
         ```
     """
@@ -239,7 +239,7 @@ def text2img_gen(
 
     Example:
         ```py
-        from embodied_gen.models.text_model import text2img_gen
+        from asset_gen.models.text_model import text2img_gen
         images = text2img_gen(prompt="banana", n_sample=3, guidance_scale=7.5)
         images[0].save("banana.png")
         ```
