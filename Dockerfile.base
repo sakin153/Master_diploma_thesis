@@ -17,13 +17,12 @@ ENV CUDA_HOME=/usr/local/cuda-11.8 \
     LD_LIBRARY_PATH=/usr/local/cuda-11.8/lib64:$LD_LIBRARY_PATH \
     DEBIAN_FRONTEND=noninteractive \
     TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6" \
-    TCNN_CUDA_ARCHITECTURES=75,80,86 \
     TOKENIZERS_PARALLELISM=false \
     PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# ── 1. xformers (torch уже есть в базовом образе) ────────────────────
+# ── 1. xformers ──────────────────────────────────────────────────────
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip==22.3.1 && \
+    pip install --upgrade pip && \
     pip install \
         xformers==0.0.27.post2 \
         --index-url https://download.pytorch.org/whl/cu118
@@ -33,7 +32,7 @@ COPY requirements.txt /tmp/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r /tmp/requirements.txt --use-deprecated=legacy-resolver
 
-# ── 3. Лёгкие git-пакеты (без компиляции, по одному во избежание конфликтов) ──
+# ── 3. Git-пакеты без колёс ──────────────────────────────────────────
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-deps "utils3d@git+https://github.com/EasternJournalist/utils3d.git@9a4eb15"
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -42,46 +41,33 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install "segment-anything@git+https://github.com/facebookresearch/segment-anything.git@dca509f"
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-deps "kolors@git+https://github.com/HochCC/Kolors.git"
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-deps "MoGe@git+https://github.com/microsoft/MoGe.git@a8c3734"
 
-# ── 4. kaolin — pre-built wheel (было ~10 мин компиляции) ───────────
+# ── 4. kaolin — pre-built wheel ──────────────────────────────────────
 RUN --mount=type=cache,target=/root/.cache/pip \
     PY_TAG=$(python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')") && \
     pip install \
         "https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118/kaolin-0.16.0-${PY_TAG}-${PY_TAG}-linux_x86_64.whl"
 
-# ── 5. pytorch3d — компиляция из исходников (~15 мин, pre-built для py311 недоступен) ──
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
-
-# ── 6. gsplat — PyPI wheel (было ~8 мин компиляции) ─────────────────
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install gsplat==1.5.3
-
-# ── 7. nvdiffrast — PyPI wheel ───────────────────────────────────────
+# ── 5. nvdiffrast ─────────────────────────────────────────────────────
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install "nvdiffrast@git+https://github.com/NVlabs/nvdiffrast.git@729261d"
 
-# ── 8. diff-gaussian-rasterization — единственное что остаётся компилировать (~5 мин) ──
-RUN git clone --recursive https://github.com/autonomousvision/mip-splatting.git /tmp/mip && \
-    pip install /tmp/mip/submodules/diff-gaussian-rasterization && \
-    rm -rf /tmp/mip
-
-# ── 9. API ───────────────────────────────────────────────────────────
+# ── 6. API ───────────────────────────────────────────────────────────
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install fastapi==0.115.0 "uvicorn[standard]==0.30.0"
 
-# ── 10. Hunyuan3D-2 (3D-генерация) ──────────────────────────────────
-# Клонируем и устанавливаем как обычный пакет (не editable).
-# Оставляем исходники в /opt/Hunyuan3D-2 — hy3dgen их читает при запуске.
+# ── 7. Hunyuan3D-2 — клонируем и устанавливаем ───────────────────────
 RUN git clone --depth=1 \
         https://github.com/Tencent-Hunyuan/Hunyuan3D-2 /opt/Hunyuan3D-2 && \
     pip install --no-cache-dir /opt/Hunyuan3D-2
 
-# ── 11. Пере-пинить transformers после Hunyuan3D ─────────────────────
-# Hunyuan3D тянет transformers>=4.44 где удалили FLAX_WEIGHTS_NAME,
-# что ломает diffusers==0.30.3. Возвращаем совместимую версию.
+# ── 8. Компилируем texture-расширения Hunyuan3D-2 ────────────────────
+RUN cd /opt/Hunyuan3D-2/hy3dgen/texgen/custom_rasterizer && \
+    python setup.py install
+RUN cd /opt/Hunyuan3D-2/hy3dgen/texgen/differentiable_renderer && \
+    python setup.py install
+
+# ── 9. Пере-пинить transformers после Hunyuan3D ──────────────────────
 RUN pip install "transformers==4.42.4"
 
 RUN mkdir -p /app/outputs/jobs /app/weights
