@@ -72,24 +72,28 @@ RUN git clone --recursive https://github.com/autonomousvision/mip-splatting.git 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install fastapi==0.115.0 "uvicorn[standard]==0.30.0"
 
-# ── 10. Hunyuan3D-2 (shape + texture generation) ─────────────────────
-# Клонируем и устанавливаем как обычный пакет (не editable).
-# Оставляем исходники в /opt/Hunyuan3D-2 — hy3dgen их читает при запуске.
+# ── 10. Hunyuan3D-2 клонирование ─────────────────────────────────────
+# Разбито на три отдельных слоя чтобы при сбое не переклонировать заново.
 RUN git clone --depth=1 \
-        https://github.com/Tencent-Hunyuan/Hunyuan3D-2 /opt/Hunyuan3D-2 && \
-    pip install --no-cache-dir /opt/Hunyuan3D-2
+        https://github.com/Tencent-Hunyuan/Hunyuan3D-2 /opt/Hunyuan3D-2
 
-# ── 10a. C++ расширения texgen (нужны для Hunyuan3D-Paint) ───────────
-# custom_rasterizer — CUDA-расширение (растеризатор для наложения текстур).
-# mesh_processor    — pybind11-расширение (UV-развёртка меша).
+# ── 10a. Установка Python-пакета hy3dgen ─────────────────────────────
+# Используем pip-кэш (не --no-cache-dir) — ускоряет повторные сборки.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install /opt/Hunyuan3D-2
+
+# ── 10b. C++ расширения texgen (нужны для Hunyuan3D-Paint) ───────────
+# custom_rasterizer — CUDA-растеризатор для bake текстур (~2 мин).
+# mesh_processor    — pybind11 UV-развёртка меша (~30 сек).
 RUN cd /opt/Hunyuan3D-2/hy3dgen/texgen/custom_rasterizer && \
-    python setup.py install && \
-    cd /opt/Hunyuan3D-2/hy3dgen/texgen/differentiable_renderer && \
+    python setup.py install
+RUN cd /opt/Hunyuan3D-2/hy3dgen/texgen/differentiable_renderer && \
     python setup.py install
 
 # ── 11. Пере-пинить transformers после Hunyuan3D ─────────────────────
 # Hunyuan3D тянет transformers>=4.44 где удалили FLAX_WEIGHTS_NAME,
 # что ломает diffusers==0.30.3. Возвращаем совместимую версию.
-RUN pip install "transformers==4.42.4"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install "transformers==4.42.4"
 
 RUN mkdir -p /app/outputs/jobs /app/weights
