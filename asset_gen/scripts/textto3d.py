@@ -238,6 +238,7 @@ def text_to_3d(
     image_width: int = 768,
     keep_intermediate: bool = True,
     disable_decompose_convex: bool = False,
+    enable_texture: bool = False,
 ) -> dict:
     """
     Batch generate 3D assets from a list of GenerateItem.
@@ -356,7 +357,9 @@ def text_to_3d(
     _release_3d_pipeline()
 
     # ── Phase 3: texture ALL meshes (paint model loaded once) ───────────────
-    if os.environ.get("HUNYUAN3D_TEXTURE", "0") == "1":
+    # enable_texture from request body takes priority; env var is a global fallback.
+    use_texture = enable_texture or os.environ.get("HUNYUAN3D_TEXTURE", "0") == "1"
+    if use_texture:
         logger.info("Phase 3: applying Hunyuan3D-Paint-Turbo texture to all meshes...")
         log_vram("before texture pipeline load")
         try:

@@ -5,6 +5,7 @@ Usage:
     python generate.py "a red ceramic mug"
     python generate.py "small wooden chair" --output outputs/chair --name chair
     python generate.py "iron dumbbell" --seed_img 42 --seed_3d 0
+    python generate.py "a wooden chair" --texture
 """
 
 import argparse
@@ -15,9 +16,14 @@ import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Generate a 3D model from a text prompt and export to MuJoCo MJCF."
+        description=(
+            "Generate a 3D model from a text prompt "
+            "and export to MuJoCo MJCF."
+        )
     )
-    parser.add_argument("prompt", type=str, help="Text description of the object.")
+    parser.add_argument(
+        "prompt", type=str, help="Text description of the object."
+    )
     parser.add_argument(
         "--output", type=str, default="outputs/generated",
         help="Output directory (default: outputs/generated).",
@@ -45,7 +51,14 @@ def parse_args():
     parser.add_argument(
         "--model", type=str, default="sdxl-turbo",
         choices=["sdxl-turbo", "kolors", "sd35", "flux", "chroma", "cosmos"],
-        help="Text-to-image model. Use 'sdxl-turbo' for 8GB GPUs (default).",
+        help="Text-to-image model (default: sdxl-turbo for 8 GB GPU).",
+    )
+    parser.add_argument(
+        "--texture", action="store_true",
+        help=(
+            "Apply Hunyuan3D-Paint-Turbo texture after mesh generation "
+            "(~6 GB VRAM, ~2-3 min extra)."
+        ),
     )
     parser.add_argument(
         "--skip_mjcf", action="store_true",
@@ -59,7 +72,6 @@ def find_urdf(result_dir: str, name: str) -> str | None:
     matches = glob.glob(pattern, recursive=True)
     if not matches:
         return None
-    # Prefer exact name match
     for path in matches:
         if os.path.basename(path) == f"{name}.urdf":
             return path
@@ -70,31 +82,40 @@ def main():
     args = parse_args()
 
     if args.name is None:
-        args.name = args.prompt.split()[0].lower().replace(",", "").replace(".", "")
+        args.name = (
+            args.prompt.split()[0].lower()
+            .replace(",", "").replace(".", "")
+        )
 
     # Set model before textto3d is imported (reads TEXT_MODEL at module level)
     os.environ["TEXT_MODEL"] = args.model
 
-    print(f"\n=== EmbodiedGen: text → 3D → MuJoCo ===")
-    print(f"  Prompt : {args.prompt}")
-    print(f"  Name   : {args.name}")
-    print(f"  Model  : {args.model}")
-    print(f"  Output : {args.output}")
+    print("\n=== EmbodiedGen: text → 3D → MuJoCo ===")
+    print(f"  Prompt  : {args.prompt}")
+    print(f"  Name    : {args.name}")
+    print(f"  Model   : {args.model}")
+    print(f"  Texture : {args.texture}")
+    print(f"  Output  : {args.output}")
     print("=" * 40)
 
     # Step 1: Text → Image → 3D mesh → URDF
-    print("\n[1/2] Generating 3D asset from prompt...")
-    from asset_gen.scripts.textto3d import text_to_3d
+    steps = "1/3" if not args.skip_mjcf else "1/2"
+    print(f"\n[{steps}] Generating 3D asset from prompt...")
+
+    from asset_gen.scripts.textto3d import GenerateItem, text_to_3d
 
     results = text_to_3d(
-        prompts=[args.prompt],
-        asset_names=[args.name],
+        items=[GenerateItem(
+            name=args.name,
+            prompt=args.prompt,
+            seed_img=args.seed_img,
+            seed_3d=args.seed_3d,
+        )],
         output_root=args.output,
-        seed_img=args.seed_img,
-        seed_3d=args.seed_3d,
         n_image_retry=args.n_image_retry,
         n_asset_retry=args.n_asset_retry,
         n_pipe_retry=1,
+        enable_texture=args.texture,
     )
 
     asset_rel = results.get("assets", {}).get(args.name)
@@ -128,10 +149,13 @@ def main():
     )
 
     mjcf_path = asset_paths.get(urdf_path)
+    mesh_path = os.path.join(
+        os.path.dirname(urdf_path), "mesh", f"{args.name}.obj"
+    )
     print(f"  MJCF  → {mjcf_path}")
 
     print("\n=== Done ===")
-    print(f"  3D mesh : {os.path.join(os.path.dirname(urdf_path), 'mesh', args.name + '.obj')}")
+    print(f"  3D mesh : {mesh_path}")
     print(f"  URDF    : {urdf_path}")
     print(f"  MJCF    : {mjcf_path}")
     print()

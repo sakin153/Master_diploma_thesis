@@ -287,6 +287,8 @@ class JobManager:
                 )
             )
 
+        enable_texture = bool(req_data.get("enable_texture", False))
+
         batch_results = text_to_3d(
             items=gen_items,
             output_root=output_root,
@@ -298,6 +300,7 @@ class JobManager:
             n_img_sample=n_img_sample,
             image_height=image_height,
             image_width=image_width,
+            enable_texture=enable_texture,
         )
 
         # Convert URDF → MJCF and build ItemFiles for each object

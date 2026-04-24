@@ -63,6 +63,14 @@ class GenerateRequest(BaseModel):
     n_img_sample: int = Field(1, ge=1, le=4)
     image_height: int = Field(768, ge=256, le=2048)
     image_width: int = Field(768, ge=256, le=2048)
+    enable_texture: bool = Field(
+        False,
+        description=(
+            "Apply Hunyuan3D-Paint-Turbo texture after mesh generation. "
+            "Requires ~6 GB VRAM and adds ~2-3 min per object. "
+            "Shape and texture models are loaded sequentially, never simultaneously."
+        ),
+    )
 
 
 class ItemFiles(BaseModel):
