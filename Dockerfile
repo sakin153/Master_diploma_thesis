@@ -33,4 +33,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Базовый pytorch/pytorch-образ задаёт ENTRYPOINT=/opt/nvidia/nvidia_entrypoint.sh,
+# который падает с "exec format error" на Windows/WSL2. Переопределяем явно.
+ENTRYPOINT ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
