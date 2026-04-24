@@ -68,7 +68,25 @@ class GenerateRequest(BaseModel):
         description=(
             "Apply Hunyuan3D-Paint-Turbo texture after mesh generation. "
             "Requires ~6 GB VRAM and adds ~2-3 min per object. "
-            "Shape and texture models are loaded sequentially, never simultaneously."
+            "Shape and texture models are loaded sequentially, "
+            "never simultaneously."
+        ),
+    )
+    skip_qa: bool = Field(
+        False,
+        description=(
+            "Skip all LLM-based quality checks (SemanticConsist, ImageSeg, "
+            "TextGenAlign, MeshGeo, ImageAesthetic). Speeds up generation by "
+            "~30-60 s per object. Recommended for fast iteration."
+        ),
+    )
+    disable_decompose_convex: bool = Field(
+        False,
+        description=(
+            "Skip convex decomposition of the mesh when building URDF. "
+            "Speeds up URDF generation significantly. The mesh will use a "
+            "single convex hull instead of per-part decomposition — "
+            "less accurate physics but much faster."
         ),
     )
 

@@ -102,6 +102,7 @@ def process_single_image(
     keep_intermediate: bool = False,
     disable_decompose_convex: bool = False,
     texture_size: int = 1024,
+    skip_qa: bool = False,
 ) -> dict:
     """Process one image → OBJ + GLB + URDF. Returns dict with file paths."""
     filename = os.path.basename(image_path).split(".")[0]
@@ -195,20 +196,25 @@ def process_single_image(
     trimesh.load(mesh_out_final).export(mesh_out_final.replace(".obj", ".glb"))
 
     # ── Stage 6b: Quality check ──────────────────────────────────────────────
-    image_dir = f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
-    image_paths = glob(f"{image_dir}/*.png")
-    images_list = []
-    checkers = _get_checkers()
-    for checker in checkers:
-        images = combine_images_to_grid(image_paths)
-        if isinstance(checker, ImageSegChecker):
-            images = [
-                f"{output_root}/{filename}_raw.png",
-                f"{output_root}/{filename}_cond.png",
-            ]
-        images_list.append(images)
-    qa_results = BaseChecker.validate(checkers, images_list)
-    urdf_convertor.add_quality_tag(urdf_path, qa_results)
+    if skip_qa:
+        logger.info("Skipping QA checks (skip_qa=True).")
+    else:
+        image_dir = (
+            f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
+        )
+        image_paths = glob(f"{image_dir}/*.png")
+        images_list = []
+        checkers = _get_checkers()
+        for checker in checkers:
+            images = combine_images_to_grid(image_paths)
+            if isinstance(checker, ImageSegChecker):
+                images = [
+                    f"{output_root}/{filename}_raw.png",
+                    f"{output_root}/{filename}_cond.png",
+                ]
+            images_list.append(images)
+        qa_results = BaseChecker.validate(checkers, images_list)
+        urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
     # ── Stage 6: Organize results ────────────────────────────────────────────
     result_dir = f"{output_root}/result"

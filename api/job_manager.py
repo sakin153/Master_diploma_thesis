@@ -288,6 +288,10 @@ class JobManager:
             )
 
         enable_texture = bool(req_data.get("enable_texture", False))
+        skip_qa = bool(req_data.get("skip_qa", False))
+        disable_decompose_convex = bool(
+            req_data.get("disable_decompose_convex", False)
+        )
 
         batch_results = text_to_3d(
             items=gen_items,
@@ -301,6 +305,8 @@ class JobManager:
             image_height=image_height,
             image_width=image_width,
             enable_texture=enable_texture,
+            skip_qa=skip_qa,
+            disable_decompose_convex=disable_decompose_convex,
         )
 
         # Convert URDF → MJCF and build ItemFiles for each object

@@ -98,6 +98,7 @@ def _generate_image_for_item(
     n_img_sample: int,
     image_height: int,
     image_width: int,
+    skip_qa: bool = False,
 ) -> Optional[str]:
     """
     Return path to a ready background-removed PNG for this item.
@@ -187,6 +188,11 @@ def _generate_image_for_item(
         )
         for raw_image in images:
             seg_image = BG_REMOVER(raw_image)
+            if skip_qa:
+                raw_image.save(out_path.replace(".png", "_raw.png"))
+                seg_image.save(out_path)
+                select_image = seg_image
+                break
             semantic_flag, sem_res = SEMANTIC_CHECKER(
                 item.prompt, [seg_image.convert("RGB")]
             )
@@ -239,6 +245,7 @@ def text_to_3d(
     keep_intermediate: bool = True,
     disable_decompose_convex: bool = False,
     enable_texture: bool = False,
+    skip_qa: bool = False,
 ) -> dict:
     """
     Batch generate 3D assets from a list of GenerateItem.
@@ -283,6 +290,7 @@ def text_to_3d(
             n_img_sample=n_img_sample,
             image_height=image_height,
             image_width=image_width,
+            skip_qa=skip_qa,
         )
 
     _release_pipe_img()
@@ -314,6 +322,7 @@ def text_to_3d(
                 n_retry=n_asset_retry,
                 keep_intermediate=keep_intermediate,
                 disable_decompose_convex=disable_decompose_convex,
+                skip_qa=skip_qa,
             )
             if not file_paths:
                 current_seed_3d = random.randint(0, 100000)
@@ -322,7 +331,7 @@ def text_to_3d(
             # QA on rendered views
             result_dir = file_paths.get("result_dir", "")
             obj_path = file_paths.get("obj")
-            if obj_path and os.path.exists(obj_path):
+            if obj_path and os.path.exists(obj_path) and not skip_qa:
                 image_path_list = render_asset3d(
                     obj_path,
                     output_root=result_dir,
