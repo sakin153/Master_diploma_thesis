@@ -79,8 +79,10 @@ RUN git clone --depth=1 \
 
 # ── 10a. Установка Python-пакета hy3dgen ─────────────────────────────
 # Используем pip-кэш (не --no-cache-dir) — ускоряет повторные сборки.
+# Gradio нужен только для демо-приложения Hunyuan3D — у нас FastAPI, удаляем.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install /opt/Hunyuan3D-2
+    pip install /opt/Hunyuan3D-2 && \
+    pip uninstall gradio -y
 
 # ── 10b. C++ расширения texgen (нужны для Hunyuan3D-Paint) ───────────
 # custom_rasterizer — CUDA-растеризатор для bake текстур (~2 мин).
