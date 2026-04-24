@@ -24,22 +24,27 @@ services:
       # Text-to-image модель (sdxl-turbo для 8GB GPU)
       TEXT_MODEL: ${TEXT_MODEL:-sd15}
 
-      # Hunyuan3D texture pipeline: "1" включить (нужно ~6 GB доп. VRAM), "0" выключить
+      # Hunyuan3D texture pipeline: "1" включить (последовательно после shape)
       HUNYUAN3D_TEXTURE: ${HUNYUAN3D_TEXTURE:-0}
 
-      # Пути внутри контейнера
+      # Пути внутри контейнера — фиксированные, хост-пути задаются через .env
       OUTPUT_ROOT: /app/outputs/jobs
       HF_HOME: /app/weights/hf_cache
+      HY3DGEN_MODELS: /app/weights/hy3dgen
       MODELSCOPE_CACHE: /app/weights/modelscope_cache
       TORCH_HOME: /app/weights/torch_cache
-      # rembg u2net model cache — persisted in volume to avoid re-downloading
       U2NET_HOME: /app/weights/u2net
       TOKENIZERS_PARALLELISM: "false"
       PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
 
     volumes:
-      - weights:/app/weights
-      - outputs:/app/outputs
+      # Хост-пути задаются в .env (скопируй из .env.example).
+      # По умолчанию — ./weights/*, что переиспользует уже скачанные модели.
+      - ${HF_CACHE_HOST:-./weights/hf_cache}:/app/weights/hf_cache
+      - ${HY3DGEN_CACHE_HOST:-./weights/hy3dgen}:/app/weights/hy3dgen
+      - ${TORCH_CACHE_HOST:-./weights/torch_cache}:/app/weights/torch_cache
+      - ${U2NET_CACHE_HOST:-./weights/u2net}:/app/weights/u2net
+      - ./outputs:/app/outputs
       - ./asset_gen/utils/gpt_config.yaml:/app/asset_gen/utils/gpt_config.yaml
 
     # Позволяет контейнеру обращаться к хостовому localhost (Ollama)
@@ -59,8 +64,4 @@ services:
 
     shm_size: "8gb"
 
-volumes:
-  weights:
-    driver: local
-  outputs:
-    driver: local
+# Именованные volumes удалены — используются bind mounts выше.

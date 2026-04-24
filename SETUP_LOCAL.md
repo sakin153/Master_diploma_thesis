@@ -238,12 +238,15 @@ gpt-4o:
 Добавить в `~/.bashrc` (или экспортировать перед каждым запуском):
 
 ```bash
-export TEXT_MODEL="sdxl-turbo"      # модель Text→Image (sdxl-turbo рекомендуется для 8 GB)
-export OUTPUT_ROOT="outputs/jobs"   # куда сохранять результаты
-export TORCH_HOME="weights/torch_cache"   # кэш весов torch
-export HF_HOME="weights/hf_cache"         # кэш HuggingFace
-export HUNYUAN3D_TEXTURE="1"        # "1" — включить генерацию текстур после меша
-                                    # "0" — выключить (быстрее, только геометрия)
+# Все пути относительны корню проекта — совпадают с bind mount в Docker.
+# Модели скачиваются один раз и используются и локально, и в Docker.
+export TEXT_MODEL="sdxl-turbo"             # sdxl-turbo рекомендуется для 8 GB GPU
+export OUTPUT_ROOT="outputs/jobs"          # куда сохранять результаты
+export HF_HOME="weights/hf_cache"          # кэш HuggingFace (~13-19 GB моделей)
+export TORCH_HOME="weights/torch_cache"    # кэш Torch (DINOv2, MoGe)
+export U2NET_HOME="weights/u2net"          # кэш rembg (u2net ~170 MB)
+export HUNYUAN3D_TEXTURE="1"              # "1" — включить генерацию текстур после меша
+                                           # "0" — выключить (быстрее, только геометрия)
 ```
 
 Применить:
@@ -251,6 +254,9 @@ export HUNYUAN3D_TEXTURE="1"        # "1" — включить генераци�
 ```bash
 source ~/.bashrc
 ```
+
+> **Совет:** При первом запуске через Docker модели скачаются в `weights/` на твоём ПК.
+> При локальном запуске (`python generate.py ...`) те же файлы будут использованы автоматически — повторная загрузка не нужна.
 
 > **Важно:** Shape-модель (~4 GB) и texture-модель (~6 GB) загружаются **последовательно**,
 > никогда одновременно. При `HUNYUAN3D_TEXTURE=1` на 8 GB GPU: shape генерируется → выгружается →
@@ -790,21 +796,24 @@ qwen2.5-vl:
 В **Anaconda PowerShell Prompt** перед каждым запуском:
 
 ```powershell
+# Все пути относительны корню проекта — совпадают с bind mount в Docker.
 $env:TEXT_MODEL        = "sdxl-turbo"
 $env:OUTPUT_ROOT       = "outputs/jobs"
-$env:TORCH_HOME        = "weights/torch_cache"
 $env:HF_HOME           = "weights/hf_cache"
-$env:HUNYUAN3D_TEXTURE = "1"    # "0" — выключить текстуры (~6 GB экономия)
+$env:TORCH_HOME        = "weights/torch_cache"
+$env:U2NET_HOME        = "weights/u2net"
+$env:HUNYUAN3D_TEXTURE = "1"    # "0" — выключить текстуры
 ```
 
 Чтобы не вводить каждый раз, сохрани их в файл `env.ps1` в папке проекта:
 
 ```powershell
-# env.ps1
+# env.ps1 — модели шарятся между Docker и локальным запуском
 $env:TEXT_MODEL        = "sdxl-turbo"
 $env:OUTPUT_ROOT       = "outputs/jobs"
-$env:TORCH_HOME        = "weights/torch_cache"
 $env:HF_HOME           = "weights/hf_cache"
+$env:TORCH_HOME        = "weights/torch_cache"
+$env:U2NET_HOME        = "weights/u2net"
 $env:HUNYUAN3D_TEXTURE = "1"
 ```
 

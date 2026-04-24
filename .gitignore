@@ -52,6 +52,7 @@ wheels*/
 node_modules
 
 # local files
+.env
 build.sh
 __pycache__/
 output*
