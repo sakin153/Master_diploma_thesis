@@ -6,6 +6,12 @@
 # ─────────────────────────────────────────────────────────────────────
 FROM embodiedgen-base:latest
 
+# libegl1 нужен для Open3D headless-рендеринга (render_video).
+# Без него Open3D падает с segfault (exit code 139) при попытке рендерить превью.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libegl1 libgles2 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Активная 3D-модель: HUNYUAN3D (установлена в базовом образе).
