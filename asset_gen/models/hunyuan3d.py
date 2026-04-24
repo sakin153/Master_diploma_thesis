@@ -1,7 +1,13 @@
 """Wrapper around the local Hunyuan3D-2 repository.
 
 Expects the repo at <project_root>/Hunyuan3D-2  (already present).
-Only shape generation (no texture) to stay within 8 GB VRAM.
+
+Two classes are exported:
+  Hunyuan3DInference  — shape generation (0.6B mini-turbo, ~4 GB VRAM)
+  Hunyuan3DTexture    — texture generation (1.3B paint-turbo, ~6 GB VRAM)
+
+They must NOT be loaded simultaneously — always release one before loading
+the other to stay within 8 GB VRAM.
 """
 
 import os
@@ -24,7 +30,7 @@ else:
     if _HY3D_LOCAL in sys.path:
         print("[DEBUG] Hunyuan3D-2 already in sys.path")
 
-__all__ = ["Hunyuan3DInference"]
+__all__ = ["Hunyuan3DInference", "Hunyuan3DTexture"]
 
 
 class _MeshAdapter:
@@ -175,4 +181,61 @@ class Hunyuan3DInference:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                     print("[DEBUG] GPU cache cleared")
+            raise
+
+
+class Hunyuan3DTexture:
+    """Apply texture to a trimesh using Hunyuan3D-Paint-Turbo (~6 GB VRAM).
+
+    Uses hunyuan3d-paint-v2-0-turbo (distillation) — smallest/fastest paint
+    model available.  Must be loaded AFTER the shape pipeline is released.
+    """
+
+    def __init__(
+        self,
+        model_path: str = "tencent/Hunyuan3D-2",
+        subfolder: str = "hunyuan3d-paint-v2-0-turbo",
+    ) -> None:
+        if _HY3D_LOCAL not in sys.path:
+            sys.path.insert(0, _HY3D_LOCAL)
+
+        try:
+            from hy3dgen.texgen import Hunyuan3DPaintPipeline
+        except ImportError as e:
+            print(f"[ERROR] Failed to import hy3dgen.texgen: {e}")
+            print(
+                "[HINT] Build the C++ extensions first:\n"
+                "  cd Hunyuan3D-2/hy3dgen/texgen/custom_rasterizer && "
+                "python setup.py install\n"
+                "  cd ../differentiable_renderer && python setup.py install"
+            )
+            raise
+
+        if torch.cuda.is_available():
+            gpu_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            allocated = torch.cuda.memory_allocated(0) / (1024**3)
+            free = gpu_mem - allocated
+            print(
+                f"[DEBUG] GPU before texture load: "
+                f"{free:.1f} GB free / {gpu_mem:.1f} GB total"
+            )
+
+        print(f"[DEBUG] Loading Hunyuan3D-Paint from {model_path}/{subfolder}...")
+        self._paint = Hunyuan3DPaintPipeline.from_pretrained(
+            model_path, subfolder=subfolder
+        )
+        print("[DEBUG] ✓ Hunyuan3D-Paint loaded")
+
+    def run(self, mesh, image):
+        """Apply texture to trimesh. Returns textured trimesh."""
+        print("[DEBUG] Running Hunyuan3D-Paint texture generation...")
+        try:
+            textured = self._paint(mesh, image)
+            print("[DEBUG] ✓ Texture generation completed")
+            return textured
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                print(f"[ERROR] OOM during texture gen: {e}")
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
             raise

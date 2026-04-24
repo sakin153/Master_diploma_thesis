@@ -44,7 +44,7 @@ def _get_checkers():
     return [GEO_CHECKER, SEG_CHECKER, _get_aesthetic_checker()]
 
 
-# ── Lazy 3-D generation pipeline (Hunyuan3D-2mini) ───────────────────────────
+# ── Lazy shape pipeline (Hunyuan3D-2mini-Turbo, 0.6B, ~4 GB VRAM) ───────────
 _PIPELINE = None
 
 
@@ -54,18 +54,43 @@ def _release_pipeline():
         del _PIPELINE
         _PIPELINE = None
         free_vram()
-        log_vram("after 3D pipeline release")
+        log_vram("after shape pipeline release")
 
 
 def _get_pipeline():
     global _PIPELINE
     if _PIPELINE is None:
-        log_vram("before 3D pipeline load")
-        logger.info("Loading Hunyuan3D-2mini pipeline...")
+        log_vram("before shape pipeline load")
+        logger.info("Loading Hunyuan3D-2mini-Turbo shape pipeline...")
         from asset_gen.models.hunyuan3d import Hunyuan3DInference
         _PIPELINE = Hunyuan3DInference()
-        log_vram("after 3D pipeline load")
+        log_vram("after shape pipeline load")
     return _PIPELINE
+
+
+# ── Lazy texture pipeline (Hunyuan3D-Paint-Turbo, 1.3B, ~6 GB VRAM) ─────────
+# Loaded ONLY after shape pipeline is fully released to stay within 8 GB.
+_TEXTURE_PIPELINE = None
+
+
+def _release_texture_pipeline():
+    global _TEXTURE_PIPELINE
+    if _TEXTURE_PIPELINE is not None:
+        del _TEXTURE_PIPELINE
+        _TEXTURE_PIPELINE = None
+        free_vram()
+        log_vram("after texture pipeline release")
+
+
+def _get_texture_pipeline():
+    global _TEXTURE_PIPELINE
+    if _TEXTURE_PIPELINE is None:
+        log_vram("before texture pipeline load")
+        logger.info("Loading Hunyuan3D-Paint-Turbo texture pipeline...")
+        from asset_gen.models.hunyuan3d import Hunyuan3DTexture
+        _TEXTURE_PIPELINE = Hunyuan3DTexture()
+        log_vram("after texture pipeline load")
+    return _TEXTURE_PIPELINE
 
 
 def process_single_image(
@@ -125,13 +150,36 @@ def process_single_image(
         logger.error(f"Exceeded retry limit for {image_path}, skipping.")
         return {}
 
-    # ── Stage 2: Mesh export ─────────────────────────────────────────────────
+    # ── Stage 2: Preview video (before releasing shape model) ────────────────
     color_images = render_video(mesh_model, r=1.85).get("color", [])
     normal_images = render_video(mesh_model, r=1.85).get("normal", [])
     video_path = os.path.join(output_root, "gs_mesh.mp4")
     if color_images or normal_images:
         merge_images_video(color_images, normal_images, video_path)
+    del color_images, normal_images, mesh_model
+    free_vram()
+    log_vram("after releasing render outputs")
 
+    # ── Stage 3: Texture generation (sequential, shape pipeline released) ────
+    # Release shape model first so the texture model fits in VRAM (~6 GB).
+    _release_pipeline()
+
+    use_texture = os.environ.get("HUNYUAN3D_TEXTURE", "0") == "1"
+    if use_texture:
+        logger.info("Applying texture with Hunyuan3D-Paint-Turbo...")
+        try:
+            tex_pipe = _get_texture_pipeline()
+            trimesh_result = tex_pipe.run(trimesh_result, seg_image)
+            logger.info("Texture applied successfully.")
+        except Exception as exc:
+            logger.warning(
+                f"Texture generation failed ({exc}), "
+                "continuing with untextured mesh."
+            )
+        finally:
+            _release_texture_pipeline()
+
+    # ── Stage 4: Mesh export ─────────────────────────────────────────────────
     mesh = trimesh_result
     mesh.vertices = (
         mesh.vertices @ np.array(mesh_add_rot) @ np.array(rot_matrix)
@@ -143,11 +191,7 @@ def process_single_image(
     mesh_glb_path = os.path.join(output_root, f"{filename}.glb")
     mesh.export(mesh_glb_path)
 
-    del color_images, normal_images, mesh_model
-    free_vram()
-    log_vram("after releasing 3D outputs")
-
-    # ── Stage 3: URDF ────────────────────────────────────────────────────────
+    # ── Stage 5: URDF ────────────────────────────────────────────────────────
     urdf_convertor = URDFGenerator(
         GPT_CLIENT,
         render_view_num=4,
@@ -170,7 +214,7 @@ def process_single_image(
     )
     trimesh.load(mesh_out_final).export(mesh_out_final.replace(".obj", ".glb"))
 
-    # ── Stage 4: Quality check ───────────────────────────────────────────────
+    # ── Stage 6b: Quality check ──────────────────────────────────────────────
     image_dir = f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
     image_paths = glob(f"{image_dir}/*.png")
     images_list = []
@@ -186,7 +230,7 @@ def process_single_image(
     qa_results = BaseChecker.validate(checkers, images_list)
     urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
-    # ── Stage 5: Organize results ────────────────────────────────────────────
+    # ── Stage 6: Organize results ────────────────────────────────────────────
     result_dir = f"{output_root}/result"
     if os.path.exists(result_dir):
         rmtree(result_dir, ignore_errors=True)

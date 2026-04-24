@@ -108,7 +108,7 @@ pip install "nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@729261d"
 
 ---
 
-## 6. Hunyuan3D-2 (3D-генерация)
+## 6. Hunyuan3D-2 (3D-генерация + текстуры)
 
 Клонировать рядом с проектом и установить:
 
@@ -118,13 +118,38 @@ cd ..
 git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2
 cd Hunyuan3D-2
 pip install -e .
-cd ../EmbodiedGen   # вернуться в проект
 ```
 
-Проверка:
+Скомпилировать C++ расширения для текстур (нужен nvcc):
 
 ```bash
-python -c "from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline; print('OK')"
+# Кастомный CUDA-растеризатор
+cd hy3dgen/texgen/custom_rasterizer
+python setup.py install
+cd ../../..
+
+# pybind11 UV-обработчик меша (без GPU)
+cd hy3dgen/texgen/differentiable_renderer
+python setup.py install
+cd ../../..
+```
+
+Вернуться в проект:
+
+```bash
+cd ../EmbodiedGen   # или ваш путь к проекту
+```
+
+Проверка shape:
+
+```bash
+python -c "from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline; print('shape OK')"
+```
+
+Проверка texgen:
+
+```bash
+python -c "from hy3dgen.texgen import Hunyuan3DPaintPipeline; print('texgen OK')"
 ```
 
 ---
@@ -217,7 +242,8 @@ export TEXT_MODEL="sdxl-turbo"      # модель Text→Image (sdxl-turbo ре
 export OUTPUT_ROOT="outputs/jobs"   # куда сохранять результаты
 export TORCH_HOME="weights/torch_cache"   # кэш весов torch
 export HF_HOME="weights/hf_cache"         # кэш HuggingFace
-export HUNYUAN3D_TEXTURE="1"        # "0" — выключить texture pipeline (~6 GB экономия)
+export HUNYUAN3D_TEXTURE="1"        # "1" — включить генерацию текстур после меша
+                                    # "0" — выключить (быстрее, только геометрия)
 ```
 
 Применить:
@@ -226,8 +252,12 @@ export HUNYUAN3D_TEXTURE="1"        # "0" — выключить texture pipelin
 source ~/.bashrc
 ```
 
-> **Совет:** При первом запуске используй `HUNYUAN3D_TEXTURE=0`, чтобы убедиться
-> что pipeline работает без ошибок OOM. Texture добавляет ещё ~6 GB VRAM.
+> **Важно:** Shape-модель (~4 GB) и texture-модель (~6 GB) загружаются **последовательно**,
+> никогда одновременно. При `HUNYUAN3D_TEXTURE=1` на 8 GB GPU: shape генерируется → выгружается →
+> texture загружается → применяется → выгружается. Требования к VRAM не суммируются.
+>
+> **Первый запуск:** используй `HUNYUAN3D_TEXTURE=0`, чтобы убедиться что меш генерируется
+> без ошибок, потом включай текстуры.
 
 ---
 
@@ -235,15 +265,16 @@ source ~/.bashrc
 
 При первом запуске автоматически скачаются веса моделей:
 
-| Модель | Размер | Куда |
-|--------|--------|------|
-| SDXL-Turbo (Text→Image) | ~7 GB | `weights/hf_cache/` |
-| Hunyuan3D-2mini (shape) | ~4 GB | `weights/hf_cache/` |
-| Hunyuan3D-2 Paint (texture) | ~6 GB | `weights/hf_cache/` |
-| DINOv2 ViT-L/14 | ~1.1 GB | `weights/torch_cache/` |
-| MoGe | ~1 GB | `weights/hf_cache/` |
+| Модель | Размер | Куда | Когда |
+|--------|--------|------|-------|
+| SDXL-Turbo (Text→Image) | ~7 GB | `weights/hf_cache/` | при запуске |
+| Hunyuan3D-2mini-Turbo (shape) | ~4 GB | `weights/hf_cache/` | при запуске |
+| Hunyuan3D-2 Paint-Turbo (texture) | ~3.5 GB | `weights/hf_cache/` | если `HUNYUAN3D_TEXTURE=1` |
+| Hunyuan3D-Delight (предобработка) | ~2.5 GB | `weights/hf_cache/` | если `HUNYUAN3D_TEXTURE=1` |
+| DINOv2 ViT-L/14 | ~1.1 GB | `weights/torch_cache/` | при запуске |
+| MoGe | ~1 GB | `weights/hf_cache/` | при запуске |
 
-**Итого:** ~19 GB при первом запуске.
+**Итого:** ~13 GB без текстур, ~19 GB с текстурами (при первом запуске).
 
 > **Важно для РФ:** `dl.fbaipublicfiles.com` (DINOv2) может быть заблокирован.
 > Скачай вручную через VPN и положи в:
@@ -502,12 +533,21 @@ curl -s http://localhost:11434/api/tags | head -c 100
 # 3. Проверить GPU
 python -c "import torch; print('GPU:', torch.cuda.get_device_name(0))"
 
-# 4. Первый тест (без текстуры — быстрее)
+# 4. Проверить что C++ расширения texgen собраны
+python -c "from hy3dgen.texgen import Hunyuan3DPaintPipeline; print('texgen OK')"
+
+# 5. Первый тест — только меш (быстрее, без текстуры)
 export HUNYUAN3D_TEXTURE=0
 python generate.py "a simple wooden cube" --skip_mjcf
 
-# 5. Посмотреть результат
+# 6. Посмотреть результат
 ls outputs/generated/asset3d/simple/result/
+
+# 7. Тест с текстурой (если шаг 5 прошёл успешно)
+export HUNYUAN3D_TEXTURE=1
+python generate.py "a red ceramic mug" --name mug --skip_mjcf
+# Ожидаемый результат: outputs/generated/asset3d/mug/result/mesh/mug.glb
+# GLB будет содержать текстуру — открой в браузере через https://gltf-viewer.donmccurdy.com/
 ```
 
 ---
@@ -649,13 +689,36 @@ cd ..
 git clone https://github.com/Tencent-Hunyuan/Hunyuan3D-2
 cd Hunyuan3D-2
 pip install -e .
-cd ..\EmbodiedGen   # вернуться в проект
 ```
 
-Проверка:
+Скомпилировать C++ расширения для текстур (нужен nvcc и Visual Studio Build Tools):
 
 ```powershell
-python -c "from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline; print('OK')"
+cd hy3dgen\texgen\custom_rasterizer
+python setup.py install
+cd ..\..\..
+
+cd hy3dgen\texgen\differentiable_renderer
+python setup.py install
+cd ..\..\..
+```
+
+Вернуться в проект:
+
+```powershell
+cd ..\EmbodiedGen
+```
+
+Проверка shape:
+
+```powershell
+python -c "from hy3dgen.shapegen import Hunyuan3DDiTFlowMatchingPipeline; print('shape OK')"
+```
+
+Проверка texgen:
+
+```powershell
+python -c "from hy3dgen.texgen import Hunyuan3DPaintPipeline; print('texgen OK')"
 ```
 
 ---
@@ -950,12 +1013,19 @@ curl http://localhost:11434/api/tags
 # 4. Проверить GPU
 python -c "import torch; print('GPU:', torch.cuda.get_device_name(0))"
 
-# 5. Первый тест (без текстуры — меньше VRAM)
+# 5. Проверить C++ расширения texgen
+python -c "from hy3dgen.texgen import Hunyuan3DPaintPipeline; print('texgen OK')"
+
+# 6. Первый тест (без текстуры — меньше VRAM)
 $env:HUNYUAN3D_TEXTURE = "0"
 python generate.py "a simple wooden cube" --skip_mjcf
 
-# 6. Посмотреть результат
+# 7. Посмотреть результат
 dir outputs\generated\asset3d\simple\result\
+
+# 8. Тест с текстурой (если шаг 6 прошёл успешно)
+$env:HUNYUAN3D_TEXTURE = "1"
+python generate.py "a red ceramic mug" --name mug --skip_mjcf
 ```
 
 ---
@@ -1130,7 +1200,7 @@ docker build -f Dockerfile.base -t embodiedgen-base:latest . && docker compose u
 sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
 ```
 
-**CUDA out of memory** — отключить текстуры:
+**CUDA out of memory** — отключить текстуры (shape-модель ~4 GB, texture-модель ~6 GB, загружаются по очереди):
 ```bash
 HUNYUAN3D_TEXTURE=0 docker compose up
 ```
