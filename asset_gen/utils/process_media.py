@@ -145,12 +145,13 @@ def render_asset3d(
     out_dir = os.path.join(output_root, output_subdir, "image_color")
     os.makedirs(out_dir, exist_ok=True)
 
-    try:
-        paths = _render_with_open3d(mesh_path, out_dir, num_images, elevation)
-        logger.info(f"render_asset3d: rendered {len(paths)} views via Open3D")
-        return paths
-    except Exception as e:
-        logger.warning(f"Open3D render failed ({e}), falling back to matplotlib...")
+    if os.environ.get("SKIP_OPEN3D_RENDER", "0") != "1":
+        try:
+            paths = _render_with_open3d(mesh_path, out_dir, num_images, elevation)
+            logger.info(f"render_asset3d: rendered {len(paths)} views via Open3D")
+            return paths
+        except Exception as e:
+            logger.warning(f"Open3D render failed ({e}), falling back to matplotlib...")
 
     try:
         paths = _render_with_matplotlib(mesh_path, out_dir, num_images, elevation)

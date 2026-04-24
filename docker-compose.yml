@@ -36,6 +36,9 @@ services:
       U2NET_HOME: /app/weights/u2net
       TOKENIZERS_PARALLELISM: "false"
       PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
+      # Open3D OffscreenRenderer падает с segfault в headless Docker (нет EGL).
+      # Пропускаем Open3D и используем matplotlib-рендеринг напрямую.
+      SKIP_OPEN3D_RENDER: "1"
 
     volumes:
       # Хост-пути задаются в .env (скопируй из .env.example).
