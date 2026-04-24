@@ -20,6 +20,11 @@ def log_vram(tag: str = "") -> None:
 def free_vram() -> None:
     """Force Python GC + CUDA cache clear."""
     gc.collect()
+    gc.collect()  # second pass catches cyclic references missed by first
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
+        try:
+            torch.cuda.ipc_collect()
+        except Exception:
+            pass
