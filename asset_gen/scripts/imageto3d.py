@@ -150,7 +150,7 @@ def process_single_image(
         logger.error(f"Exceeded retry limit for {image_path}, skipping.")
         return {}
 
-    # ── Stage 2: Preview video (before releasing shape model) ────────────────
+    # ── Stage 2: Preview video ───────────────────────────────────────────────
     color_images = render_video(mesh_model, r=1.85).get("color", [])
     normal_images = render_video(mesh_model, r=1.85).get("normal", [])
     video_path = os.path.join(output_root, "gs_mesh.mp4")
@@ -158,28 +158,8 @@ def process_single_image(
         merge_images_video(color_images, normal_images, video_path)
     del color_images, normal_images, mesh_model
     free_vram()
-    log_vram("after releasing render outputs")
 
-    # ── Stage 3: Texture generation (sequential, shape pipeline released) ────
-    # Release shape model first so the texture model fits in VRAM (~6 GB).
-    _release_pipeline()
-
-    use_texture = os.environ.get("HUNYUAN3D_TEXTURE", "0") == "1"
-    if use_texture:
-        logger.info("Applying texture with Hunyuan3D-Paint-Turbo...")
-        try:
-            tex_pipe = _get_texture_pipeline()
-            trimesh_result = tex_pipe.run(trimesh_result, seg_image)
-            logger.info("Texture applied successfully.")
-        except Exception as exc:
-            logger.warning(
-                f"Texture generation failed ({exc}), "
-                "continuing with untextured mesh."
-            )
-        finally:
-            _release_texture_pipeline()
-
-    # ── Stage 4: Mesh export ─────────────────────────────────────────────────
+    # ── Stage 3: Mesh export ─────────────────────────────────────────────────
     mesh = trimesh_result
     mesh.vertices = (
         mesh.vertices @ np.array(mesh_add_rot) @ np.array(rot_matrix)

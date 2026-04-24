@@ -3,10 +3,12 @@
 Batch strategy:
   Phase 1 — generate ALL images (text prompts only), text2image model
              stays loaded in VRAM for the whole batch, then is released.
-  Phase 2 — generate ALL meshes (Hunyuan3D), 3D model stays loaded in
-             VRAM for the whole batch, then is released.
+  Phase 2 — generate ALL meshes (Hunyuan3D shape), 3D model stays loaded
+             for the whole batch, then is released.
+  Phase 3 — (if HUNYUAN3D_TEXTURE=1) apply texture to ALL meshes,
+             paint model loaded once for the whole batch, then released.
 
-This avoids reloading heavy models for every object.
+This avoids reloading heavy models between objects.
 """
 
 import base64
@@ -23,6 +25,8 @@ from asset_gen.models.segment_model import RembgRemover
 from asset_gen.models.text_model import PROMPT_APPEND
 from asset_gen.scripts.imageto3d import (
     _release_pipeline as _release_3d_pipeline,
+    _get_texture_pipeline,
+    _release_texture_pipeline,
     process_single_image,
 )
 from asset_gen.utils.gpt_clients import GPT_CLIENT
@@ -350,4 +354,41 @@ def text_to_3d(
         free_vram()
 
     _release_3d_pipeline()
+
+    # ── Phase 3: texture ALL meshes (paint model loaded once) ───────────────
+    if os.environ.get("HUNYUAN3D_TEXTURE", "0") == "1":
+        logger.info("Phase 3: applying Hunyuan3D-Paint-Turbo texture to all meshes...")
+        log_vram("before texture pipeline load")
+        try:
+            import trimesh as _trimesh
+            from PIL import Image as _PILImage
+            tex_pipe = _get_texture_pipeline()
+            for item in items:
+                file_paths = results["files"].get(item.name)
+                img_path = image_paths.get(item.name)
+                if not file_paths or not img_path or not os.path.exists(img_path):
+                    continue
+                obj_path = file_paths.get("obj")
+                glb_path = file_paths.get("glb")
+                if not obj_path or not os.path.exists(obj_path):
+                    continue
+                logger.info(f"Texturing '{item.name}'...")
+                try:
+                    mesh = _trimesh.load(obj_path)
+                    image = _PILImage.open(img_path)
+                    textured = tex_pipe.run(mesh, image)
+                    if glb_path:
+                        textured.export(glb_path)
+                        logger.info(
+                            f"'{item.name}' textured GLB saved: {glb_path}"
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        f"Texture failed for '{item.name}': {exc}, "
+                        "keeping untextured mesh."
+                    )
+        finally:
+            _release_texture_pipeline()
+        log_vram("after texture pipeline release")
+
     return results
