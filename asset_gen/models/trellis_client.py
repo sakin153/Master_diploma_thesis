@@ -155,13 +155,20 @@ class TrellisClient:
             raise TrellisAPIError(f"Failed to submit TRELLIS job: {e}") from e
         logger.info("[TRELLIS] Job submitted successfully.")
 
+    @staticmethod
+    def _progress_bar(pct: int, width: int = 30) -> str:
+        filled = int(width * pct / 100)
+        return "█" * filled + "░" * (width - filled)
+
     def _poll_until_done(self) -> None:
         url = f"{self.base_url}/status"
         deadline = time.monotonic() + self.timeout
+        t_start = time.monotonic()
         last_progress = -1
         last_progress_time = time.monotonic()
 
         while True:
+            elapsed = time.monotonic() - t_start
             if time.monotonic() > deadline:
                 raise TrellisTimeoutError(
                     f"TRELLIS generation timed out after {self.timeout:.0f}s"
@@ -177,11 +184,15 @@ class TrellisClient:
                 continue
 
             status = data.get("status", "")
-            progress = data.get("progress", 0)
+            progress = int(data.get("progress", 0))
 
-            logger.info(f"[TRELLIS] Status: {status}, progress: {progress}%")
+            bar = self._progress_bar(progress)
+            logger.info(
+                f"[TRELLIS] [{bar}] {progress:3d}%  {elapsed:5.0f}s  status={status}"
+            )
 
             if status == "COMPLETE":
+                logger.info(f"[TRELLIS] [{self._progress_bar(100)}] 100%  ✓ done in {elapsed:.1f}s")
                 return
 
             if status == "FAILED":

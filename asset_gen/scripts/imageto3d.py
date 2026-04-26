@@ -1,5 +1,7 @@
 import os
 import random
+import time
+from contextlib import contextmanager
 from glob import glob
 from shutil import copy, copytree, rmtree
 
@@ -28,6 +30,18 @@ from asset_gen.validators.quality_checkers import (
     TrellisOutputChecker,
 )
 from asset_gen.validators.urdf_convertor import URDFGenerator
+
+
+@contextmanager
+def _stage(name: str):
+    """Log stage start/finish with elapsed time."""
+    logger.info(f"▶  {name} ...")
+    t0 = time.monotonic()
+    try:
+        yield
+    finally:
+        logger.info(f"✓  {name} — {time.monotonic() - t0:.1f}s")
+
 
 # GPT-based quality checkers: no VRAM, safe at module level.
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
@@ -128,6 +142,7 @@ def process_single_image(
     """
     filename = os.path.basename(image_path).split(".")[0]
     os.makedirs(output_root, exist_ok=True)
+    t_total = time.monotonic()
 
     image = Image.open(image_path)
     image.save(f"{output_root}/{filename}_raw.png")
@@ -135,41 +150,36 @@ def process_single_image(
     seg_path = f"{output_root}/{filename}_cond.png"
 
     # ── Stage 1: Background removal + segmentation ───────────────────────────
-    # get_segmented_image_by_agent() tries SAM → inverted SAM → rembg and
-    # applies trellis_preprocess() internally → returns RGB 518×518.
-    if image.mode != "RGBA":
-        seg_image = get_segmented_image_by_agent(
-            image,
-            sam_remover=_get_sam_remover(),
-            rbg_remover=_get_rbg_remover(),
-            seg_checker=SEG_CHECKER,
-            save_path=seg_path,
-            mode="loose",
-        )
-    else:
-        from asset_gen.data.utils import trellis_preprocess
-        seg_image = trellis_preprocess(image)
-        seg_image.save(seg_path)
+    with _stage("Stage 1/6 — Segmentation (SAM → rembg → trellis_preprocess)"):
+        if image.mode != "RGBA":
+            seg_image = get_segmented_image_by_agent(
+                image,
+                sam_remover=_get_sam_remover(),
+                rbg_remover=_get_rbg_remover(),
+                seg_checker=SEG_CHECKER,
+                save_path=seg_path,
+                mode="loose",
+            )
+        else:
+            from asset_gen.data.utils import trellis_preprocess
+            seg_image = trellis_preprocess(image)
+            seg_image.save(seg_path)
 
     # Release SAM before de-lighting to free VRAM
     _release_sam()
 
     # ── Stage 1b: De-lighting (optional) ────────────────────────────────────
     if delight_model is not None:
-        logger.info(f"Applying de-lighting to {filename}...")
-        try:
-            seg_image.save(
-                f"{output_root}/{filename}_pre_delight.png"
-            )
-            # delight_model expects RGBA; seg_image from trellis_preprocess is RGB
-            rgba_for_delight = seg_image.convert("RGBA") if seg_image.mode == "RGB" else seg_image
-            seg_image = delight_model(rgba_for_delight)
-            seg_image.save(f"{output_root}/{filename}_delight.png")
-            logger.info(f"De-lighting done for {filename}.")
-        except Exception as exc:
-            logger.warning(
-                f"De-lighting failed for {filename}: {exc}. Continuing without it."
-            )
+        with _stage("Stage 1b/6 — De-lighting (Hunyuan3D-Delight)"):
+            try:
+                seg_image.save(f"{output_root}/{filename}_pre_delight.png")
+                rgba_for_delight = (
+                    seg_image.convert("RGBA") if seg_image.mode == "RGB" else seg_image
+                )
+                seg_image = delight_model(rgba_for_delight)
+                seg_image.save(f"{output_root}/{filename}_delight.png")
+            except Exception as exc:
+                logger.warning(f"De-lighting failed: {exc}. Continuing without it.")
 
     mesh_model = None
     trimesh_result = None
@@ -179,8 +189,8 @@ def process_single_image(
     current_seed = seed
     for try_idx in range(n_retry):
         logger.info(
-            f"Try: {try_idx + 1}/{n_retry}, "
-            f"Seed: {current_seed}, Input: {seg_path}"
+            f"Stage 2/6 — TRELLIS 3D generation "
+            f"(attempt {try_idx + 1}/{n_retry}, seed={current_seed})"
         )
         try:
             outputs = image3d_model_infer(
@@ -190,30 +200,26 @@ def process_single_image(
                 texture_size=texture_size,
             )
         except Exception as e:
-            logger.error(
-                f"[TRELLIS Failed] {image_path}: {e}, "
-                f"retry {try_idx + 1}/{n_retry}"
-            )
+            logger.error(f"[TRELLIS Failed] {image_path}: {e}, retry {try_idx + 1}/{n_retry}")
             current_seed = random.randint(0, 100000)
             continue
 
         trimesh_result = outputs.get("trimesh", [None])[0]
         glb_bytes_raw = outputs.get("glb_bytes")
-        mesh_model = outputs.get("mesh", [None])[0]  # always None for TRELLIS
+        mesh_model = outputs.get("mesh", [None])[0]
 
         # ── Geometry QA (fast, no GPT) ────────────────────────────────────
         if trimesh_result is not None and not skip_qa:
             ok, msg = _TRELLIS_CHECKER(trimesh_result)
             if not ok:
                 logger.warning(
-                    f"[TrellisOutputChecker] {msg}. "
-                    f"Retrying {try_idx + 1}/{n_retry}."
+                    f"[TrellisOutputChecker] {msg}. Retrying {try_idx + 1}/{n_retry}."
                 )
                 current_seed = random.randint(0, 100000)
                 trimesh_result = None
                 continue
 
-        logger.info("TRELLIS generation succeeded.")
+        logger.info("✓  TRELLIS generation succeeded.")
         break
 
     if trimesh_result is None:
@@ -221,84 +227,86 @@ def process_single_image(
         return {}
 
     # ── Stage 3: Mesh export ─────────────────────────────────────────────────
-    mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
-    mesh_glb_path = os.path.join(output_root, f"{filename}.glb")
+    with _stage("Stage 3/6 — Mesh export (OBJ + GLB)"):
+        mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
+        mesh_glb_path = os.path.join(output_root, f"{filename}.glb")
 
-    # Save original GLB (with baked texture) from TRELLIS directly.
-    if glb_bytes_raw:
-        with open(mesh_glb_path, "wb") as f:
-            f.write(glb_bytes_raw)
-    else:
-        trimesh_result.export(mesh_glb_path)
-
-    # Export OBJ for URDF/MJCF pipeline (trimesh also writes .mtl + texture PNG).
-    trimesh_result.export(mesh_obj_path)
-
-    # ── Stage 4: URDF ────────────────────────────────────────────────────────
-    urdf_convertor = URDFGenerator(
-        GPT_CLIENT,
-        render_view_num=4,
-        decompose_convex=not disable_decompose_convex,
-    )
-    asset_attrs = {"version": VERSION}
-    if asset_type:
-        asset_attrs["category"] = asset_type
-
-    urdf_root = f"{output_root}/URDF_{filename}"
-    urdf_path = urdf_convertor(
-        mesh_path=mesh_obj_path,
-        output_root=urdf_root,
-        **asset_attrs,
-    )
-
-    # Export GLB inside the URDF mesh dir too (used by API download endpoints)
-    mesh_out_final = (
-        f"{urdf_root}/{urdf_convertor.output_mesh_dir}/{filename}.obj"
-    )
-    if os.path.exists(mesh_out_final):
-        glb_final = mesh_out_final.replace(".obj", ".glb")
         if glb_bytes_raw:
-            with open(glb_final, "wb") as f:
+            with open(mesh_glb_path, "wb") as f:
                 f.write(glb_bytes_raw)
         else:
-            trimesh.load(mesh_out_final).export(glb_final)
+            trimesh_result.export(mesh_glb_path)
+
+        trimesh_result.export(mesh_obj_path)
+
+    # ── Stage 4: URDF ────────────────────────────────────────────────────────
+    with _stage(
+        "Stage 4/6 — URDF generation"
+        + (" (CoACD convex decomposition)" if not disable_decompose_convex else " (no CoACD)")
+    ):
+        urdf_convertor = URDFGenerator(
+            GPT_CLIENT,
+            render_view_num=4,
+            decompose_convex=not disable_decompose_convex,
+        )
+        asset_attrs = {"version": VERSION}
+        if asset_type:
+            asset_attrs["category"] = asset_type
+
+        urdf_root = f"{output_root}/URDF_{filename}"
+        urdf_path = urdf_convertor(
+            mesh_path=mesh_obj_path,
+            output_root=urdf_root,
+            **asset_attrs,
+        )
+
+        mesh_out_final = f"{urdf_root}/{urdf_convertor.output_mesh_dir}/{filename}.obj"
+        if os.path.exists(mesh_out_final):
+            glb_final = mesh_out_final.replace(".obj", ".glb")
+            if glb_bytes_raw:
+                with open(glb_final, "wb") as f:
+                    f.write(glb_bytes_raw)
+            else:
+                trimesh.load(mesh_out_final).export(glb_final)
 
     # ── Stage 5: GPT-based quality check ─────────────────────────────────────
     if skip_qa:
-        logger.info("Skipping GPT QA checks (skip_qa=True).")
+        logger.info("Stage 5/6 — QA checks skipped (skip_qa=True).")
     else:
-        image_dir = (
-            f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
-        )
-        image_paths = glob(f"{image_dir}/*.png")
-        images_list = []
-        checkers = _get_checkers()
-        for checker in checkers:
-            images = combine_images_to_grid(image_paths)
-            if isinstance(checker, ImageSegChecker):
-                images = [
-                    f"{output_root}/{filename}_raw.png",
-                    f"{output_root}/{filename}_cond.png",
-                ]
-            images_list.append(images)
-        qa_results = BaseChecker.validate(checkers, images_list)
-        urdf_convertor.add_quality_tag(urdf_path, qa_results)
+        with _stage("Stage 5/6 — GPT/CLIP quality checks"):
+            image_dir = f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
+            image_paths = glob(f"{image_dir}/*.png")
+            images_list = []
+            checkers = _get_checkers()
+            for checker in checkers:
+                images = combine_images_to_grid(image_paths)
+                if isinstance(checker, ImageSegChecker):
+                    images = [
+                        f"{output_root}/{filename}_raw.png",
+                        f"{output_root}/{filename}_cond.png",
+                    ]
+                images_list.append(images)
+            qa_results = BaseChecker.validate(checkers, images_list)
+            urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
     # ── Stage 6: Organize results ─────────────────────────────────────────────
-    result_dir = f"{output_root}/result"
-    if os.path.exists(result_dir):
-        rmtree(result_dir, ignore_errors=True)
-    os.makedirs(result_dir, exist_ok=True)
-    copy(urdf_path, f"{result_dir}/{os.path.basename(urdf_path)}")
-    copytree(
-        f"{urdf_root}/{urdf_convertor.output_mesh_dir}",
-        f"{result_dir}/{urdf_convertor.output_mesh_dir}",
+    with _stage("Stage 6/6 — Organizing results"):
+        result_dir = f"{output_root}/result"
+        if os.path.exists(result_dir):
+            rmtree(result_dir, ignore_errors=True)
+        os.makedirs(result_dir, exist_ok=True)
+        copy(urdf_path, f"{result_dir}/{os.path.basename(urdf_path)}")
+        copytree(
+            f"{urdf_root}/{urdf_convertor.output_mesh_dir}",
+            f"{result_dir}/{urdf_convertor.output_mesh_dir}",
+        )
+
+        if not keep_intermediate:
+            delete_dir(output_root, keep_subs=["result"])
+
+    logger.info(
+        f"Pipeline complete for '{filename}' — total: {time.monotonic() - t_total:.1f}s"
     )
-
-    if not keep_intermediate:
-        delete_dir(output_root, keep_subs=["result"])
-
-    logger.info(f"Saved results for {image_path} in {result_dir}")
 
     final_obj = f"{result_dir}/{urdf_convertor.output_mesh_dir}/{filename}.obj"
     final_glb = f"{result_dir}/{urdf_convertor.output_mesh_dir}/{filename}.glb"
