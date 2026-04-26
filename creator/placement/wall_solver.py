@@ -78,20 +78,66 @@ def _size_xyz(model: Dict[str, Any]) -> Tuple[float, float, float]:
     size = model.get("size")
     if not isinstance(size, (list, tuple)) or len(size) < 3:
         return 0.3, 0.3, 0.3
+    # Canonical size convention in this project:
+    # size[0]=scene X width, size[1]=scene Z height, size[2]=scene Y depth.
     return (
         max(0.01, float(size[0])),
-        max(0.01, float(size[1])),
         max(0.01, float(size[2])),
+        max(0.01, float(size[1])),
     )
 
 
 def _aabb_3d_overlap(
     a: Dict[str, float], b: Dict[str, float], margin: float = 0.05,
 ) -> bool:
+    """Strict 3D AABB overlap.
+
+    For wall vs floor checks, use _aabb_overlap_with_clearance instead — that
+    one allows a wall-mounted painting at z=1.5 m above a couch at z=0.45 m
+    even when their XY footprints intersect, as long as there's vertical
+    clearance.
+    """
     sep_x = a["max_x"] + margin < b["min_x"] or b["max_x"] + margin < a["min_x"]
     sep_y = a["max_y"] + margin < b["min_y"] or b["max_y"] + margin < a["min_y"]
     sep_z = a["max_z"] + margin < b["min_z"] or b["max_z"] + margin < a["min_z"]
     return not (sep_x or sep_y or sep_z)
+
+
+def _aabb_overlap_with_clearance(
+    wall_aabb: Dict[str, float],
+    floor_aabb: Dict[str, float],
+    *,
+    xy_margin: float = 0.05,
+    vertical_clearance: float = 0.10,
+) -> bool:
+    """Wall vs floor collision: only blocks when vertical separation is small.
+
+    A painting at 1.5 m on a wall can hang above a sofa at 0.45 m even if
+    their XY rectangles overlap — that's a desired setup, not a collision.
+    The check returns True only when the wall object's lower edge is within
+    `vertical_clearance` of the floor object's upper edge, AND the XY
+    rectangles overlap.
+    """
+    # No XY overlap → no collision regardless of Z
+    sep_x = (
+        wall_aabb["max_x"] + xy_margin < floor_aabb["min_x"]
+        or floor_aabb["max_x"] + xy_margin < wall_aabb["min_x"]
+    )
+    sep_y = (
+        wall_aabb["max_y"] + xy_margin < floor_aabb["min_y"]
+        or floor_aabb["max_y"] + xy_margin < wall_aabb["min_y"]
+    )
+    if sep_x or sep_y:
+        return False
+
+    # XY-overlapping: the wall object must be safely ABOVE the floor object,
+    # otherwise the painting/clock would clip through the furniture below.
+    if wall_aabb["min_z"] >= floor_aabb["max_z"] + vertical_clearance:
+        return False
+    if floor_aabb["min_z"] >= wall_aabb["max_z"] + vertical_clearance:
+        # Wall object is BELOW floor object — should not happen but tolerate.
+        return False
+    return True
 
 
 def _model_aabb_3d(model: Dict[str, Any]) -> Dict[str, float]:
@@ -189,10 +235,12 @@ def solve_wall_placements(
                 candidate["yaw_deg"] = yaw
                 c_aabb = _model_aabb_3d(candidate)
 
-                # Check against floor objects and other wall objects
+                # Check against floor objects and other wall objects.
+                # Floor check uses vertical-clearance rule: a high-mounted
+                # painting can hang above furniture below it without conflict.
                 collision = False
                 for fa in floor_aabbs:
-                    if _aabb_3d_overlap(c_aabb, fa):
+                    if _aabb_overlap_with_clearance(c_aabb, fa):
                         collision = True
                         break
                 if not collision:

@@ -31,6 +31,7 @@ from creator.placement.geometry import (
     obb_inside_polygon,
     obb_inside_room,
     obb_overlap,
+    obb_overlap_depth,
     point_in_polygon,
 )
 
@@ -255,11 +256,12 @@ def solve_floor_placements(
     full_placed_models: Sequence[Dict[str, Any]],
     semantic_plan: Dict[str, Any],
     room_half_size: float = 5.0,
-    grid_step: float = 0.6,
+    grid_step: Optional[float] = None,
     yaw_candidates_deg: Sequence[float] = (0.0, 90.0, 180.0, 270.0),
     beam_width: int = 12,
     collision_inflation: float = 0.01,
     seed: int = 42,
+    max_backtracks: int = 4,
 ) -> List[Dict[str, Any]]:
     """Place floor objects using DFS + beam search with OBB/SAT collision.
 
@@ -271,6 +273,23 @@ def solve_floor_placements(
     5. Gradient-based post-pass to resolve residual overlaps
     """
     rng = random.Random(seed)
+
+    # Adaptive grid step: derive from the smallest footprint in the scene so
+    # small objects (chairs, stools) get sub-50 cm sampling resolution while
+    # large rooms with only big furniture stay coarse for speed.
+    if grid_step is None:
+        min_footprint = float("inf")
+        for m in full_placed_models:
+            sz = m.get("size") or [1.0, 1.0, 1.0]
+            if not isinstance(sz, (list, tuple)) or len(sz) < 3:
+                continue
+            sx = max(0.1, float(sz[0]))
+            sy = max(0.1, float(sz[2]) if len(sz) > 2 else float(sz[0]))
+            min_footprint = min(min_footprint, min(sx, sy))
+        if min_footprint == float("inf"):
+            grid_step = 0.5
+        else:
+            grid_step = max(0.20, min(0.80, 0.55 * min_footprint))
 
     # Parse semantic plan
     model_plan: Dict[str, List[Dict[str, Any]]] = {}
@@ -327,10 +346,17 @@ def solve_floor_placements(
         for i, m in enumerate(pre_arranged)
     }
     states: List[Dict[str, Any]] = [
-        {"placed": pre_arranged_placed, "obbs": pre_arranged_obbs, "score": 0.0}
+        {"placed": pre_arranged_placed, "obbs": pre_arranged_obbs, "score": 0.0,
+         "history": [], "instance_ids": []}
     ]
 
-    for m in indexed_models:
+    # History snapshot for backtracking
+    history_stack: List[Tuple[int, List[Dict[str, Any]]]] = []
+    backtracks_used = 0
+
+    def _expand_step(
+        m: Dict[str, Any], states_in: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
         name = m["Model"]
         instance_id = f"{name}__{m.get('_index', 0)}"
         constraints = m.get("_constraints", [])
@@ -339,15 +365,14 @@ def solve_floor_placements(
         ring_total = int(m.get("_ring_total", 1))
         hz = model_half_height(m)
 
-        # Add near-target candidates if there's a "near" constraint with a placed target
+        # Near-target candidates from any "near" constraint with a placed target
         extra_candidates: List[Tuple[float, float]] = []
         for c in constraints:
             if str(c.get("type", "")).lower() == "near":
                 tgt_name = str(c.get("target", ""))
                 dist_range = c.get("distance", [0.3, 2.0])
                 lo, hi = float(dist_range[0]), float(dist_range[1])
-                # Check if target is in any current state
-                for st in states[:1]:  # just check best state
+                for st in states_in[:1]:
                     for p in st["placed"].values():
                         if str(p.get("Model", "")) == tgt_name:
                             pp = p.get("Pose", {})
@@ -363,12 +388,11 @@ def solve_floor_placements(
         candidates = all_candidates + extra_candidates
 
         next_states: List[Dict[str, Any]] = []
-        for st in states:
+        for st in states_in:
             best_for_state: List[Tuple[float, Dict[str, Any]]] = []
 
             for x, y in candidates:
                 for yaw in yaw_candidates_deg:
-                    yaw_rad = math.radians(yaw)
                     obb = model_to_obb(
                         m,
                         inflation=collision_inflation,
@@ -376,7 +400,6 @@ def solve_floor_placements(
                         yaw_override=yaw,
                     )
 
-                    # Hard check: inside room
                     if room_polygon:
                         if not obb_inside_polygon(obb, room_polygon):
                             continue
@@ -416,33 +439,152 @@ def solve_floor_placements(
                             "item": item,
                             "obb": obb,
                             "instance_id": instance_id,
+                            "x": float(x),
+                            "y": float(y),
+                            "yaw": float(yaw),
                         },
                     ))
 
-            # Keep top-K candidates per state
             best_for_state.sort(key=lambda t: t[0], reverse=True)
             for _, ns in best_for_state[:beam_width]:
                 new_state = {
                     "placed": dict(ns["placed"]),
                     "obbs": list(ns["obbs"]),
                     "score": ns["score"],
+                    "history": list(st.get("history", [])),
+                    "instance_ids": list(st.get("instance_ids", [])),
+                    "_last_xy": (ns["x"], ns["y"], ns["yaw"]),
                 }
                 new_state["placed"][ns["instance_id"]] = ns["item"]
                 new_state["obbs"].append(ns["obb"])
+                new_state["history"].append((ns["instance_id"], ns["item"], ns["obb"]))
+                new_state["instance_ids"].append(ns["instance_id"])
                 next_states.append(new_state)
 
+        return next_states
+
+    def _diverse_prune(
+        nss: List[Dict[str, Any]], k: int, min_dist: float = 0.30,
+    ) -> List[Dict[str, Any]]:
+        """Keep top-K states with at least `min_dist` separation in last placement.
+        Falls back to top-K by score when beam can't be diversified."""
+        if not nss:
+            return nss
+        nss.sort(key=lambda s: s["score"], reverse=True)
+        kept: List[Dict[str, Any]] = [nss[0]]
+        for s in nss[1:]:
+            if len(kept) >= k:
+                break
+            sx, sy, _ = s.get("_last_xy", (0.0, 0.0, 0.0))
+            ok = True
+            for kk in kept:
+                kx, ky, _ = kk.get("_last_xy", (0.0, 0.0, 0.0))
+                if math.hypot(sx - kx, sy - ky) < min_dist:
+                    ok = False
+                    break
+            if ok:
+                kept.append(s)
+        # Fill remaining slots with top-score regardless of diversity
+        if len(kept) < k:
+            seen = {id(s) for s in kept}
+            for s in nss:
+                if id(s) not in seen:
+                    kept.append(s)
+                    if len(kept) >= k:
+                        break
+        return kept
+
+    step_idx = 0
+    n_models = len(indexed_models)
+    while step_idx < n_models:
+        m = indexed_models[step_idx]
+        next_states = _expand_step(m, states)
+
         if not next_states:
-            # Fallback: place at origin
+            # Backtrack: pop the last placement from each state and retry with
+            # different yaw/position diversity. After max_backtracks we give up
+            # and place at the room centre clamped to nearest free spot.
+            if backtracks_used < max_backtracks and step_idx > 0:
+                backtracks_used += 1
+                rolled_back = []
+                for st in states:
+                    hist = st.get("history") or []
+                    ids = st.get("instance_ids") or []
+                    if not hist:
+                        rolled_back.append(st)
+                        continue
+                    last_id, _, _ = hist[-1]
+                    new_placed = {
+                        k: v for k, v in st["placed"].items() if k != last_id
+                    }
+                    new_obbs = [
+                        model_to_obb(v, inflation=collision_inflation)
+                        for k, v in new_placed.items()
+                    ]
+                    rolled_back.append({
+                        "placed": new_placed,
+                        "obbs": new_obbs,
+                        "score": st["score"] * 0.9,
+                        "history": hist[:-1],
+                        "instance_ids": ids[:-1],
+                    })
+                states = rolled_back
+                step_idx -= 1
+                # Reseed RNG so jitter samples land elsewhere
+                rng = random.Random(seed + backtracks_used * 7919)
+                continue
+
+            # Last-resort: place near room centre with progressive offset until
+            # an OBB-feasible cell is found, never collapse to (0,0).
+            name = m["Model"]
+            instance_id = f"{name}__{m.get('_index', 0)}"
+            hz = model_half_height(m)
+            best_state = max(states, key=lambda s: s["score"]) if states else states[0]
+            placed_obbs = best_state["obbs"]
+            chosen = (0.0, 0.0)
+            for radius in (0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0):
+                found = False
+                samples = 16 if radius > 0 else 1
+                for _ in range(samples):
+                    if radius == 0:
+                        cx, cy = 0.0, 0.0
+                    else:
+                        ang = rng.uniform(0, 2 * math.pi)
+                        cx = radius * math.cos(ang)
+                        cy = radius * math.sin(ang)
+                    obb = model_to_obb(
+                        m, inflation=collision_inflation,
+                        pos_override=(cx, cy), yaw_override=0.0,
+                    )
+                    if not obb_inside_room(obb, room_half_size):
+                        continue
+                    if not any(
+                        obb_overlap_depth(obb, other) > 0 for other in placed_obbs
+                    ):
+                        chosen = (cx, cy)
+                        found = True
+                        break
+                if found:
+                    break
             fallback_item = dict(m)
-            fallback_item["Pose"] = {"x": 0.0, "y": 0.0, "z": float(hz)}
+            fallback_item["Pose"] = {"x": chosen[0], "y": chosen[1], "z": float(hz)}
             fallback_item["yaw_deg"] = 0.0
+            fb_obb = model_to_obb(
+                fallback_item, inflation=collision_inflation,
+                pos_override=chosen, yaw_override=0.0,
+            )
             for st in states:
                 st["placed"][instance_id] = fallback_item
+                st["obbs"].append(fb_obb)
+                st.setdefault("history", []).append(
+                    (instance_id, fallback_item, fb_obb),
+                )
+                st.setdefault("instance_ids", []).append(instance_id)
+            step_idx += 1
             continue
 
-        # Global beam pruning
-        next_states.sort(key=lambda s: s["score"], reverse=True)
-        states = next_states[:max(1, beam_width)]
+        states = _diverse_prune(next_states, max(1, beam_width))
+        step_idx += 1
 
     best = max(states, key=lambda s: s["score"])
 
@@ -475,87 +617,99 @@ def solve_floor_placements(
 # ---------------------------------------------------------------------------
 
 
+_TARGET_BEARING_TYPES = frozenset({
+    "near", "next_to", "beside",
+    "on", "on_top_of", "on-top-of", "on top of", "on_top",
+    "left_of", "right_of", "in_front_of", "behind",
+    "face_to", "face_same_as",
+    "center_aligned",
+})
+
+
 def _topological_sort_models(
     indexed_models: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Topological sort so near-target anchors are placed before dependants.
+    """Topological sort so target-anchor objects are placed before dependants.
 
-    If object B has a 'near' constraint pointing to object A, A must be
-    placed first so beam search can generate near-target candidates for B.
-    This is a simplified DAG sort: anchors first, then dependants.
+    Each model instance is keyed by `(Model_name, _index)` so multiple copies
+    of the same model don't collapse their dependency graphs. Constraints of
+    every target-bearing type pull placement order — `on_top_of`, `near`,
+    `face_to`, `left_of`, etc. all require their target to exist first.
     """
-    # Build dependency map: name -> list of names it depends on
-    all_names = [str(m.get("Model", "")) for m in indexed_models]
-    name_set = set(all_names)
-
-    deps: Dict[str, set] = {str(m.get("Model", "")): set() for m in indexed_models}
+    # Per-instance keys keep duplicates independent.
+    inst_keys: List[Tuple[str, int]] = []
     for m in indexed_models:
-        mname = str(m.get("Model", ""))
+        inst_keys.append((str(m.get("Model", "")), int(m.get("_index", 0))))
+
+    # Group instances by model name so target-by-name resolves to all copies.
+    by_name: Dict[str, List[Tuple[str, int]]] = {}
+    for k in inst_keys:
+        by_name.setdefault(k[0], []).append(k)
+
+    # Build dependency map: instance_key -> set of instance_keys it depends on.
+    deps: Dict[Tuple[str, int], set] = {k: set() for k in inst_keys}
+    for m in indexed_models:
+        my_key = (str(m.get("Model", "")), int(m.get("_index", 0)))
         for c in m.get("_constraints", []):
             if not isinstance(c, dict):
                 continue
-            if str(c.get("type", "")).lower() in {"near", "next_to", "beside"}:
-                target = str(c.get("target", ""))
-                if target in name_set and target != mname:
-                    deps[mname].add(target)
+            ctype = str(c.get("type", "")).lower()
+            if ctype not in _TARGET_BEARING_TYPES:
+                continue
+            target = str(c.get("target", ""))
+            target_keys = by_name.get(target, [])
+            for tk in target_keys:
+                if tk == my_key:
+                    continue
+                deps[my_key].add(tk)
 
-    # Kahn's algorithm (stable - preserves footprint order within level)
-    in_degree: Dict[str, int] = {n: 0 for n in deps}
-    for n, d in deps.items():
-        for dep in d:
-            if dep in in_degree:
-                in_degree[dep] = in_degree.get(dep, 0)  # dep has no extra in-degree from this
+    # Reverse adjacency for Kahn's algorithm.
+    dependants: Dict[Tuple[str, int], List[Tuple[str, int]]] = {k: [] for k in inst_keys}
+    for k, ds in deps.items():
+        for d in ds:
+            if d in dependants:
+                dependants[d].append(k)
 
-    # Build reverse: who depends on me
-    dependants: Dict[str, List[str]] = {n: [] for n in deps}
-    for n, d in deps.items():
-        for dep in d:
-            if dep in dependants:
-                dependants[dep].append(n)
-        in_degree[n] = len([dep for dep in d if dep in name_set])
+    in_degree: Dict[Tuple[str, int], int] = {k: len(ds) for k, ds in deps.items()}
+    key_to_model = {
+        (str(m.get("Model", "")), int(m.get("_index", 0))): m
+        for m in indexed_models
+    }
 
-    queue = [n for n, deg in in_degree.items() if deg == 0]
-    sorted_names: List[str] = []
+    def _footprint(m: Dict[str, Any]) -> float:
+        s = m.get("size", [1.0, 1.0, 1.0])
+        if not isinstance(s, (list, tuple)) or len(s) < 3:
+            return 1.0
+        return float(s[0]) * float(s[2] if len(s) > 2 else s[0])
+
+    queue: List[Tuple[str, int]] = [k for k, d in in_degree.items() if d == 0]
+    result: List[Dict[str, Any]] = []
     visited: set = set()
 
     while queue:
-        # Sort queue by footprint size (largest first, preserving original priority)
-        name_to_model = {str(m.get("Model", "")): m for m in indexed_models}
+        # Largest-footprint-first within the current ready-set
         queue.sort(
-            key=lambda n: -(
-                float(name_to_model[n].get("size", [1, 1, 1])[0])
-                * float(name_to_model[n].get("size", [1, 1, 1])[1])
-                if n in name_to_model else 0
-            )
+            key=lambda k: -_footprint(key_to_model.get(k, {})),
         )
-        n = queue.pop(0)
-        if n in visited:
+        k = queue.pop(0)
+        if k in visited:
             continue
-        visited.add(n)
-        sorted_names.append(n)
-        for dep in dependants.get(n, []):
-            in_degree[dep] -= 1
-            if in_degree[dep] == 0:
-                queue.append(dep)
+        visited.add(k)
+        m = key_to_model.get(k)
+        if m is not None:
+            result.append(m)
+        for dep_k in dependants.get(k, []):
+            in_degree[dep_k] -= 1
+            if in_degree[dep_k] <= 0 and dep_k not in visited:
+                queue.append(dep_k)
 
-    # Add any remaining (cycles or not in deps)
-    for n in all_names:
-        if n not in visited:
-            sorted_names.append(n)
-
-    # Build per-name queues preserving multiple instances
-    name_queues: Dict[str, List[Dict[str, Any]]] = {}
-    for m in indexed_models:
-        n = str(m.get("Model", ""))
-        name_queues.setdefault(n, []).append(m)
-
-    result: List[Dict[str, Any]] = []
-    seen_names: set = set()
-    for n in sorted_names:
-        if n in seen_names:
-            continue
-        seen_names.add(n)
-        result.extend(name_queues.get(n, []))
+    # Any cycles or stragglers — append in original order
+    if len(result) < len(indexed_models):
+        for m in indexed_models:
+            k = (str(m.get("Model", "")), int(m.get("_index", 0)))
+            if k not in visited:
+                result.append(m)
+                visited.add(k)
 
     return result
 

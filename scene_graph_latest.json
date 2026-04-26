@@ -1,86 +1,67 @@
 {
-  "query": "sofa with book",
+  "query": "Кухня",
   "nodes": [
     {
       "id": "obj_0",
-      "name": "Sofa",
-      "constraints_count": 1
-    },
-    {
-      "id": "obj_1",
-      "name": "Book",
+      "name": "Stove",
       "constraints_count": 2
     }
   ],
   "edges": [
     {
       "from": "obj_0",
-      "from_name": "Sofa",
+      "from_name": "Stove",
       "type": "region",
       "hard": false,
       "weight": 1.0,
-      "value": "middle",
+      "value": "edge",
       "to": "",
       "to_name": ""
     },
     {
-      "from": "obj_1",
-      "from_name": "Book",
-      "type": "on_top_of",
-      "hard": false,
+      "from": "obj_0",
+      "from_name": "Stove",
+      "type": "near",
+      "hard": true,
       "weight": 1.0,
       "value": "None",
-      "to": "obj_0",
-      "to_name": "Sofa"
-    },
-    {
-      "from": "obj_1",
-      "from_name": "Book",
-      "type": "region",
-      "hard": false,
-      "weight": 0.7,
-      "value": "middle",
+      "distance": [
+        0.1,
+        0.3
+      ],
       "to": "",
-      "to_name": ""
+      "to_name": "Wall"
     }
   ],
   "raw_plan": {
     "objects": [
       {
-        "Model": "Sofa",
+        "Model": "Stove",
         "constraints": [
           {
             "type": "region",
             "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 1.0
-          }
-        ]
-      },
-      {
-        "Model": "Book",
-        "constraints": [
-          {
-            "type": "on_top_of",
-            "target": "Sofa",
-            "value": null,
+            "value": "edge",
             "hard": false,
             "weight": 1.0
           },
           {
-            "type": "region",
-            "target": "",
-            "value": "middle",
-            "hard": false,
-            "weight": 0.7
+            "type": "near",
+            "target": "Wall",
+            "value": null,
+            "hard": true,
+            "weight": 1.0,
+            "distance": [
+              0.1,
+              0.3
+            ]
           }
         ]
       }
     ],
     "room": {
       "half_size": 2.0,
-      "type": "other"
+      "type": "kitchen"
     }
   }
 }

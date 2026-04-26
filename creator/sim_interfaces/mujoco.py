@@ -1,5 +1,6 @@
 import copy
 import json
+import math
 import os
 import re
 import shutil
@@ -7,11 +8,10 @@ import sys
 import xml.etree.ElementTree as ET
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-import objaverse
 import trimesh
-from obj2mjcf.cli import Args, process_obj
+from obj2mjcf.cli import Args, CoacdArgs, process_obj
 
 from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
 from creator.placement import (
@@ -34,6 +34,7 @@ class MujocoSimInterface(BaseSimInterface):
     # After height-based scaling, if the horizontal span exceeds this, we clamp it.
     # Key = tuple of keywords, value = max allowed horizontal extent in metres.
     _MAX_HORIZ_M: Tuple[Tuple[Tuple[str, ...], float], ...] = (
+        (("crate", "container", "box"), 0.45),  # tabletop crate footprint clamp
         (("plate", "dish"), 0.32),      # dinner plate ≤ 32 cm
         (("bowl",), 0.25),              # mixing bowl ≤ 25 cm
         (("cup", "mug"), 0.12),         # cup width ≤ 12 cm
@@ -62,6 +63,7 @@ class MujocoSimInterface(BaseSimInterface):
         (("apple", "fruit"), 0.08),
         (("vase",), 0.30),
         (("pillow", "cushion"), 0.15),
+        (("crate", "container", "box"), 0.35),
         # Furniture
         (("stool",), 0.45),
         (("coffee table", "cocktail table"), 0.45),
@@ -109,9 +111,19 @@ class MujocoSimInterface(BaseSimInterface):
         (("car", "vehicle", "truck"), 1.50),
     )
 
-    def __init__(self, chosen_model: str) -> None:
+    _CONCAVE_COLLISION_HINTS: Tuple[str, ...] = (
+        "crate",
+        "container",
+        "box",
+        "basket",
+        "bin",
+        "drawer",
+        "ящик",
+    )
+
+    def __init__(self, chosen_model: str, cache_dir: Optional[str] = None) -> None:
         super().__init__(chosen_model)
-        self.cache = Cache()
+        self.cache = Cache(cache=cache_dir)
 
     def check_world(self, world: Dict[str, Union[str, int, float]]) -> None:
         pass
@@ -287,52 +299,146 @@ class MujocoSimInterface(BaseSimInterface):
             full_placed_models.append(selected_entry)
         return full_placed_models
 
-    def load_objects(self, full_placed_models: List[Dict]) -> Dict[str, str]:
-        # TODO abstract dataset loader
-        try:
-            loaded = objaverse.load_objects(
-                uids=[entry["uuid"] for entry in full_placed_models]
-            )
-        except Exception as e:
-            print(f"Warning: Failed to load objects from Objaverse: {e}")
-            loaded = {}
+    def load_objects(self, full_placed_models: List[Dict]) -> Dict[str, Optional[str]]:
+        """Resolve mesh paths for models.
 
-        # Mark missing models for fallback cube substitution
-        result = {}
-        for entry in full_placed_models:
-            uuid = entry["uuid"]
-            if uuid in loaded and loaded[uuid]:
-                result[uuid] = loaded[uuid]
-            else:
-                # None signals missing model -> will use fallback cube
-                result[uuid] = None
+        The generation pipeline now uses a local assets catalog. Each model row
+        should already include `model_loc` (absolute path) or a relative path.
+        Missing paths are marked as None so XML assembly can substitute a
+        fallback cube and continue.
+        """
+        result: Dict[str, Optional[str]] = {}
+        project_root = Path(__file__).resolve().parents[2]
+
+        for i, entry in enumerate(full_placed_models):
+            uid = str(entry.get("uuid") or entry.get("name") or f"model_{i}")
+            raw_path = entry.get("model_loc")
+            if not raw_path:
+                raw_path = entry.get("local_path")
+            if not raw_path:
+                raw_path = entry.get("obj_file")
+            if not raw_path:
+                raw_path = entry.get("mesh_path")
+
+            resolved_path: Optional[str] = None
+            if isinstance(raw_path, str) and raw_path.strip():
+                candidate = Path(raw_path.strip())
+                if not candidate.is_absolute():
+                    candidate = (project_root / candidate).resolve()
+                if candidate.exists() and candidate.is_file():
+                    resolved_path = str(candidate)
+
+            if resolved_path is None:
+                model_name = entry.get("Model") or entry.get("name") or uid
+                print(f"Warning: mesh path not found for '{model_name}'.")
+            result[uid] = resolved_path
 
         return result
 
-    @staticmethod
-    def _infer_up_axis(mesh: "trimesh.Trimesh") -> str:
-        """Return 'y' or 'z': which mesh axis becomes scene-Z (height) after rotation.
+    def _detect_up_axis(
+        self,
+        model_name: str,
+        mesh: "trimesh.Trimesh",
+    ) -> str:
+        """Pick the mesh axis ('y' or 'z') that should map to scene-Z (vertical).
 
-        GLB/GLTF Y-up models rest on the XZ plane → Y_min ≈ 0.
-        Some Objaverse models are exported Z-up → Z_min ≈ 0, Y is centered.
+        Euler conventions used downstream:
+          'y' → euler="90 0 yaw" (rotate +90° around X: mesh-Y → scene-Z).
+          'z' → euler="0 0 yaw"  (already upright).
 
-        We apply euler='90 0 yaw' for Y-up models (mesh-Y → scene-Z).
-        Z-up models are already correctly oriented and need euler='0 0 yaw'.
+        Strategy, in order of reliability:
+          1. Category-aware match: pick axis whose unit-scaled extent best
+             matches `target_height_m(model_name)` on a log scale. This is
+             the strongest signal — it directly resolves "table on edge"
+             cases where the geometric heuristics tie.
+          2. Floor-rest test: if exactly one of Y/Z has min ≈ 0 with the
+             other axis centered, that axis is up.
+          3. Centroid asymmetry: axis with strongest |centroid - midpoint|/span
+             (mass distribution gives away the up direction).
+          4. Footprint/height ratio: prefer axis where the perpendicular
+             footprint dominates (most furniture is wider than tall).
+          5. Fallback to 'y' (GLB/Objaverse convention).
         """
-        bounds_min = mesh.bounds[0]
-        extents = mesh.extents
-        max_dim = max(extents) if max(extents) > 0 else 1.0
-        tol = max_dim * 0.05  # 5% tolerance
+        bmin, bmax = mesh.bounds
+        bmin = [float(v) for v in bmin]
+        bmax = [float(v) for v in bmax]
+        spans = [max(1e-9, bmax[i] - bmin[i]) for i in range(3)]
+        max_dim = max(spans)
+        unit_scale = self.infer_unit_scale(max_dim)
+        try:
+            centroid = mesh.centroid
+            cx, cy, cz = float(centroid[0]), float(centroid[1]), float(centroid[2])
+        except Exception:
+            cx = 0.5 * (bmin[0] + bmax[0])
+            cy = 0.5 * (bmin[1] + bmax[1])
+            cz = 0.5 * (bmin[2] + bmax[2])
+        centers = [cx, cy, cz]
 
-        y_min = float(bounds_min[1])
-        z_min = float(bounds_min[2])
+        # Stage 1: category-aware. Use target height to disambiguate.
+        # Only meaningful if the category is in our table (avoid LLM here
+        # to keep `update_model_sizes` cheap and deterministic).
+        target_h = self._lookup_target_height(model_name)
+        if target_h is not None and target_h > 0:
+            log_t = math.log(target_h)
+            best_axis: Optional[str] = None
+            best_dist = float("inf")
+            for axis_idx, axis_name in ((1, "y"), (2, "z")):
+                h_m = spans[axis_idx] * unit_scale
+                if h_m <= 1e-6:
+                    continue
+                d = abs(math.log(h_m) - log_t)
+                if d < best_dist:
+                    best_dist = d
+                    best_axis = axis_name
+            # Accept only if the best candidate is within ~2.5x of target
+            # (log(2.5) ≈ 0.92). Otherwise the category target is unreliable
+            # for this asset and we fall through to geometric heuristics.
+            if best_axis is not None and best_dist < math.log(2.5):
+                return best_axis
 
-        z_at_floor = abs(z_min) < tol          # Z starts near 0 → Z-up
-        y_centered = abs(y_min) > tol           # Y is not at floor → Y is centered
-
-        if z_at_floor and y_centered:
+        # Stage 2: floor-rest test
+        floor_thresh = 0.10
+        y_on_floor = abs(bmin[1]) <= floor_thresh * spans[1]
+        z_on_floor = abs(bmin[2]) <= floor_thresh * spans[2]
+        x_centered = abs(cx - 0.5 * (bmin[0] + bmax[0])) <= 0.10 * spans[0]
+        y_centered = abs(cy - 0.5 * (bmin[1] + bmax[1])) <= 0.10 * spans[1]
+        z_centered = abs(cz - 0.5 * (bmin[2] + bmax[2])) <= 0.10 * spans[2]
+        if y_on_floor and not z_on_floor and x_centered and z_centered:
+            return "y"
+        if z_on_floor and not y_on_floor and x_centered and y_centered:
             return "z"
+
+        # Stage 3: centroid asymmetry — axis with mass concentrated off-center
+        # is the natural up axis (table top / chair seat / etc.)
+        asymm = []
+        for axis_idx in range(3):
+            mid = 0.5 * (bmin[axis_idx] + bmax[axis_idx])
+            asymm.append(abs(centers[axis_idx] - mid) / spans[axis_idx])
+        # Restrict to Y/Z (X-up not supported by assembly euler).
+        if asymm[1] > 0.10 and asymm[1] >= asymm[2]:
+            return "y"
+        if asymm[2] > 0.10 and asymm[2] > asymm[1]:
+            return "z"
+
+        # Stage 4: footprint/height ratio
+        ratio_y = (spans[0] * spans[2]) / max(1e-6, spans[1])
+        ratio_z = (spans[0] * spans[1]) / max(1e-6, spans[2])
+        if ratio_y > ratio_z * 1.15:
+            return "y"
+        if ratio_z > ratio_y * 1.15:
+            return "z"
+
+        # Stage 5: fallback
         return "y"
+
+    def _lookup_target_height(self, model_name: str) -> Optional[float]:
+        """Like `target_height_m` but returns None for unknown categories
+        (no LLM call). Used by up-axis detection to avoid recursion / cost."""
+        name = str(model_name or "").lower()
+        for keywords, height in self._HEIGHT_TARGETS_M:
+            if any(kw in name for kw in keywords):
+                return float(height)
+        return None
 
     def update_model_sizes(self, models: List[Dict]) -> List[Dict]:
         updated_models = models
@@ -343,7 +449,10 @@ class MujocoSimInterface(BaseSimInterface):
             try:
                 mesh = trimesh.load(model["model_loc"], force="mesh")
                 updated_models[i]["size"] = mesh.extents
-                updated_models[i]["_up_axis"] = self._infer_up_axis(mesh)
+                model_name = str(model.get("Model") or model.get("name") or "")
+                updated_models[i]["_up_axis"] = self._detect_up_axis(
+                    model_name, mesh,
+                )
             except Exception as e:
                 print(f"Warning: Failed to load mesh for {model.get('Model')}: {e}")
                 # Keep original size, will use fallback
@@ -492,13 +601,14 @@ class MujocoSimInterface(BaseSimInterface):
             max_dim = max(sx, sy, sz)
             model_name = str(model.get("Model") or model.get("name") or "")
 
+            up_axis = str(model.get("_up_axis", "y"))
+
             # Step 1: unit detection (same as before — based on raw max extent)
             unit_scale = self.infer_unit_scale(max_dim)
 
             # Step 2: height in metres after unit normalisation.
             # For Y-up models (standard GLB): mesh Y → scene Z after euler="90 0 yaw".
             # For Z-up models (some Objaverse assets): mesh Z → scene Z, no rotation.
-            up_axis = model.get("_up_axis", "y")
             if up_axis == "z":
                 height_raw = sz if sz >= 0.05 * max_dim else max_dim
             elif sy >= 0.05 * max_dim:
@@ -543,9 +653,17 @@ class MujocoSimInterface(BaseSimInterface):
 
             final_scale = max(1e-4, min(1000.0, final_scale))
             model["scale"] = final_scale
-            model["size"] = [sx * final_scale, sy * final_scale, sz * final_scale]
-            # Annotate actual computed height for debugging / placement
-            model["_height_m"] = sy * final_scale
+
+            # Normalise size so that size[1] is ALWAYS the scene height.
+            # Y-up (euler="90 0 yaw"): mesh-Y → scene-Z, so size[1]=mesh_Y=height ✓
+            # Z-up (euler="0 0 yaw"):  mesh-Z → scene-Z, so swap Y↔Z in stored size.
+            if up_axis == "z":
+                # [mesh_X, mesh_Z, mesh_Y] → [scene_width, scene_height, scene_depth]
+                model["size"] = [sx * final_scale, sz * final_scale, sy * final_scale]
+                model["_height_m"] = sz * final_scale
+            else:
+                model["size"] = [sx * final_scale, sy * final_scale, sz * final_scale]
+                model["_height_m"] = sy * final_scale
 
         return updated_models
 
@@ -597,7 +715,7 @@ class MujocoSimInterface(BaseSimInterface):
             # Use fallback cube if model is missing (model_loc is None or doesn't exist)
             if model_loc is None or not os.path.exists(str(model_loc)):
                 model_name = model.get('Model', model.get('name', 'unknown'))
-                print(f"Model '{model_name}' not found in Objaverse, using fallback cube.")
+                print(f"Model '{model_name}' not found in local assets, using fallback cube.")
                 fallback_xml = self.create_fallback_cube_xml(path, model)
                 self.insert_include_tags(main_root, fallback_xml)
                 continue
@@ -607,10 +725,10 @@ class MujocoSimInterface(BaseSimInterface):
 
             obj_path = self.write_obj_file(obj, path, model)
             self.save_material_and_images(data, path)
-            args = self.create_args(path)
+            args = self.create_args(path, model)
             printed_output = self.process_obj_file(obj_path, args)
-            self.copy_images_to_nested_path(path, model)
             saved_mjc_path = self.get_saved_mjc_path(path, model)
+            self.copy_referenced_textures_to_model_dir(path, saved_mjc_path)
             if "Error compiling model" in printed_output:
                 if not self.model_xml_compiles(saved_mjc_path):
                     print(
@@ -699,24 +817,27 @@ class MujocoSimInterface(BaseSimInterface):
         px = float(pose.get("x", 0.0))
         py = float(pose.get("y", 0.0))
         pz = float(pose.get("z", 1.4))
-        yaw_deg = float(model.get("yaw_deg", 0.0))
         size = model.get("size") or [0.3, 0.3, 0.3]
-        hx = float(size[0]) / 2.0
-        hy = float(size[1]) / 2.0
-        hz = float(size[2]) / 2.0 if len(size) > 2 else hy
+        half_width = float(size[0]) / 2.0
+        half_height = float(size[1]) / 2.0 if len(size) > 1 else half_width
+        half_depth = float(size[2]) / 2.0 if len(size) > 2 else half_width
 
         wall_t = 0.05
+        wall_pos = (wall_body.get("pos") or "0 0 0").split()
+        wall_center_z = float(wall_pos[2]) if len(wall_pos) == 3 else 0.0
+        rel_z = pz - wall_center_z
+
         # Position of mounted object relative to wall body centre
         # For north/south wall: object sticks out in -Y direction (into room)
         # For east/west wall: object sticks out in -X direction
         if wall_side in ("north",):
-            rel_x, rel_y, rel_z = px, -wall_t - hz, pz - float(pose.get("z", 1.4)) + pz
+            rel_x, rel_y = px, -wall_t - half_depth
         elif wall_side in ("south",):
-            rel_x, rel_y, rel_z = px, wall_t + hz, pz
+            rel_x, rel_y = px, wall_t + half_depth
         elif wall_side in ("east",):
-            rel_x, rel_y, rel_z = -wall_t - hz, py, pz
+            rel_x, rel_y = -wall_t - half_depth, py
         else:  # west
-            rel_x, rel_y, rel_z = wall_t + hz, py, pz
+            rel_x, rel_y = wall_t + half_depth, py
 
         safe_name = re.sub(r"[^a-zA-Z0-9_]", "_", model_name)
         save_fn = re.sub(r"[^a-zA-Z0-9_]", "_", str(model.get("save_fn") or "0"))
@@ -731,7 +852,7 @@ class MujocoSimInterface(BaseSimInterface):
         friction_str = " ".join(str(v) for v in profile.friction)
         ET.SubElement(child_body, "geom",
             type="box",
-            size=f"{hx} {hy} {hz}",
+            size=f"{half_width} {half_depth} {half_height}",
             rgba="0.7 0.6 0.5 1",
             friction=friction_str,
             density=str(profile.density),
@@ -846,13 +967,13 @@ class MujocoSimInterface(BaseSimInterface):
     ) -> Path:
         size = model.get("size")
         if size is None:
-            sx, sy, sz = 0.5, 0.5, 0.5
+            width, depth, height = 0.5, 0.5, 0.5
         else:
-            sx = max(0.1, float(size[0]))
-            sy = max(0.1, float(size[1]))
-            sz = max(0.1, float(size[2]))
+            width = max(0.1, float(size[0]))
+            height = max(0.1, float(size[1])) if len(size) > 1 else width
+            depth = max(0.1, float(size[2])) if len(size) > 2 else width
 
-        gx, gy, gz = sx / 2.0, sy / 2.0, sz / 2.0
+        gx, gy, gz = width / 2.0, depth / 2.0, height / 2.0
         pose = model.get("Pose") or {"x": 0.0, "y": 0.0, "z": gz}
         px = float(pose.get("x", 0.0))
         py = float(pose.get("y", 0.0))
@@ -901,7 +1022,17 @@ class MujocoSimInterface(BaseSimInterface):
         self, model: Dict[str, Union[str, int, float]]
     ) -> trimesh.Trimesh:
         mesh = trimesh.load(model["model_loc"], force="mesh")
-        mesh.apply_scale(model["scale"])
+        mesh.apply_scale(float(model.get("scale", 1.0)))
+
+        # Normalize mesh origin to bbox center so body pose z=height/2 really
+        # means floor contact and not floating/intersecting due mesh offsets.
+        bmin, bmax = mesh.bounds
+        cx = 0.5 * (float(bmin[0]) + float(bmax[0]))
+        cy = 0.5 * (float(bmin[1]) + float(bmax[1]))
+        cz = 0.5 * (float(bmin[2]) + float(bmax[2]))
+        if all(math.isfinite(v) for v in (cx, cy, cz)):
+            mesh.apply_translation([-cx, -cy, -cz])
+
         return mesh
 
     def export_mesh(self, mesh: trimesh.Trimesh) -> Tuple[str, Dict[str, bytes]]:
@@ -926,29 +1057,91 @@ class MujocoSimInterface(BaseSimInterface):
 
     def save_material_and_images(self, data: Dict[str, bytes], path: Path) -> None:
         for k, v in data.items():
-            with open(os.path.join(path, k), "wb") as f:
+            target_path = path / k
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(target_path, "wb") as f:
                 f.write(v)
 
-    def copy_images_to_nested_path(
-        self, path: Path, model: Dict[str, Union[str, int, float]]
+    def copy_referenced_textures_to_model_dir(
+        self,
+        source_dir: Path,
+        saved_mjc_path: Path,
     ) -> None:
-        nested_path = Path(os.path.abspath(str(path) + f"/{model['save_fn']}"))
-        nested_path.mkdir(parents=True, exist_ok=True)
-        files = os.listdir(path)
-        for file in files:
-            if file.endswith(".png") or file.endswith(".jpg"):
-                source_path = os.path.join(path, file)
-                destination_path = os.path.join(nested_path, file)
-                shutil.copy(source_path, destination_path)
+        if not saved_mjc_path.exists():
+            return
 
-    def create_args(self, path: Path) -> Args:
-        return Args(
-            obj_dir=path,
-            verbose=True,
-            save_mjcf=True,
-            compile_model=True,
-            overwrite=True,
-        )
+        try:
+            xml_root = ET.parse(saved_mjc_path).getroot()
+        except ET.ParseError:
+            return
+
+        target_dir = saved_mjc_path.parent
+        seen_files: Set[str] = set()
+
+        for texture in xml_root.findall(".//texture"):
+            raw_file = (texture.get("file") or "").strip()
+            if not raw_file:
+                continue
+
+            texture_rel_path = raw_file.replace("\\", "/")
+            if texture_rel_path in seen_files:
+                continue
+            seen_files.add(texture_rel_path)
+
+            source_path = source_dir / texture_rel_path
+            if not source_path.exists():
+                # Some exporters flatten texture file names in the source folder.
+                source_path = source_dir / Path(texture_rel_path).name
+            if not source_path.exists() or not source_path.is_file():
+                continue
+
+            destination_path = target_dir / texture_rel_path
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            if source_path.resolve() == destination_path.resolve():
+                continue
+            shutil.copy2(source_path, destination_path)
+
+    def _needs_convex_decomposition(self, model: Optional[Dict[str, Any]]) -> bool:
+        if not model:
+            return False
+        parts: List[str] = []
+        name = str(model.get("Model") or model.get("name") or "")
+        if name:
+            parts.append(name)
+        for key in ("categories", "tags"):
+            raw = model.get(key)
+            if isinstance(raw, list):
+                parts.extend(str(x) for x in raw if x)
+        haystack = " ".join(parts).lower()
+        return any(token in haystack for token in self._CONCAVE_COLLISION_HINTS)
+
+    def create_args(
+        self,
+        path: Path,
+        model: Optional[Dict[str, Any]] = None,
+    ) -> Args:
+        use_decompose = self._needs_convex_decomposition(model)
+        kwargs: Dict[str, Any] = {
+            "obj_dir": path,
+            "verbose": True,
+            "save_mjcf": True,
+            "compile_model": True,
+            "overwrite": True,
+            "decompose": use_decompose,
+        }
+        if use_decompose:
+            kwargs["coacd_args"] = CoacdArgs(
+                preprocess_resolution=30,
+                threshold=0.08,
+                max_convex_hull=24,
+                mcts_iterations=60,
+                mcts_max_depth=3,
+                mcts_nodes=16,
+                resolution=800,
+                pca=False,
+                seed=0,
+            )
+        return Args(**kwargs)
 
     def process_obj_file(self, obj_path: str, args: Args) -> str:
         sys.stdout = StringIO()
@@ -1019,10 +1212,19 @@ class MujocoSimInterface(BaseSimInterface):
         model_name = str(model.get("Model") or model.get("name") or "")
         profile = get_physics_profile(model_name)
 
-        # Y-up GLB: rotate 90° around X so mesh-Y becomes scene-Z (height).
-        # Z-up models are already upright — only apply yaw rotation.
+        # MuJoCo uses XYZ-intrinsic Tait-Bryan euler. The third angle rotates
+        # around the body's already-rotated Z axis, not the world Z.
+        #
+        # Y-up GLB: we want a final rotation = Rx(90°) · Rz(yaw_world). The
+        # equivalent intrinsic euler is "90 yaw 0" — the second angle becomes
+        # a rotation around the body's Y axis which, after the preceding
+        # Rx(90°), points along world-Z (i.e. yaw around world vertical).
+        # Using "90 0 yaw" instead would tip the table over because by then
+        # the body-Z axis is horizontal.
+        #
+        # Z-up models stay upright; "0 0 yaw" rotates around world-Z directly.
         up_axis = str(model.get("_up_axis", "y"))
-        euler_str = f"0 0 {yaw_deg}" if up_axis == "z" else f"90 0 {yaw_deg}"
+        euler_str = f"0 0 {yaw_deg}" if up_axis == "z" else f"90 {yaw_deg} 0"
 
         for body in included_root.findall(".//body"):
             body.set("pos", f"{px} {py} {pz}")
@@ -1055,26 +1257,34 @@ class MujocoSimInterface(BaseSimInterface):
         material_count: int,
     ) -> int:
         materials = included_root.findall(".//material")
-        for i, texture in enumerate(included_root.findall(".//texture")):
+        for texture in included_root.findall(".//texture"):
             old_name = texture.get("name")
+            if not old_name:
+                continue
             material_map[old_name] = f"material_{material_count}"
             texture.set("name", material_map[old_name])
             material_count += 1
-        for i, material in enumerate(materials):
+
+        for material in materials:
             old_name = material.get("name")
+            if not old_name:
+                continue
             if old_name not in material_map:
                 material_map[old_name] = f"material_{material_count}"
                 material_count += 1
             material.set("name", material_map[old_name])
-            texture = material.get("texture")
-            if texture:
-                material.set("texture", material_map[old_name])
-        for i, geom in enumerate(included_root.findall(".//geom")):
+
+            texture_name = material.get("texture")
+            if texture_name and texture_name in material_map:
+                material.set("texture", material_map[texture_name])
+
+        for geom in included_root.findall(".//geom"):
             material = geom.get("material")
-            if material:
+            if material and material in material_map:
                 geom.set("material", material_map[material])
+
             class_ = geom.get("class")
-            if class_:
+            if class_ and class_ in material_map:
                 geom.set("class", material_map[class_])
         return material_count
 

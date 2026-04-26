@@ -16,6 +16,17 @@ from creator.placement.geometry import (
 )
 
 
+_CONTAINER_HINTS = (
+    "box",
+    "crate",
+    "container",
+    "drawer",
+    "basket",
+    "bin",
+    "ящик",
+)
+
+
 def _clip(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
@@ -49,6 +60,115 @@ def _footprint_half(item: Dict[str, Any]) -> Tuple[float, float]:
     if not isinstance(size, (list, tuple)) or len(size) < 3:
         return 0.5, 0.5
     return max(0.01, float(size[0])) / 2.0, max(0.01, float(size[2])) / 2.0
+
+
+def _is_container_target(item: Dict[str, Any]) -> bool:
+    parts: List[str] = []
+    name = str(item.get("Model") or item.get("name") or "")
+    if name:
+        parts.append(name)
+
+    for key in ("categories", "tags"):
+        raw = item.get(key)
+        if isinstance(raw, list):
+            parts.extend(str(x) for x in raw if x)
+
+    haystack = " ".join(parts).lower()
+    return any(token in haystack for token in _CONTAINER_HINTS)
+
+
+def _xy_overlap_rect(
+    ax: float,
+    ay: float,
+    ahx: float,
+    ahy: float,
+    bx: float,
+    by: float,
+    bhx: float,
+    bhy: float,
+    *,
+    margin: float = 0.01,
+) -> bool:
+    sep_x = (ax + ahx + margin < bx - bhx) or (bx + bhx + margin < ax - ahx)
+    sep_y = (ay + ahy + margin < by - bhy) or (by + bhy + margin < ay - ahy)
+    return not (sep_x or sep_y)
+
+
+def _on_surface_candidates(
+    source: Dict[str, Any],
+    target: Dict[str, Any],
+    current_xy: Tuple[float, float],
+) -> List[Tuple[float, float]]:
+    tp = target.get("Pose") or {"x": 0.0, "y": 0.0}
+    tx, ty = float(tp.get("x", 0.0)), float(tp.get("y", 0.0))
+
+    t_hx, t_hy = _footprint_half(target)
+    s_hx, s_hy = _footprint_half(source)
+    usable_hx = max(0.0, t_hx - s_hx - 0.01)
+    usable_hy = max(0.0, t_hy - s_hy - 0.01)
+
+    px = _clip(float(current_xy[0]), tx - usable_hx, tx + usable_hx)
+    py = _clip(float(current_xy[1]), ty - usable_hy, ty + usable_hy)
+    candidates: List[Tuple[float, float]] = [(px, py), (tx, ty)]
+
+    grid_steps = 4
+    if usable_hx > 1e-6 or usable_hy > 1e-6:
+        for gx in range(grid_steps + 1):
+            for gy in range(grid_steps + 1):
+                u = gx / grid_steps
+                v = gy / grid_steps
+                ox = usable_hx * (2.0 * u - 1.0) if usable_hx > 1e-6 else 0.0
+                oy = usable_hy * (2.0 * v - 1.0) if usable_hy > 1e-6 else 0.0
+                candidates.append((tx + ox, ty + oy))
+
+    unique: List[Tuple[float, float]] = []
+    seen = set()
+    for cx, cy in candidates:
+        key = (round(cx, 4), round(cy, 4))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append((cx, cy))
+    return unique
+
+
+def _pick_on_surface_slot(
+    source: Dict[str, Any],
+    target: Dict[str, Any],
+    current_xy: Tuple[float, float],
+    occupied: Sequence[Tuple[float, float, float, float]],
+    *,
+    prefer_edge: bool = False,
+) -> Tuple[float, float]:
+    s_hx, s_hy = _footprint_half(source)
+    candidates = _on_surface_candidates(source, target, current_xy)
+    tp = target.get("Pose") or {"x": 0.0, "y": 0.0}
+    tx, ty = float(tp.get("x", 0.0)), float(tp.get("y", 0.0))
+
+    best_xy = candidates[0]
+    best_score = -float("inf")
+    cx0, cy0 = float(current_xy[0]), float(current_xy[1])
+
+    for cx, cy in candidates:
+        collides = any(
+            _xy_overlap_rect(cx, cy, s_hx, s_hy, ox, oy, ohx, ohy, margin=0.005)
+            for ox, oy, ohx, ohy in occupied
+        )
+        if collides:
+            continue
+
+        # Prefer staying close to the current position, and spread when occupied.
+        score = -((cx - cx0) ** 2 + (cy - cy0) ** 2)
+        if prefer_edge and not occupied:
+            score += 2.0 * ((cx - tx) ** 2 + (cy - ty) ** 2)
+        if occupied:
+            min_d = min(math.hypot(cx - ox, cy - oy) for ox, oy, _, _ in occupied)
+            score += 0.5 * min_d
+        if score > best_score:
+            best_score = score
+            best_xy = (cx, cy)
+
+    return best_xy
 
 
 def _find_target(
@@ -149,13 +269,19 @@ def evaluate_constraint_violations(
                 s_hh = _half_height(source)
                 t_hh = _half_height(target)
                 t_hx, t_hy = _footprint_half(target)
-                exp_z = tpz + t_hh + s_hh + 0.01
                 # XY tolerance: object may be placed anywhere within target footprint
                 xy_tol_x = max(0.12, t_hx)
                 xy_tol_y = max(0.12, t_hy)
                 z_tol = max(0.08, s_hh * 0.5)
                 sat_xy = abs(sx - tx) <= xy_tol_x and abs(sy - ty) <= xy_tol_y
-                sat_z = abs(spz - exp_z) <= z_tol
+                if _is_container_target(target):
+                    z_floor = tpz - t_hh + s_hh
+                    z_drop_start = tpz + t_hh + s_hh + 0.12
+                    sat_z = (z_floor - z_tol) <= spz <= (z_drop_start + z_tol)
+                    exp_z = tpz + t_hh + s_hh + 0.01
+                else:
+                    exp_z = tpz + t_hh + s_hh + 0.01
+                    sat_z = abs(spz - exp_z) <= z_tol
                 if not (sat_xy and sat_z):
                     violations.append(
                         f"{name}: on {target_name} violated "
@@ -274,12 +400,16 @@ def repair_layout_by_constraints(
                     s_hh = _half_height(source)
                     t_hh = _half_height(target)
                     t_hx, t_hy = _footprint_half(target)
-                    # Only snap X,Y to target center if object is outside its footprint.
-                    # Preserve positions set by solve_small_object_placements.
-                    if abs(sx - tx) > t_hx or abs(sy - ty) > t_hy:
-                        sx = tx
-                        sy = ty
-                    sz = float(tp.get("z", 0.0)) + t_hh + s_hh + 0.01
+                    s_hx, s_hy = _footprint_half(source)
+                    limit_x = max(0.0, t_hx - s_hx)
+                    limit_y = max(0.0, t_hy - s_hy)
+                    sx = _clip(sx, tx - limit_x, tx + limit_x)
+                    sy = _clip(sy, ty - limit_y, ty + limit_y)
+                    if _is_container_target(target):
+                        drop_start = min(0.12, max(0.05, t_hh * 0.5))
+                        sz = float(tp.get("z", 0.0)) + t_hh + s_hh + drop_start
+                    else:
+                        sz = float(tp.get("z", 0.0)) + t_hh + s_hh + 0.01
 
             pose["x"] = _clip(sx, -room_half_size + 0.2, room_half_size - 0.2)
             pose["y"] = _clip(sy, -room_half_size + 0.2, room_half_size - 0.2)
@@ -302,6 +432,24 @@ def repair_layout_by_constraints(
         if not n:
             continue
         by_name_final.setdefault(n, []).append(m)
+
+    on_target_counts: Dict[str, int] = {}
+    for obj in objects:
+        if not isinstance(obj, dict):
+            continue
+        constraints = obj.get("constraints") if isinstance(obj.get("constraints"), list) else []
+        for c in constraints:
+            if not isinstance(c, dict):
+                continue
+            ctype = str(c.get("type", "")).lower()
+            if ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
+                t_name = str(c.get("target", "")).strip()
+                if t_name:
+                    on_target_counts[t_name] = on_target_counts.get(t_name, 0) + 1
+                break
+
+    on_target_seen: Dict[str, int] = {}
+    occupied_on_target: Dict[int, List[Tuple[float, float, float, float]]] = {}
 
     for obj in objects:
         if not isinstance(obj, dict):
@@ -328,20 +476,40 @@ def repair_layout_by_constraints(
             if not target:
                 continue
 
+            seen_for_target = on_target_seen.get(target_name, 0)
+            total_for_target = on_target_counts.get(target_name, 1)
+            prefer_edge = total_for_target > 1 and seen_for_target == 0
+            on_target_seen[target_name] = seen_for_target + 1
+
             source_pose = dict(source.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.01})
             target_pose = target.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0}
             s_hh = _half_height(source)
             t_hh = _half_height(target)
-            t_hx, t_hy = _footprint_half(target)
             tx_c = float(target_pose.get("x", 0.0))
             ty_c = float(target_pose.get("y", 0.0))
             sx_c = float(source_pose.get("x", tx_c))
             sy_c = float(source_pose.get("y", ty_c))
-            # Only snap X,Y to target center if object is outside its footprint.
-            if abs(sx_c - tx_c) > t_hx or abs(sy_c - ty_c) > t_hy:
-                source_pose["x"] = tx_c
-                source_pose["y"] = ty_c
-            source_pose["z"] = float(target_pose.get("z", 0.0)) + t_hh + s_hh + 0.01
+
+            target_key = id(target)
+            occupied = occupied_on_target.setdefault(target_key, [])
+            slot_x, slot_y = _pick_on_surface_slot(
+                source,
+                target,
+                (sx_c, sy_c),
+                occupied,
+                prefer_edge=prefer_edge,
+            )
+            source_pose["x"] = slot_x
+            source_pose["y"] = slot_y
+
+            if _is_container_target(target):
+                drop_start = min(0.12, max(0.05, t_hh * 0.5))
+                source_pose["z"] = float(target_pose.get("z", 0.0)) + t_hh + s_hh + drop_start
+            else:
+                source_pose["z"] = float(target_pose.get("z", 0.0)) + t_hh + s_hh + 0.01
+
+            s_hx, s_hy = _footprint_half(source)
+            occupied.append((source_pose["x"], source_pose["y"], s_hx, s_hy))
             source["Pose"] = source_pose
             break
 

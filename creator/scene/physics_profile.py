@@ -104,6 +104,7 @@ _PROFILE_RULES: Tuple[Tuple[Tuple[str, ...], PhysicsProfile], ...] = (
             "pencil", "marker", "ball", "toy", "vase", "pot", "flower",
             "remote", "controller", "pillow", "cushion", "apple", "fruit",
             "candle", "figurine", "stapler", "scissors", "tape",
+            "box", "crate", "container", "package", "parcel",
         ),
         DYNAMIC_SMALL,
     ),

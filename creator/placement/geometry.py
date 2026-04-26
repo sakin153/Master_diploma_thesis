@@ -392,7 +392,10 @@ def gradient_resolve_overlaps(
             pose["y"] = float(pose.get("y", 0.0)) + step_size * g.y
             resolved[i]["Pose"] = pose
 
-    # Final hard clamp: ensure all objects stay within room bounds
+    # Final hard clamp: ensure all objects stay within room bounds AND
+    # rest correctly on the floor (or on top of their support if stacked).
+    # Floor objects: bottom must be at z=0, so z = half-height.
+    # Stacked objects: keep their existing z (set by small-objects/repair pass).
     for i in range(n):
         obb_i = model_to_obb(resolved[i])
         pose = dict(resolved[i].get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0})
@@ -411,6 +414,20 @@ def gradient_resolve_overlaps(
             cy += hi - aabb_i.max_y
         pose["x"] = cx
         pose["y"] = cy
+
+        # Z-clamp: an object whose bottom would be below floor (z < half-height)
+        # must be lifted up. Objects stacked on others (z noticeably above
+        # half-height) keep their stacked z so we don't break "on top of".
+        hh = model_half_height(resolved[i])
+        cz = float(pose.get("z", hh))
+        floor_z = hh
+        # Tolerance: anything within 5% of floor_z is treated as a floor object.
+        if cz < floor_z - 1e-3:
+            pose["z"] = floor_z
+        elif abs(cz - floor_z) < max(0.05, 0.1 * hh):
+            # Snap exactly to floor (kills small drift from gradient steps).
+            pose["z"] = floor_z
+
         resolved[i]["Pose"] = pose
 
     return resolved

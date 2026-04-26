@@ -43,9 +43,55 @@ Rules:
 
 _SCENE_TOO_SHORT_WORDS = 8   # expand if fewer than this many words
 
+_ROOM_DEFAULTS: Dict[str, List[tuple]] = {
+    "classroom": [
+        ("desk", 10, "student desks arranged in rows"),
+        ("chair", 10, "chairs aligned with desks"),
+        ("teacher desk", 1, "at front of the room"),
+        ("whiteboard", 1, "mounted on front wall"),
+    ],
+    "office": [
+        ("desk", 1, "main work desk"),
+        ("office chair", 1, "near desk"),
+        ("bookshelf", 1, "against wall"),
+    ],
+    "bedroom": [
+        ("bed", 1, "main bed"),
+        ("nightstand", 2, "one on each side of bed"),
+        ("wardrobe", 1, "against wall"),
+    ],
+    "living_room": [
+        ("sofa", 1, "main seating"),
+        ("coffee table", 1, "in front of sofa"),
+        ("armchair", 2, "around coffee table"),
+    ],
+}
+
 
 def _word_count(text: str) -> int:
     return len(text.split())
+
+
+def _tokenize(text: str) -> List[str]:
+    return re.findall(r"[a-zа-яё0-9]+", (text or "").lower())
+
+
+def _singularize(word: str) -> str:
+    w = (word or "").strip().lower()
+    if len(w) > 3 and w.endswith("ves"):
+        return w[:-3] + "f"   # shelves→shelf, knives→knife
+    if len(w) > 3 and w.endswith("ies"):
+        return w[:-3] + "y"
+    if len(w) > 2 and w.endswith("s"):
+        return w[:-1]
+    return w
+
+
+def _default_object_hints(room_type: str) -> List["ObjectHint"]:
+    return [
+        ObjectHint(name=name, quantity=qty, notes=notes)
+        for name, qty, notes in _ROOM_DEFAULTS.get(room_type, [])
+    ]
 
 
 def expand_prompt(
@@ -98,6 +144,13 @@ def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
     except json.JSONDecodeError:
         return _heuristic_scene_spec(original_query)
 
+    room_type = str(data.get("room_type", "other"))
+    if room_type not in {
+        "bedroom", "office", "classroom", "kitchen",
+        "living_room", "warehouse", "lab", "outdoor", "other",
+    }:
+        room_type = _heuristic_scene_spec(original_query).room_type
+
     objects = []
     for o in data.get("estimated_objects", []):
         if isinstance(o, dict):
@@ -106,14 +159,23 @@ def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
                 quantity=int(o.get("quantity", 1)),
                 notes=str(o.get("notes", "")),
             ))
+        elif isinstance(o, str) and o.strip():
+            objects.append(ObjectHint(name=o.strip(), quantity=1, notes=""))
+
+    if not objects:
+        objects = _default_object_hints(room_type)
 
     dim_hint = str(data.get("room_dimensions_hint", "medium (5x5m)"))
     room_half = _parse_room_dim_hint(dim_hint)
 
+    expanded_description = str(data.get("expanded_description", original_query)).strip()
+    if not expanded_description:
+        expanded_description = original_query
+
     return SceneSpec(
         original_query=original_query,
-        expanded_description=str(data.get("expanded_description", original_query)),
-        room_type=str(data.get("room_type", "other")),
+        expanded_description=expanded_description,
+        room_type=room_type,
         room_style=str(data.get("room_style", "modern")),
         estimated_objects=objects,
         room_half_size=room_half,
@@ -154,12 +216,19 @@ def _heuristic_scene_spec(query: str) -> "SceneSpec":
             room_type = rt
             break
 
+    hints = _default_object_hints(room_type)
+    obj_text = ", ".join(f"{h.quantity} {h.name}" for h in hints[:6])
+    expanded = (
+        f"{query}. This is a {room_type.replace('_', ' ')} scene with coherent furnishing. "
+        f"Suggested objects: {obj_text}. Arrange objects with realistic spacing and circulation."
+    )
+
     return SceneSpec(
         original_query=query,
-        expanded_description=query,
+        expanded_description=expanded,
         room_type=room_type,
         room_style="modern",
-        estimated_objects=[],
+        estimated_objects=hints,
         room_half_size=2.5,
     )
 

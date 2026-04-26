@@ -8,15 +8,26 @@ import requests
 from creator.utils.json import parse_output_to_json
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "deepseek-v3.1:671b-cloud"
+OLLAMA_MODEL = "qwen3.5:cloud"
 OLLAMA_TIMEOUT_S = 120
 
-CACHE_DB_PATH = "/var/tmp/ciare/.ollama_cache.sqlite3"
+_DEFAULT_CACHE_DB_PATH = "/var/tmp/ciare/.ollama_cache.sqlite3"
+
+
+def _resolve_cache_db_path() -> str:
+    """LLM cache path. Follows CIARE_CACHE_DIR env var when set so a custom
+    CACHE_DIR (e.g. per-run /tmp/ciare_run_*) gets its own LLM cache instead
+    of all runs sharing a single global SQLite at /var/tmp/ciare/."""
+    custom = os.environ.get("CIARE_CACHE_DIR")
+    if custom:
+        return os.path.join(custom, ".ollama_cache.sqlite3")
+    return _DEFAULT_CACHE_DB_PATH
 
 
 def _ensure_cache_db() -> None:
-    os.makedirs(os.path.dirname(CACHE_DB_PATH), exist_ok=True)
-    with sqlite3.connect(CACHE_DB_PATH) as conn:
+    db_path = _resolve_cache_db_path()
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    with sqlite3.connect(db_path) as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS llm_cache (
@@ -31,7 +42,7 @@ def _ensure_cache_db() -> None:
 
 def _cache_get(cache_key: str, model: str) -> Optional[str]:
     _ensure_cache_db()
-    with sqlite3.connect(CACHE_DB_PATH) as conn:
+    with sqlite3.connect(_resolve_cache_db_path()) as conn:
         row = conn.execute(
             "SELECT response FROM llm_cache WHERE cache_key = ? AND model = ?",
             (cache_key, model),
@@ -41,7 +52,7 @@ def _cache_get(cache_key: str, model: str) -> Optional[str]:
 
 def _cache_set(cache_key: str, model: str, response: str) -> None:
     _ensure_cache_db()
-    with sqlite3.connect(CACHE_DB_PATH) as conn:
+    with sqlite3.connect(_resolve_cache_db_path()) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO llm_cache(cache_key, model, response) VALUES (?, ?, ?)",
             (cache_key, model, response),

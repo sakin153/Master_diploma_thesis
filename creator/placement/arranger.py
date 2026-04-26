@@ -57,6 +57,14 @@ def detect_arrangement_groups(
 
     # Build near-pairs from semantic plan
     near_pairs: Dict[str, str] = {}  # follower → anchor
+    def _role(name: str) -> str:
+        lname = name.lower()
+        if any(k in lname for k in ["desk", "table", "bench"]):
+            return "desk"
+        if any(k in lname for k in ["chair", "stool", "seat"]):
+            return "chair"
+        return "other"
+
     objects = semantic_plan.get("objects", []) if isinstance(semantic_plan, dict) else []
     for obj in objects:
         if not isinstance(obj, dict):
@@ -68,7 +76,29 @@ def detect_arrangement_groups(
             if str(c.get("type", "")).lower() == "near":
                 target = str(c.get("target", ""))
                 if target and counts.get(target, 0) >= grid_threshold:
-                    near_pairs[name] = target
+                    src_role = _role(name)
+                    tgt_role = _role(target)
+
+                    # Classroom specialization:
+                    # if desks are constrained near chairs, treat chairs as
+                    # followers of desks so we can place desk+chair pairs.
+                    if (
+                        src_role == "desk"
+                        and tgt_role == "chair"
+                        and counts.get(name, 0) >= grid_threshold
+                    ):
+                        near_pairs[target] = name
+                    else:
+                        near_pairs[name] = target
+
+    # Extra classroom guard: if both desk-like and chair-like groups are large,
+    # enforce chair→desk pairing even if the LLM constraints are noisy.
+    desk_candidates = [n for n, c in counts.items() if c >= grid_threshold and _role(n) == "desk"]
+    chair_candidates = [n for n, c in counts.items() if c >= grid_threshold and _role(n) == "chair"]
+    if desk_candidates and chair_candidates:
+        anchor = max(desk_candidates, key=lambda n: counts.get(n, 0))
+        follower = max(chair_candidates, key=lambda n: counts.get(n, 0))
+        near_pairs[follower] = anchor
 
     # Group models
     grouped: Dict[str, List[Dict[str, Any]]] = {}
@@ -83,21 +113,22 @@ def detect_arrangement_groups(
         if name in handled:
             continue
         n = len(mlist)
-        if n >= grid_threshold:
-            groups.append(ArrangementGroup(
-                model_name=name,
-                models=mlist,
-                arrangement="grid",
-                paired_with="",
-            ))
-            handled.add(name)
-        elif name in near_pairs:
-            # Will be handled as pairs with anchor
+        # Pair has priority over standalone grid so follower groups are
+        # consumed by anchor+follower classroom arrangement.
+        if name in near_pairs and counts.get(near_pairs[name], 0) >= grid_threshold:
             groups.append(ArrangementGroup(
                 model_name=name,
                 models=mlist,
                 arrangement="pair",
                 paired_with=near_pairs[name],
+            ))
+            handled.add(name)
+        elif n >= grid_threshold:
+            groups.append(ArrangementGroup(
+                model_name=name,
+                models=mlist,
+                arrangement="grid",
+                paired_with="",
             ))
             handled.add(name)
         else:
@@ -211,7 +242,8 @@ def apply_grid_arrangement(
         col = idx % params.cols
         row = idx // params.cols
         cx = params.origin.x + col * params.spacing_x + float(size[0]) / 2.0
-        cy = params.origin.y + row * params.spacing_y + float(size[1]) / 2.0
+        # size[2] = scene Y depth (size[1] is height, not floor depth)
+        cy = params.origin.y + row * params.spacing_y + (float(size[2]) if len(size) > 2 else float(size[1])) / 2.0
 
         item = dict(m)
         item["Pose"] = {"x": cx, "y": cy, "z": sz}
@@ -377,14 +409,20 @@ def apply_arrangements(
 
         if follower_models and len(follower_models) >= grid_threshold // 2:
             # Paired grid (desk+chair)
-            anchor_size = anchor_models[0].get("size", [0.6, 0.5, 0.75])
-            follower_size = follower_models[0].get("size", [0.45, 0.45, 0.9])
             anchor_yaw = _default_yaw(group.model_name)
-            follower_yaw = (anchor_yaw + 180.0) % 360.0
+            follower_name_l = follower_name.lower()
+            if any(k in follower_name_l for k in ["chair", "stool", "seat"]):
+                # Keep same yaw as desk anchor to avoid visually flipped rows
+                # when model forward-axis conventions differ across assets.
+                follower_yaw = anchor_yaw
+            else:
+                follower_yaw = (anchor_yaw + 180.0) % 360.0
 
             updated_a, updated_f = apply_paired_grid_arrangement(
                 anchor_models, follower_models,
                 room_half_size=room_half_size,
+                gap_x=0.45,
+                gap_y=0.75,
                 anchor_yaw_deg=anchor_yaw,
                 follower_yaw_deg=follower_yaw,
             )
@@ -433,5 +471,5 @@ def _default_yaw(name: str) -> float:
     if any(k in lname for k in ["desk", "table", "bench"]):
         return 0.0
     if any(k in lname for k in ["chair", "stool", "seat"]):
-        return 180.0
+        return 0.0
     return 0.0

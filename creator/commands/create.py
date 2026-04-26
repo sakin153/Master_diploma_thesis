@@ -27,7 +27,7 @@ def cli(ctx):
     from creator.contexts_prompts.model import fmt_model_qa_tmpl
     from creator.contexts_prompts.world import fmt_world_qa_tmpl
     from creator.model_databases.fetch_worlds import download_world
-    from creator.model_databases.objaverse import ObjaverseLoader
+    from creator.model_databases.local_assets import LocalAssetsLoader
     from creator.sim_interfaces.mujoco import MujocoSimInterface
     from creator.utils.json import NumpyEncoder
     from creator.xml.worlds import find_model
@@ -41,9 +41,9 @@ def cli(ctx):
         style=STYLE,
     ).ask()
 
-    chosen_model = "deepseek-v3.1:671b-cloud"  # Gpt-4 is default and cheapest
+    chosen_model = "gpt-oss:120b-cloud"  # Gpt-4 is default and cheapest
     if chosen_simulator == "mujoco":
-        loader = ObjaverseLoader()
+        loader = LocalAssetsLoader()
         interface = MujocoSimInterface(chosen_model)
     models, worlds = loader.get_models()
 

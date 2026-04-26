@@ -12,6 +12,17 @@ import random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
+_CONTAINER_HINTS = (
+    "box",
+    "crate",
+    "container",
+    "drawer",
+    "basket",
+    "bin",
+    "ящик",
+)
+
+
 def _volume(size: Sequence[float]) -> float:
     return float(size[0]) * float(size[1]) * float(size[2])
 
@@ -24,7 +35,8 @@ def _get_size(model: Dict[str, Any]) -> List[float]:
 
 
 def _footprint_area(size: Sequence[float]) -> float:
-    return float(size[0]) * float(size[1])
+    # size[0]=width, size[2]=depth (scene XY footprint); size[1]=height
+    return float(size[0]) * (float(size[2]) if len(size) > 2 else float(size[0]))
 
 
 def _instance_constraints(
@@ -153,6 +165,40 @@ def _xy_overlap(
     return not (sep_x or sep_y)
 
 
+_ON_CONSTRAINT_TYPES = frozenset({
+    "on", "on_top_of", "on-top-of", "on top of", "on_top",
+})
+
+
+def _extract_on_target(constraints: Sequence[Dict[str, Any]]) -> str:
+    for c in constraints:
+        if not isinstance(c, dict):
+            continue
+        ctype = str(c.get("type", "")).lower()
+        if ctype in _ON_CONSTRAINT_TYPES:
+            target = str(c.get("target", "")).strip()
+            if target:
+                return target
+    return ""
+
+
+def _stacking_depth(
+    name: str,
+    on_target: str,
+    name_to_target: Dict[str, str],
+    seen: Optional[set] = None,
+) -> int:
+    """Recursive depth: floor=0, on-floor-object=1, on-on-floor-object=2, ..."""
+    if not on_target or on_target == name:
+        return 0
+    seen = seen or set()
+    if on_target in seen:
+        return 0  # cycle guard
+    seen.add(on_target)
+    parent_target = name_to_target.get(on_target, "")
+    return 1 + _stacking_depth(on_target, parent_target, name_to_target, seen)
+
+
 def solve_small_object_placements(
     *,
     placed_models: Sequence[Dict[str, Any]],
@@ -160,60 +206,92 @@ def solve_small_object_placements(
     small_threshold_volume: float = 0.06,
     seed: int = 42,
 ) -> List[Dict[str, Any]]:
-    """Place small objects on support surfaces with collision avoidance.
+    """Place objects on support surfaces with collision avoidance.
 
-    Pipeline:
-    1. Identify receptacles (large objects) and small objects
-    2. For explicit "on" constraints: place on named target
-    3. For implicit small objects: find best receptacle, sample positions
-    4. Check collisions with other small objects on same surface
+    Two kinds of objects are handled here:
+      - **Explicit-on**: any object (regardless of size) whose plan contains
+        `on_top_of(target)`. Crates on a table are large but stack-bound.
+      - **Implicit-small**: objects with volume < `small_threshold_volume`
+        (books, cups, apples) that have no explicit support — auto-attach
+        to the nearest semantically appropriate receptacle.
+
+    Processing order is topological by stacking depth so the underlying
+    receptacle is positioned (e.g. crate moved onto table) BEFORE the items
+    that rest on it (e.g. apple in crate). This is required for correct Z.
+
+    For multiple identical receptacle instances of the same model name (e.g.
+    4 crates), items with the same `on_top_of(target_name)` constraint are
+    distributed round-robin across instances so apples spread evenly across
+    crates instead of piling onto the closest one.
     """
     rng = random.Random(seed)
     out = [dict(m) for m in placed_models]
     constraint_rows = _instance_constraints(out, semantic_plan or {"objects": []})
 
-    # Identify receptacles
-    receptacles = []
-    for m in out:
-        size = _get_size(m)
-        if _volume(size) >= small_threshold_volume:
-            receptacles.append(m)
+    # Build per-model-name target lookup for stacking-depth computation.
+    name_to_target: Dict[str, str] = {}
+    for i, m in enumerate(out):
+        nm = str(m.get("Model") or m.get("name") or "")
+        if not nm:
+            continue
+        cs = constraint_rows[i] if i < len(constraint_rows) else []
+        tgt = _extract_on_target(cs)
+        if tgt and nm not in name_to_target:
+            name_to_target[nm] = tgt
 
-    # Track items placed on each receptacle for collision checking
+    # Eligibility & ordering: every item with explicit on-target is eligible
+    # regardless of size; small items without explicit on-target also eligible.
+    eligible: List[Tuple[int, int, str]] = []  # (depth, original_index, on_target)
+    for i, m in enumerate(out):
+        nm = str(m.get("Model") or m.get("name") or "")
+        size = _get_size(m)
+        cs = constraint_rows[i] if i < len(constraint_rows) else []
+        on_target = _extract_on_target(cs)
+        if on_target:
+            depth = _stacking_depth(nm, on_target, name_to_target)
+            eligible.append((depth, i, on_target))
+        elif _volume(size) < small_threshold_volume:
+            eligible.append((1, i, ""))
+
+    # Process from shallowest to deepest stacking — crates first, apples after.
+    # Stable secondary key keeps original order within the same depth.
+    eligible.sort(key=lambda t: (t[0], t[1]))
+
+    receptacles = [
+        m for m in out if _volume(_get_size(m)) >= small_threshold_volume
+    ]
     surface_items: Dict[int, List[Tuple[float, float, List[float]]]] = {}
 
-    for i, m in enumerate(out):
-        size = _get_size(m)
-        constraints = constraint_rows[i] if i < len(constraint_rows) else []
+    # Round-robin cursor per (target_name) — distribute multiple items across
+    # multiple identical-name receptacles evenly.
+    rr_cursor: Dict[str, int] = {}
 
-        # Check for explicit "on" constraint
-        on_target = ""
-        for c in constraints:
-            ctype = str(c.get("type", "")).lower()
-            if ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
-                on_target = str(c.get("target", ""))
-                if on_target:
-                    break
+    for _depth, i, on_target in eligible:
+        m = out[i]
+        size = _get_size(m)
 
         if on_target:
-            receptacle = _find_target_by_name(
-                item_index=i,
-                target_name=on_target,
-                placed_models=out,
-            )
-            if receptacle is not None:
-                _place_on_receptacle(out, i, receptacle, size, rng, surface_items)
+            # Find ALL receptacle instances matching the target name.
+            # Distribute round-robin so 5 apples × 4 crates → 1-2 per crate.
+            candidates = [
+                idx for idx, c in enumerate(out)
+                if idx != i
+                and str(c.get("Model") or c.get("name") or "") == on_target
+            ]
+            if not candidates:
+                # Try fuzzy fallback by name token
                 continue
-
-        # Only auto-place small objects
-        if _volume(size) >= small_threshold_volume:
+            cursor = rr_cursor.get(on_target, 0)
+            chosen_idx = candidates[cursor % len(candidates)]
+            rr_cursor[on_target] = cursor + 1
+            receptacle = out[chosen_idx]
+            _place_on_receptacle(out, i, receptacle, size, rng, surface_items)
             continue
 
-        # Find best receptacle (closest large object)
+        # Implicit small object: pick best support semantically + by distance.
         receptacle = _find_best_receptacle(m, receptacles)
         if receptacle is None:
             continue
-
         _place_on_receptacle(out, i, receptacle, size, rng, surface_items)
 
     return out
@@ -236,7 +314,12 @@ def _place_on_receptacle(
     # size[1] = mesh Y = scene Z (height) after euler="90 0 yaw" rotation
     z_receptacle = float(rsize[1]) / 2.0
     z_item = float(item_size[1]) / 2.0
-    target_z = z_base + z_receptacle + z_item + 0.01
+    if _is_container_like(receptacle):
+        # Spawn above opening so physics can settle item into the container.
+        drop_start = min(0.12, max(0.05, z_receptacle * 0.5))
+        target_z = z_base + z_receptacle + z_item + drop_start
+    else:
+        target_z = z_base + z_receptacle + z_item + 0.01
 
     # Find receptacle id for tracking
     recep_id = id(receptacle)
@@ -248,7 +331,8 @@ def _place_on_receptacle(
     best_score = -float("inf")
 
     hx_item = float(item_size[0]) / 2.0
-    hy_item = float(item_size[1]) / 2.0
+    # size[2] = scene Y depth (not size[1]=height) for XY clamping
+    hy_item = float(item_size[2]) / 2.0 if len(item_size) > 2 else float(item_size[0]) / 2.0
 
     rx_center = float(rp.get("x", 0.0))
     ry_center = float(rp.get("y", 0.0))
@@ -298,22 +382,85 @@ def _place_on_receptacle(
     )
 
 
+_SUPPORT_SURFACE_HINTS = (
+    "table", "desk", "shelf", "bookshelf", "bookcase",
+    "counter", "countertop", "nightstand", "dresser", "sideboard",
+    "cabinet", "credenza", "buffet", "bar", "stand",
+    "tray", "pedestal", "podium", "platform",
+)
+_NON_SUPPORT_HINTS = (
+    "chair", "armchair", "stool", "sofa", "couch", "loveseat", "settee",
+    "ottoman", "bed", "mattress", "lamp", "fan", "tv", "monitor",
+    "screen", "fridge", "refrigerator", "wardrobe", "closet",
+)
+
+
+def _surface_score(receptacle: Dict[str, Any]) -> float:
+    """Semantic appropriateness of putting a small object on this receptacle.
+    Range roughly [-1, +1]; higher is better."""
+    parts: List[str] = []
+    name = str(receptacle.get("Model") or receptacle.get("name") or "")
+    if name:
+        parts.append(name)
+    for key in ("categories", "tags"):
+        raw = receptacle.get(key)
+        if isinstance(raw, list):
+            parts.extend(str(x) for x in raw if x)
+    haystack = " ".join(parts).lower()
+
+    score = 0.0
+    if any(token in haystack for token in _SUPPORT_SURFACE_HINTS):
+        score += 1.0
+    if any(token in haystack for token in _NON_SUPPORT_HINTS):
+        score -= 0.7
+    if any(token in haystack for token in _CONTAINER_HINTS):
+        # Containers explicitly want stuff inside them.
+        score += 0.6
+    return score
+
+
 def _find_best_receptacle(
     item: Dict[str, Any],
     receptacles: Sequence[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
+    """Pick the most appropriate support surface.
+
+    Combines distance (closer is better) with semantic appropriateness:
+    a table 2 m away beats a chair 0.5 m away.
+    """
     if not receptacles:
         return None
     ip = item.get("Pose") or {"x": 0.0, "y": 0.0}
     ix, iy = float(ip.get("x", 0.0)), float(ip.get("y", 0.0))
 
     best = None
-    best_d = float("inf")
+    best_score = float("-inf")
     for r in receptacles:
         rp = r.get("Pose") or {"x": 0.0, "y": 0.0}
         rx, ry = float(rp.get("x", 0.0)), float(rp.get("y", 0.0))
-        d = (ix - rx) ** 2 + (iy - ry) ** 2
-        if d < best_d:
-            best_d = d
+        d = math.sqrt((ix - rx) ** 2 + (iy - ry) ** 2)
+        # Distance term decays with distance: ~1.0 at 0, ~0 at 4 m.
+        dist_term = max(0.0, 1.0 - d / 4.0)
+        sem_term = _surface_score(r)
+        # Hard veto: never put items on clearly non-support objects unless
+        # nothing else exists.
+        score = sem_term * 1.5 + dist_term * 0.6
+        if score > best_score:
+            best_score = score
             best = r
     return best
+
+
+def _is_container_like(item: Dict[str, Any]) -> bool:
+    parts: List[str] = []
+    name = str(item.get("Model") or item.get("name") or "")
+    if name:
+        parts.append(name)
+
+    for key in ("categories", "tags"):
+        raw = item.get(key)
+        if isinstance(raw, list):
+            parts.extend(str(x) for x in raw if x)
+
+    haystack = " ".join(parts).lower()
+    return any(token in haystack for token in _CONTAINER_HINTS)

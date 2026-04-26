@@ -9,7 +9,7 @@ from tinydb import TinyDB
 from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
 from creator.contexts_prompts.model import fmt_model_qa_tmpl
 from creator.contexts_prompts.objects import fmt_objects_qa_tmpl
-from creator.model_databases.objaverse import ObjaverseLoader
+from creator.model_databases.local_assets import LocalAssetsLoader
 from creator.placement import (
     build_semantic_plan,
     repair_layout_by_constraints,
@@ -18,6 +18,7 @@ from creator.placement import (
     solve_wall_placements,
     validate_and_repair_layout,
 )
+from creator.placement.plan import _stabilize_dense_group_constraints
 from creator.postprocess import refine_scene_with_engine
 from creator.sim_interfaces.mujoco import MujocoSimInterface
 from creator.utils.cache import Cache
@@ -26,20 +27,6 @@ from creator.xml.worlds import find_model
 
 Simulator = Literal["mujoco"]
 
-_NUMBER_WORDS = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-}
-
-
 def _tokenize(text: str) -> List[str]:
     # Support both Latin and Cyrillic (Russian) characters
     return re.findall(r"[a-zа-яё0-9]+", (text or "").lower())
@@ -47,72 +34,13 @@ def _tokenize(text: str) -> List[str]:
 
 def _singularize(word: str) -> str:
     w = (word or "").strip().lower()
+    if len(w) > 3 and w.endswith("ves"):
+        return w[:-3] + "f"
     if len(w) > 3 and w.endswith("ies"):
         return w[:-3] + "y"
     if len(w) > 2 and w.endswith("s"):
         return w[:-1]
     return w
-
-
-def _requested_counts_from_query(query: str) -> Dict[str, int]:
-    tokens = _tokenize(query)
-    counts: Dict[str, int] = {}
-    for i, t in enumerate(tokens[:-1]):
-        n = None
-        if t.isdigit():
-            n = int(t)
-        elif t in _NUMBER_WORDS:
-            n = _NUMBER_WORDS[t]
-        if n is None or n <= 1:
-            continue
-        noun = _singularize(tokens[i + 1])
-        if noun:
-            counts[noun] = max(counts.get(noun, 1), min(n, 10))
-    return counts
-
-
-def _expand_models_by_requested_counts(
-    chosen_models: Sequence[Dict[str, Any]],
-    query: str,
-) -> List[Dict[str, Any]]:
-    counts = _requested_counts_from_query(query)
-    if not counts:
-        return list(chosen_models)
-
-    requested_nouns = list(counts.keys())
-    grouped: Dict[str, List[Dict[str, Any]]] = {noun: [] for noun in requested_nouns}
-    unmatched: List[Dict[str, Any]] = []
-
-    for m in chosen_models:
-        name = str(m.get("Model", "")).lower()
-        name_tokens = {_singularize(t) for t in _tokenize(name)}
-        matched_noun = ""
-        for noun in requested_nouns:
-            if noun in name_tokens:
-                matched_noun = noun
-                break
-        if matched_noun:
-            grouped[matched_noun].append(dict(m))
-        else:
-            unmatched.append(dict(m))
-
-    expanded: List[Dict[str, Any]] = []
-    for noun in requested_nouns:
-        target_count = counts[noun]
-        pool = grouped.get(noun, [])
-        if not pool:
-            continue
-
-        # Keep exact requested quantity for this noun.
-        i = 0
-        current = 0
-        while current < target_count:
-            expanded.append(dict(pool[i % len(pool)]))
-            i += 1
-            current += 1
-
-    expanded.extend(unmatched)
-    return expanded
 
 
 def _score_model_for_object(obj: str, model: Dict[str, Any]) -> int:
@@ -142,6 +70,26 @@ def _score_model_for_object(obj: str, model: Dict[str, Any]) -> int:
         if t in meta:
             score += 2
 
+    head = _singularize(obj_tokens[-1]) if obj_tokens else obj_l
+
+    # Disambiguate common ambiguous nouns.
+    if head in {"desk", "table"}:
+        if "table" in name and head == "desk":
+            score += 5
+        if "desk" in name and head == "table":
+            score += 3
+        if any(k in name for k in ["lamp", "light", "fan", "desktop"]):
+            score -= 18
+
+    if head in {"whiteboard", "blackboard", "board"}:
+        if any(k in name for k in ["whiteboard", "blackboard", "board"]):
+            score += 5
+        if any(k in name for k in ["surfboard", "skateboard", "snowboard"]):
+            score -= 20
+
+    if head == "chair" and "wheelchair" in name:
+        score -= 12
+
     return score
 
 
@@ -154,7 +102,7 @@ def _rank_models_for_object(
     scored: List[Tuple[int, Dict[str, Any]]] = []
     for m in models:
         s = _score_model_for_object(obj, m)
-        if s > 0:
+        if s >= 3:
             scored.append((s, m))
 
     scored.sort(key=lambda x: x[0], reverse=True)
@@ -184,16 +132,7 @@ def _objects_from_llm_output(raw: Any) -> List[str]:
                 v = item.get("Object") or item.get("object")
                 if isinstance(v, str) and v.strip():
                     out.append(v.strip())
-        # De-dupe preserving order
-        deduped: List[str] = []
-        seen = set()
-        for o in out:
-            ol = o.lower()
-            if ol in seen:
-                continue
-            seen.add(ol)
-            deduped.append(o)
-        return deduped
+        return out
     if isinstance(raw, str):
         return [raw.strip()] if raw.strip() else []
     return []
@@ -220,19 +159,92 @@ def _normalize_chosen_models(raw: Any) -> List[Dict[str, str]]:
     return out
 
 
+def _noun_key(text: str) -> str:
+    toks = _tokenize(text)
+    if not toks:
+        return ""
+    return _singularize(toks[-1])
+
+def _merge_objects_with_scene_hints(
+    objects: Sequence[str],
+    scene_spec: Any,
+) -> List[str]:
+    merged = [str(o).strip() for o in objects if str(o).strip()]
+
+    hints = getattr(scene_spec, "estimated_objects", []) or []
+    for h in hints:
+        name = str(getattr(h, "name", "") or "").strip()
+        if not name:
+            continue
+        qty = int(getattr(h, "quantity", 1) or 1)
+        qty = max(1, min(qty, 20))
+        for _ in range(qty):
+            merged.append(name)
+
+    return merged
+
+
+def _model_matches_object(model_name: str, obj_name: str) -> bool:
+    m_tokens = {_singularize(t) for t in _tokenize(model_name)}
+    o_tokens = [_singularize(t) for t in _tokenize(obj_name)]
+    if not m_tokens or not o_tokens:
+        return False
+
+    # Exact noun match on head token is strongest.
+    if o_tokens[-1] in m_tokens:
+        return True
+
+    # Otherwise require at least one semantic token overlap.
+    return any(t in m_tokens for t in o_tokens if len(t) > 2)
+
+
+def _ensure_models_cover_objects(
+    chosen_models: Sequence[Dict[str, str]],
+    objects: Sequence[str],
+    models_catalog: Sequence[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    out = [dict(m) for m in chosen_models if isinstance(m, dict) and m.get("Model")]
+    if not objects:
+        return out
+
+    required_unique: List[str] = []
+    seen_req: set = set()
+    for obj in objects:
+        key = _noun_key(obj) or str(obj).strip().lower()
+        if not key or key in seen_req:
+            continue
+        seen_req.add(key)
+        required_unique.append(str(obj))
+
+    for obj in required_unique:
+        covered = any(_model_matches_object(str(m.get("Model", "")), obj) for m in out)
+        if covered:
+            continue
+        ranked = _rank_models_for_object(obj, models_catalog, limit=1)
+        if not ranked:
+            continue
+        name = str(ranked[0].get("name", "")).strip()
+        if not name:
+            continue
+        out.append({"Model": name})
+
+    return out
+
+
 def generate_world(
     *,
     simulator: Simulator,
     query: str,
     cache_dir: Optional[str] = None,
-    vlm_validation: bool = False,   # enable VLM layout validation loop
+    vlm_validation: bool = True,   # enable VLM layout validation loop
     max_vlm_iters: int = 1,
+    assets_dir: Optional[str] = None,
 ) -> str:
     """Generate a 3D MuJoCo scene from a text query.
 
     New pipeline (stages):
       0. Prompt expansion    — expand short queries into full scene specs
-      1. Object extraction   — LLM selects objects from catalog
+            1. Object extraction   — LLM selects objects from local assets catalog
       2. Room sizing         — compute room dimensions from object footprints
       3. Semantic plan       — LLM generates placement constraints + scene graph
       4. Layout solving      — floor / wall / surface placement
@@ -248,19 +260,27 @@ def generate_world(
         cache.init_models_and_worlds()
     db = TinyDB(os.path.join(cache.worlds_path, "world_db.json"))
 
+    # Make the LLM cache live alongside the rest of the cache so a custom
+    # CACHE_DIR (per-run or per-project) gets isolated LLM responses too.
+    # Otherwise stale planner outputs from previous runs (different asset
+    # catalogues) leak through and pin the new pipeline to old model names.
+    os.environ["CIARE_CACHE_DIR"] = cache.cache_path
+
     from creator.llm.model import prompt_model
     from creator.scene.prompt_expander import expand_prompt
     from creator.scene.room_planner import compute_room_half_size
 
-    chosen_model = "deepseek-v3.1:671b-cloud"
+    chosen_model = "gpt-oss:120b-cloud"
 
     if simulator == "mujoco":
-        loader = ObjaverseLoader()
-        interface = MujocoSimInterface(chosen_model)
+        loader = LocalAssetsLoader(assets_dir=assets_dir)
+        interface = MujocoSimInterface(chosen_model, cache_dir=cache_dir)
     else:
         raise ValueError(f"Unsupported simulator: {simulator}")
 
     models, _worlds = loader.get_models()
+    models_full = loader.get_models_full()
+    print(f"[pipeline] Loaded {len(models)} local assets from: {loader.assets_dir}")
 
     # ---------------------------------------------------------------
     # Stage 0: Prompt expansion
@@ -280,8 +300,10 @@ def generate_world(
     # ---------------------------------------------------------------
     raw_objects = prompt_model(fmt_objects_qa_tmpl, effective_query, chosen_model)
     objects = _objects_from_llm_output(raw_objects)
+    objects = _merge_objects_with_scene_hints(objects, scene_spec)
     if not objects:
-        objects = [effective_query]
+        hints = [getattr(h, "name", "") for h in (scene_spec.estimated_objects or [])]
+        objects = [h for h in hints if isinstance(h, str) and h.strip()] or [effective_query]
 
     candidates: List[Dict[str, Any]] = []
     for obj in objects:
@@ -291,7 +313,7 @@ def generate_world(
 
     context: List[Dict[str, Any]] = []
     seen_names: set = set()
-    for m in candidates:
+    for m in models:
         name = m.get("name")
         if not name or name in seen_names:
             continue
@@ -307,8 +329,7 @@ def generate_world(
     chosen_models = _normalize_chosen_models(chosen_models_raw)
 
     filtered_models = [m for m in chosen_models if find_model(m["Model"], models)]
-    # Expand by requested counts (e.g. "10 desks" → 10 desk instances)
-    chosen_models = _expand_models_by_requested_counts(filtered_models, effective_query)
+    chosen_models = _ensure_models_cover_objects(filtered_models, objects, models)
 
     # Last-resort fallback
     if not chosen_models:
@@ -334,14 +355,16 @@ def generate_world(
     # Stage 2: Load models, sizes, and normalize scale
     # (room sizing happens after sizes are known)
     # ---------------------------------------------------------------
-    full_placed_models = interface.get_full_placed_models(
-        chosen_models, loader.get_models_full()
-    )
+    full_placed_models = interface.get_full_placed_models(chosen_models, models_full)
     objects_map = interface.load_objects(full_placed_models)
     for i, _ in enumerate(full_placed_models):
-        uid = full_placed_models[i].get("uuid", "")
+        uid = str(full_placed_models[i].get("uuid") or "")
+        if not uid:
+            uid = str(full_placed_models[i].get("name") or f"asset_{i}")
+        full_placed_models[i]["uuid"] = uid
         full_placed_models[i]["model_loc"] = objects_map.get(uid)
-        full_placed_models[i]["save_fn"] = uid + f"_{i}"
+        safe_uid = re.sub(r"[^a-zA-Z0-9_]+", "_", uid)
+        full_placed_models[i]["save_fn"] = safe_uid + f"_{i}"
     full_placed_models = interface.update_model_sizes(full_placed_models)
     full_placed_models = interface.normalize_models_to_realistic_scale(
         full_placed_models, query=effective_query,
@@ -366,6 +389,12 @@ def generate_world(
         chosen_models=chosen_models,
         context_models=models,
     )
+    if isinstance(semantic_plan.get("objects"), list):
+        semantic_plan["objects"] = _stabilize_dense_group_constraints(
+            semantic_plan["objects"]
+        )
+        from creator.placement.plan import _infer_face_to_from_near
+        semantic_plan["objects"] = _infer_face_to_from_near(semantic_plan["objects"])
     # Inject room spec into the plan for solvers
     semantic_plan.setdefault("room", {})["half_size"] = room_half_size
     semantic_plan["room"]["type"] = scene_spec.room_type
@@ -383,9 +412,9 @@ def generate_world(
         full_placed_models=full_placed_models,
         semantic_plan=semantic_plan,
         room_half_size=room_half_size,
-        grid_step=0.8,
-        yaw_candidates_deg=(0.0, 90.0, 180.0, 270.0),
-        beam_width=12,
+        grid_step=None,  # auto-adapt from min footprint
+        yaw_candidates_deg=(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0),
+        beam_width=24,
     )
     full_placed_models = solve_wall_placements(
         placed_models=full_placed_models,
@@ -415,7 +444,7 @@ def generate_world(
 
     saved_models = interface.add_models(
         chosen_models,
-        loader.get_models_full(),
+        models_full,
         effective_query,
         world_path,
         room_half_size=room_half_size,
@@ -458,7 +487,7 @@ def generate_world(
         # Re-assemble after VLM repair
         saved_models = interface.add_models(
             [{"Model": m.get("Model", m.get("name", ""))} for m in saved_models],
-            loader.get_models_full(),
+            models_full,
             effective_query,
             world_path,
             room_half_size=room_half_size,
