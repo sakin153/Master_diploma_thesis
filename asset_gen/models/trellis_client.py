@@ -148,7 +148,8 @@ class TrellisClient:
     def _submit(self, params: dict) -> None:
         url = f"{self.base_url}/generate_no_preview"
         try:
-            resp = requests.post(url, data=params, timeout=30)
+            # 120s: сервер может долго принимать большой base64-payload.
+            resp = requests.post(url, data=params, timeout=120)
             resp.raise_for_status()
         except requests.RequestException as e:
             raise TrellisAPIError(f"Failed to submit TRELLIS job: {e}") from e

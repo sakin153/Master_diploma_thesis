@@ -282,9 +282,10 @@ class SDXLTurboLoader(BasePipelineLoader):
             use_safetensors=True,
             **_attn_kwargs(),
         )
-        # 4 шага → латентность критична: cpu_offload вместо sequential.
-        pipe.enable_model_cpu_offload()
-        _apply_mem_opts(pipe, vae_tile=True)
+        # SDXL-Turbo fp16 ≈ 5 ГБ — помещается в 8 ГБ целиком.
+        # .to(device) в 5-10× быстрее cpu_offload при 4-шаговой дистилляции.
+        pipe = pipe.to(self.device)
+        _apply_mem_opts(pipe, vae_tile=False)
         return pipe
 
 
@@ -383,9 +384,10 @@ class SDXLBaseLoader(BasePipelineLoader):
             final_sigmas_type="sigma_min",
         )
 
-        # На 8 ГБ: cpu_offload + vae_tiling. Не зовём .to(device) — конфликт с offload.
-        pipe.enable_model_cpu_offload()
-        _apply_mem_opts(pipe, vae_tile=True)
+        # SDXL Base fp16 ≈ 5.5 ГБ — помещается в 8 ГБ целиком.
+        # .to(device) в 5-10× быстрее cpu_offload при 25-30 шагах.
+        pipe = pipe.to(self.device)
+        _apply_mem_opts(pipe, vae_tile=False)
         return pipe
 
 
