@@ -68,11 +68,16 @@ def _attn_kwargs() -> dict:
 
 def _apply_mem_opts(pipe, *, vae_tile: bool = False) -> None:
     """Включает xformers/SDPA-attention и VAE-оптимизации."""
+    import logging
+    _log = logging.getLogger(__name__)
     if HAS_XFORMERS:
         try:
             pipe.enable_xformers_memory_efficient_attention()
+            _log.info("Attention: xformers (fast)")
         except Exception:
-            pass
+            _log.warning("xformers import OK but enable failed — using SDPA")
+    else:
+        _log.info("Attention: PyTorch SDPA (xformers not installed — slower)")
     try:
         pipe.enable_vae_slicing()
     except Exception:

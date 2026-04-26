@@ -89,10 +89,11 @@ class Text2ImagePipeline:
         """
         if self._runner is None:
             raise RuntimeError("Pipeline not loaded. Call load() first.")
-        generator = (
-            torch.Generator().manual_seed(seed) if seed is not None else None
-        )
-        torch.cuda.empty_cache()
+        if seed is not None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            generator = torch.Generator(device=device).manual_seed(seed)
+        else:
+            generator = None
         return self._runner.run(
             prompt,
             num_inference_steps=num_inference_steps,
