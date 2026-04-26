@@ -66,10 +66,16 @@ class GenerateRequest(BaseModel):
     enable_texture: bool = Field(
         False,
         description=(
-            "Apply Hunyuan3D-Paint-Turbo texture after mesh generation. "
-            "Requires ~6 GB VRAM and adds ~2-3 min per object. "
-            "Shape and texture models are loaded sequentially, "
-            "never simultaneously."
+            "Deprecated. TRELLIS generates textured GLB natively. "
+            "Accepted but ignored."
+        ),
+    )
+    enable_delight: bool = Field(
+        False,
+        description=(
+            "Apply Hunyuan3D-Delight to remove lighting from generated images "
+            "before sending to TRELLIS. Requires ~4.5 GB VRAM and adds "
+            "~1-2 min per object."
         ),
     )
     skip_qa: bool = Field(

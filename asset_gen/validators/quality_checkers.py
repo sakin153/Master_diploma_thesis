@@ -33,6 +33,7 @@ __all__ = [
     "ImageAestheticChecker",
     "SemanticConsistChecker",
     "TextGenAlignChecker",
+    "TrellisOutputChecker",
     "PanoImageGenChecker",
     "PanoHeightEstimator",
     "PanoImageOccChecker",
@@ -407,6 +408,78 @@ class TextGenAlignChecker(BaseChecker):
             text_prompt=self.prompt.format(text),
             image_base64=image,
         )
+
+
+class TrellisOutputChecker:
+    """Fast geometric sanity check for TRELLIS-generated meshes (no GPT).
+
+    Checks that the mesh is not a degenerate flat plane and does not have
+    an excessive number of disconnected components, which can happen when
+    TRELLIS generates floating fragments.
+
+    Example:
+        ```py
+        checker = TrellisOutputChecker()
+        ok, msg = checker(mesh)
+        if not ok:
+            logger.warning(msg)
+        ```
+    """
+
+    def __init__(
+        self,
+        max_components: int = 5,
+        min_height_ratio: float = 0.05,
+    ) -> None:
+        self.max_components = max_components
+        self.min_height_ratio = min_height_ratio
+
+    def __call__(self, mesh) -> tuple[bool, str]:
+        """Check mesh geometry.
+
+        Args:
+            mesh: trimesh.Trimesh object.
+
+        Returns:
+            Tuple (passed: bool, message: str).
+            ``message`` is "YES" on pass, or a description of the failure.
+        """
+        import trimesh as _trimesh
+
+        if not isinstance(mesh, _trimesh.Trimesh):
+            return True, "YES"
+
+        if len(mesh.vertices) == 0 or len(mesh.faces) == 0:
+            return False, "Mesh is empty (no vertices or faces)."
+
+        # Disconnected component check
+        try:
+            components = mesh.split(only_watertight=False)
+            if len(components) > self.max_components:
+                return (
+                    False,
+                    f"Mesh has {len(components)} disconnected components "
+                    f"(limit: {self.max_components}).",
+                )
+        except Exception:
+            pass  # split can fail on degenerate meshes; skip
+
+        # Flat-plane check: if Z-extent is tiny relative to XY-extent,
+        # the mesh is probably a ground plane artifact.
+        try:
+            bbmin, bbmax = mesh.bounds
+            height_z = float(bbmax[2] - bbmin[2])
+            width_xy = float(max(bbmax[0] - bbmin[0], bbmax[1] - bbmin[1]))
+            if width_xy > 0 and height_z / width_xy < self.min_height_ratio:
+                return (
+                    False,
+                    f"Mesh appears to be a flat plane "
+                    f"(Z/XY ratio = {height_z / width_xy:.3f} < {self.min_height_ratio}).",
+                )
+        except Exception:
+            pass
+
+        return True, "YES"
 
 
 class PanoImageGenChecker(BaseChecker):

@@ -7,30 +7,33 @@ import numpy as np
 import trimesh
 from PIL import Image
 from asset_gen.data.utils import delete_dir
-from asset_gen.models.segment_model import RembgRemover
+from asset_gen.models.segment_model import (
+    RembgRemover,
+    SAMRemover,
+    get_segmented_image_by_agent,
+)
 from asset_gen.utils.gpt_clients import GPT_CLIENT
 from asset_gen.utils.inference import image3d_model_infer
 from asset_gen.utils.log import logger
 from asset_gen.utils.process_media import (
     combine_images_to_grid,
-    merge_images_video,
 )
 from asset_gen.utils.tags import VERSION
-from asset_gen.utils.trender import render_video
 from asset_gen.utils.vram_utils import free_vram, log_vram
 from asset_gen.validators.quality_checkers import (
     BaseChecker,
     ImageAestheticChecker,
     ImageSegChecker,
     MeshGeoChecker,
+    TrellisOutputChecker,
 )
 from asset_gen.validators.urdf_convertor import URDFGenerator
 
-# Quality checkers: GPT/Ollama-based, no VRAM, safe at module level.
-RBG_REMOVER = RembgRemover()
+# GPT-based quality checkers: no VRAM, safe at module level.
 SEG_CHECKER = ImageSegChecker(GPT_CLIENT)
 GEO_CHECKER = MeshGeoChecker(GPT_CLIENT)
 _AESTHETIC_CHECKER = None
+_TRELLIS_CHECKER = TrellisOutputChecker()
 
 
 def _get_aesthetic_checker():
@@ -44,53 +47,52 @@ def _get_checkers():
     return [GEO_CHECKER, SEG_CHECKER, _get_aesthetic_checker()]
 
 
-# ── Lazy shape pipeline (Hunyuan3D-2mini-Turbo, 0.6B, ~4 GB VRAM) ───────────
-_PIPELINE = None
+# ── Lazy background removers (RembgRemover: CPU-only, safe to keep loaded) ───
+_RBG_REMOVER = None
+_SAM_REMOVER = None
 
 
-def _release_pipeline():
-    global _PIPELINE
-    if _PIPELINE is not None:
-        del _PIPELINE
-        _PIPELINE = None
+def _get_rbg_remover() -> RembgRemover:
+    global _RBG_REMOVER
+    if _RBG_REMOVER is None:
+        _RBG_REMOVER = RembgRemover()
+    return _RBG_REMOVER
+
+
+def _get_sam_remover() -> SAMRemover:
+    global _SAM_REMOVER
+    if _SAM_REMOVER is None:
+        log_vram("before SAM load")
+        logger.info("Loading SAMRemover (vit_h)...")
+        _SAM_REMOVER = SAMRemover()
+        log_vram("after SAM load")
+    return _SAM_REMOVER
+
+
+def _release_sam() -> None:
+    global _SAM_REMOVER
+    if _SAM_REMOVER is not None:
+        del _SAM_REMOVER
+        _SAM_REMOVER = None
         free_vram()
-        log_vram("after shape pipeline release")
+        log_vram("after SAM release")
+
+
+# ── TRELLIS client (no VRAM — remote API) ────────────────────────────────────
+_TRELLIS_CLIENT = None
 
 
 def _get_pipeline():
-    global _PIPELINE
-    if _PIPELINE is None:
-        log_vram("before shape pipeline load")
-        logger.info("Loading Hunyuan3D-2mini-Turbo shape pipeline...")
-        from asset_gen.models.hunyuan3d import Hunyuan3DInference
-        _PIPELINE = Hunyuan3DInference()
-        log_vram("after shape pipeline load")
-    return _PIPELINE
+    global _TRELLIS_CLIENT
+    if _TRELLIS_CLIENT is None:
+        from asset_gen.models.trellis_client import TrellisClient
+        _TRELLIS_CLIENT = TrellisClient()
+    return _TRELLIS_CLIENT
 
 
-# ── Lazy texture pipeline (Hunyuan3D-Paint-Turbo, 1.3B, ~6 GB VRAM) ─────────
-# Loaded ONLY after shape pipeline is fully released to stay within 8 GB.
-_TEXTURE_PIPELINE = None
-
-
-def _release_texture_pipeline():
-    global _TEXTURE_PIPELINE
-    if _TEXTURE_PIPELINE is not None:
-        del _TEXTURE_PIPELINE
-        _TEXTURE_PIPELINE = None
-        free_vram()
-        log_vram("after texture pipeline release")
-
-
-def _get_texture_pipeline():
-    global _TEXTURE_PIPELINE
-    if _TEXTURE_PIPELINE is None:
-        log_vram("before texture pipeline load")
-        logger.info("Loading Hunyuan3D-Paint-Turbo texture pipeline...")
-        from asset_gen.models.hunyuan3d import Hunyuan3DTexture
-        _TEXTURE_PIPELINE = Hunyuan3DTexture()
-        log_vram("after texture pipeline load")
-    return _TEXTURE_PIPELINE
+def _release_pipeline():
+    global _TRELLIS_CLIENT
+    _TRELLIS_CLIENT = None  # no VRAM, just drop the reference
 
 
 def process_single_image(
@@ -103,8 +105,27 @@ def process_single_image(
     disable_decompose_convex: bool = False,
     texture_size: int = 1024,
     skip_qa: bool = False,
+    delight_model=None,
 ) -> dict:
-    """Process one image → OBJ + GLB + URDF. Returns dict with file paths."""
+    """Process one image → OBJ + GLB (textured) + URDF. Returns dict with paths.
+
+    Args:
+        image_path: Path to the source image.
+        output_root: Directory where all outputs will be written.
+        asset_type: Semantic category hint for GPT-based URDF parameter estimation.
+        seed: 3D generation seed (passed to TRELLIS).
+        n_retry: How many times to retry if TRELLIS fails or QA check fails.
+        keep_intermediate: Keep intermediate files (images, logs) after success.
+        disable_decompose_convex: Skip CoACD convex decomposition in URDF.
+        texture_size: Texture atlas resolution for TRELLIS (pixels).
+        skip_qa: Skip all GPT/CLIP quality checks.
+        delight_model: Optional DelightingModel instance. If provided, applied
+            to the segmented image before sending to TRELLIS.
+
+    Returns:
+        dict with keys: ``obj``, ``glb``, ``urdf``, ``result_dir``.
+        Empty dict on total failure.
+    """
     filename = os.path.basename(image_path).split(".")[0]
     os.makedirs(output_root, exist_ok=True)
 
@@ -112,17 +133,49 @@ def process_single_image(
     image.save(f"{output_root}/{filename}_raw.png")
 
     seg_path = f"{output_root}/{filename}_cond.png"
-    seg_image = RBG_REMOVER(image) if image.mode != "RGBA" else image
-    seg_image.save(seg_path)
+
+    # ── Stage 1: Background removal + segmentation ───────────────────────────
+    # get_segmented_image_by_agent() tries SAM → inverted SAM → rembg and
+    # applies trellis_preprocess() internally → returns RGB 518×518.
+    if image.mode != "RGBA":
+        seg_image = get_segmented_image_by_agent(
+            image,
+            sam_remover=_get_sam_remover(),
+            rbg_remover=_get_rbg_remover(),
+            seg_checker=SEG_CHECKER,
+            save_path=seg_path,
+            mode="loose",
+        )
+    else:
+        from asset_gen.data.utils import trellis_preprocess
+        seg_image = trellis_preprocess(image)
+        seg_image.save(seg_path)
+
+    # Release SAM before de-lighting to free VRAM
+    _release_sam()
+
+    # ── Stage 1b: De-lighting (optional) ────────────────────────────────────
+    if delight_model is not None:
+        logger.info(f"Applying de-lighting to {filename}...")
+        try:
+            seg_image.save(
+                f"{output_root}/{filename}_pre_delight.png"
+            )
+            # delight_model expects RGBA; seg_image from trellis_preprocess is RGB
+            rgba_for_delight = seg_image.convert("RGBA") if seg_image.mode == "RGB" else seg_image
+            seg_image = delight_model(rgba_for_delight)
+            seg_image.save(f"{output_root}/{filename}_delight.png")
+            logger.info(f"De-lighting done for {filename}.")
+        except Exception as exc:
+            logger.warning(
+                f"De-lighting failed for {filename}: {exc}. Continuing without it."
+            )
 
     mesh_model = None
     trimesh_result = None
+    glb_bytes_raw = None
 
-    # Rotation matrices to align Hunyuan3D output to MuJoCo convention
-    rot_matrix = [[0, 0, -1], [0, 1, 0], [1, 0, 0]]
-    mesh_add_rot = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]
-
-    # ── Stage 1: Image → 3D ──────────────────────────────────────────────────
+    # ── Stage 2: Image → 3D (TRELLIS API) ────────────────────────────────────
     current_seed = seed
     for try_idx in range(n_retry):
         logger.info(
@@ -131,48 +184,57 @@ def process_single_image(
         )
         try:
             outputs = image3d_model_infer(
-                _get_pipeline(), seg_image, current_seed
+                _get_pipeline(),
+                seg_image,
+                current_seed,
+                texture_size=texture_size,
             )
         except Exception as e:
             logger.error(
-                f"[Image3D Failed] {image_path}: {e}, "
-                f"retry {try_idx+1}/{n_retry}"
+                f"[TRELLIS Failed] {image_path}: {e}, "
+                f"retry {try_idx + 1}/{n_retry}"
             )
             current_seed = random.randint(0, 100000)
             continue
 
-        # Hunyuan3D: gaussian is None, accept first result
-        mesh_model = outputs["mesh"][0]
         trimesh_result = outputs.get("trimesh", [None])[0]
-        logger.info("Hunyuan3D generation succeeded.")
+        glb_bytes_raw = outputs.get("glb_bytes")
+        mesh_model = outputs.get("mesh", [None])[0]  # always None for TRELLIS
+
+        # ── Geometry QA (fast, no GPT) ────────────────────────────────────
+        if trimesh_result is not None and not skip_qa:
+            ok, msg = _TRELLIS_CHECKER(trimesh_result)
+            if not ok:
+                logger.warning(
+                    f"[TrellisOutputChecker] {msg}. "
+                    f"Retrying {try_idx + 1}/{n_retry}."
+                )
+                current_seed = random.randint(0, 100000)
+                trimesh_result = None
+                continue
+
+        logger.info("TRELLIS generation succeeded.")
         break
 
-    if mesh_model is None:
+    if trimesh_result is None:
         logger.error(f"Exceeded retry limit for {image_path}, skipping.")
         return {}
 
-    # ── Stage 2: Preview video ───────────────────────────────────────────────
-    color_images = render_video(mesh_model, r=1.85).get("color", [])
-    normal_images = render_video(mesh_model, r=1.85).get("normal", [])
-    video_path = os.path.join(output_root, "gs_mesh.mp4")
-    if color_images or normal_images:
-        merge_images_video(color_images, normal_images, video_path)
-    del color_images, normal_images, mesh_model
-    free_vram()
-
     # ── Stage 3: Mesh export ─────────────────────────────────────────────────
-    mesh = trimesh_result
-    mesh.vertices = (
-        mesh.vertices @ np.array(mesh_add_rot) @ np.array(rot_matrix)
-    )
-
     mesh_obj_path = os.path.join(output_root, f"{filename}.obj")
-    mesh.export(mesh_obj_path)
-
     mesh_glb_path = os.path.join(output_root, f"{filename}.glb")
-    mesh.export(mesh_glb_path)
 
-    # ── Stage 5: URDF ────────────────────────────────────────────────────────
+    # Save original GLB (with baked texture) from TRELLIS directly.
+    if glb_bytes_raw:
+        with open(mesh_glb_path, "wb") as f:
+            f.write(glb_bytes_raw)
+    else:
+        trimesh_result.export(mesh_glb_path)
+
+    # Export OBJ for URDF/MJCF pipeline (trimesh also writes .mtl + texture PNG).
+    trimesh_result.export(mesh_obj_path)
+
+    # ── Stage 4: URDF ────────────────────────────────────────────────────────
     urdf_convertor = URDFGenerator(
         GPT_CLIENT,
         render_view_num=4,
@@ -189,15 +251,21 @@ def process_single_image(
         **asset_attrs,
     )
 
-    # Export GLB inside URDF mesh dir too
+    # Export GLB inside the URDF mesh dir too (used by API download endpoints)
     mesh_out_final = (
         f"{urdf_root}/{urdf_convertor.output_mesh_dir}/{filename}.obj"
     )
-    trimesh.load(mesh_out_final).export(mesh_out_final.replace(".obj", ".glb"))
+    if os.path.exists(mesh_out_final):
+        glb_final = mesh_out_final.replace(".obj", ".glb")
+        if glb_bytes_raw:
+            with open(glb_final, "wb") as f:
+                f.write(glb_bytes_raw)
+        else:
+            trimesh.load(mesh_out_final).export(glb_final)
 
-    # ── Stage 6b: Quality check ──────────────────────────────────────────────
+    # ── Stage 5: GPT-based quality check ─────────────────────────────────────
     if skip_qa:
-        logger.info("Skipping QA checks (skip_qa=True).")
+        logger.info("Skipping GPT QA checks (skip_qa=True).")
     else:
         image_dir = (
             f"{urdf_root}/{urdf_convertor.output_render_dir}/image_color"
@@ -216,7 +284,7 @@ def process_single_image(
         qa_results = BaseChecker.validate(checkers, images_list)
         urdf_convertor.add_quality_tag(urdf_path, qa_results)
 
-    # ── Stage 6: Organize results ────────────────────────────────────────────
+    # ── Stage 6: Organize results ─────────────────────────────────────────────
     result_dir = f"{output_root}/result"
     if os.path.exists(result_dir):
         rmtree(result_dir, ignore_errors=True)
@@ -226,15 +294,12 @@ def process_single_image(
         f"{urdf_root}/{urdf_convertor.output_mesh_dir}",
         f"{result_dir}/{urdf_convertor.output_mesh_dir}",
     )
-    if os.path.exists(video_path):
-        copy(video_path, f"{result_dir}/video.mp4")
 
     if not keep_intermediate:
         delete_dir(output_root, keep_subs=["result"])
 
     logger.info(f"Saved results for {image_path} in {result_dir}")
 
-    # Collect output file paths
     final_obj = f"{result_dir}/{urdf_convertor.output_mesh_dir}/{filename}.obj"
     final_glb = f"{result_dir}/{urdf_convertor.output_mesh_dir}/{filename}.glb"
     final_urdf = f"{result_dir}/{os.path.basename(urdf_path)}"
@@ -270,12 +335,12 @@ def entrypoint(**kwargs):
 
     for idx, img_path in enumerate(image_path):
         try:
-            filename = os.path.basename(img_path).split(".")[0]
+            fn = os.path.basename(img_path).split(".")[0]
             out_root = output_root
             if image_root or len(image_path) > 1:
-                out_root = os.path.join(output_root, filename)
+                out_root = os.path.join(output_root, fn)
 
-            mesh_out = f"{out_root}/{filename}.obj"
+            mesh_out = f"{out_root}/{fn}.obj"
             if skip_exists and os.path.exists(mesh_out):
                 logger.warning(
                     f"Skip {img_path}, already processed in {mesh_out}"

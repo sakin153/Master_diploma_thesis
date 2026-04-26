@@ -63,6 +63,7 @@ HUNYUAN3D_TEXTURE=0 docker compose up --build  # for 8 GB GPU
 | `TEXT_MODEL` | `sd15` | Text-to-image model: `sd15`, `sdxl-turbo`, `kolors`, `sd35`, `flux` |
 | `HUNYUAN3D_TEXTURE` | `0` | `1` = apply Hunyuan3D-Paint-Turbo texture after shape gen |
 | `OUTPUT_ROOT` | `outputs/jobs` | Where job outputs are saved |
+| `SKIP_OPEN3D_RENDER` | — | Set to `1` in headless/Docker; switches to matplotlib renderer (Open3D segfaults without EGL) |
 | `HF_HOME` | — | HuggingFace model cache |
 | `TORCH_HOME` | — | Torch model cache (DINOv2 goes here) |
 
@@ -72,28 +73,32 @@ HUNYUAN3D_TEXTURE=0 docker compose up --build  # for 8 GB GPU
 
 ### `api/` — REST API (thesis addition)
 - `main.py` — FastAPI app with endpoints: `POST /api/generate`, `GET /api/jobs/{id}`, `GET /api/jobs/{id}/logs`, download endpoints per format (obj/glb/urdf/mjcf/zip)
-- `job_manager.py` — `JobManager` singleton: single-GPU sequential queue backed by a background thread. Jobs persist to `outputs/jobs/{job_id}/job.json` and survive restarts (in-flight jobs are marked failed on reload).
+- `job_manager.py` — `JobManager` singleton: single-GPU sequential queue backed by a background thread. Jobs persist to `outputs/jobs/{job_id}/job.json` and survive restarts (in-flight jobs are marked failed on reload). During execution `_TeeStream` patches `sys.stdout/stderr` and a `logging.Handler` are installed so all output (including `print()` from deep libs) lands in `job.logs`.
 - `models.py` — Pydantic models for requests/responses. `ModelChoice` enum is the canonical list of valid text-to-image model names.
 
 ### `asset_gen/` — Core generation library
-- `scripts/textto3d.py` — Main pipeline entry point (`text_to_3d()` / `GenerateItem`). Batch-optimises VRAM: loads text2img for **all** items, releases it, then loads Hunyuan3D for **all** items.
-- `scripts/imageto3d.py` — Image → 3D step. Contains two lazy pipeline globals: `_PIPELINE` (shape) and `_TEXTURE_PIPELINE` (texture). Shape is always released before texture loads — they never coexist in VRAM. Switch 3D backend by editing `IMAGE3D_MODEL` constant (line ~53): `"HUNYUAN3D"` (default, 6-10 GB), `"SAM3D"` (submodule, 10-14 GB), `"TRELLIS"` (20+ GB).
-- `models/hunyuan3d.py` — Two classes: `Hunyuan3DInference` (shape, mini-turbo 0.6B) and `Hunyuan3DTexture` (paint-turbo 1.3B). Both require that the C++ extensions in `Hunyuan3D-2/hy3dgen/texgen/` are compiled.
-- `models/image_comm_model.py` — Builds the HuggingFace text-to-image pipeline selected by `TEXT_MODEL`.
+- `scripts/textto3d.py` — Main pipeline entry point (`text_to_3d()` / `GenerateItem`). **Three-phase VRAM strategy**: Phase 1 — load text2img, generate all images, release. Phase 2 — load Hunyuan3D shape, generate all meshes, release. Phase 3 — (if `enable_texture`) load paint model, texture all meshes, release. Models never coexist in VRAM.
+- `scripts/imageto3d.py` — Image → 3D step. Contains two lazy pipeline globals: `_PIPELINE` (shape) and `_TEXTURE_PIPELINE` (texture). Hardcodes two rotation matrices (`rot_matrix`, `mesh_add_rot`) to align Hunyuan3D's coordinate system to MuJoCo — these must be recalibrated if switching 3D backends.
+- `models/model_image_runtime.py` — Unified text-to-image pipeline factory. `PIPELINE_REGISTRY` dict maps model name → `(LoaderClass, RunnerClass)`. **Must be kept in sync with `ModelChoice` enum in `api/models.py`.**
+- `models/hunyuan3d.py` — Two classes: `Hunyuan3DInference` (shape, mini-turbo 0.6B, ~4 GB VRAM) and `Hunyuan3DTexture` (paint-turbo 1.3B, ~6 GB VRAM). They must never be loaded simultaneously. Requires compiled C++ extensions in `Hunyuan3D-2/hy3dgen/texgen/`.
+- `utils/inference.py` — `image3d_model_infer()` has a hard `isinstance(pipe, Hunyuan3DInference)` check — update this first when switching 3D backends.
 - `data/asset_converter.py` — `cvt_asset_gen_asset_to_anysim()` converts URDF → MJCF (or other simulator formats via `AssetType` enum).
 - `validators/quality_checkers.py` — LLM-based quality gates (semantic consistency, segmentation, text-gen alignment). All use `GPT_CLIENT` singleton.
 - `utils/gpt_clients.py` — LLM client wrapping OpenAI-compatible APIs. Config is read from `asset_gen/utils/gpt_config.yaml`. Supports `ollama`, `qwen2.5-vl`, `gpt-4o`.
-- `utils/vram_utils.py` — `free_vram()` / `log_vram()` helpers called around model load/unload.
+- `utils/vram_utils.py` — `free_vram()` / `log_vram()` helpers called around every model load/unload.
 
 ### `generate.py` — Standalone CLI
-Single-object wrapper around `text_to_3d()` + `cvt_asset_gen_asset_to_anysim()`. Output layout: `outputs/generated/asset3d/{name}/result/mesh/*.obj|glb`, `*.urdf`, `mjcf/*.xml`.
+Single-object wrapper around `text_to_3d()` + `cvt_asset_gen_asset_to_anysim()`. Sets `TEXT_MODEL` env var before importing `textto3d` to satisfy the module-level read.
+
+### `from_zero/` — Reference / scratch
+Prototype files (mirrors of `asset_gen/` scripts) written from scratch during thesis development. Not imported by the main pipeline; kept as reference.
 
 ### `Hunyuan3D-2/` — Git submodule
-Tencent's 3D generation model. Installed as a separate editable package (`hy3dgen`). Required for `IMAGE3D_MODEL = "HUNYUAN3D"`.
+Tencent's 3D generation model. Installed as a separate editable package (`hy3dgen`). `hunyuan3d.py` adds its directory to `sys.path` at import time. Required for `IMAGE3D_MODEL = "HUNYUAN3D"`.
 
 ## LLM config (`asset_gen/utils/gpt_config.yaml`)
 
-This file is **not** auto-generated — edit it directly to switch backends:
+This file is **bind-mounted in Docker** — edit it directly without rebuilding the image. Switch backends:
 
 ```yaml
 agent_type: "ollama"   # or "qwen2.5-vl" or "gpt-4o"
@@ -104,7 +109,19 @@ ollama:
   model_name: qwen2.5vl:7b
 ```
 
-In Docker, Ollama runs on the host and is accessed via `http://host.docker.internal:11434/v1`. The file is bind-mounted so no image rebuild is needed after editing it.
+In Docker, Ollama runs on the host and is accessed via `http://host.docker.internal:11434/v1`.
+
+## Switching the 3D backend
+
+`CLAUDE.md` notes three backends by VRAM cost:
+- `"HUNYUAN3D"` (default, ~4–6 GB split across shape/texture)
+- `"SAM3D"` (submodule, 10–14 GB)
+- `"TRELLIS"` (20+ GB) — exceeds RTX 2070 Super capacity
+
+To switch backends, change `IMAGE3D_MODEL` constant in `imageto3d.py` (~line 53) **and** update:
+1. `utils/inference.py` — remove `isinstance(pipe, Hunyuan3DInference)` guard
+2. `imageto3d.py` — recalibrate `rot_matrix`/`mesh_add_rot` for the new model's coordinate system
+3. The output dict from the new model must include `"trimesh": [trimesh.Trimesh]` for downstream mesh export
 
 ## Output structure
 

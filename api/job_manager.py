@@ -288,6 +288,7 @@ class JobManager:
             )
 
         enable_texture = bool(req_data.get("enable_texture", False))
+        enable_delight = bool(req_data.get("enable_delight", False))
         skip_qa = bool(req_data.get("skip_qa", False))
         disable_decompose_convex = bool(
             req_data.get("disable_decompose_convex", False)
@@ -305,6 +306,7 @@ class JobManager:
             image_height=image_height,
             image_width=image_width,
             enable_texture=enable_texture,
+            enable_delight=enable_delight,
             skip_qa=skip_qa,
             disable_decompose_convex=disable_decompose_convex,
         )
