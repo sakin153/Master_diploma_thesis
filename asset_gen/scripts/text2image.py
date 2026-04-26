@@ -11,6 +11,7 @@ import base64
 import io
 import os
 import random
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -195,11 +196,11 @@ def _generate_one(
         if select_image is not None:
             break
         logger.info(
-            f"Image GEN for '{item.name}' "
-            f"try {try_idx + 1}/{n_retry}, "
-            f"seed={seed}, size={width}x{height}, "
-            f"steps={img_denoise_step}, prompt={f_prompt}"
+            f"▶  Diffusion [{item.name}] — "
+            f"try {try_idx + 1}/{n_retry}, {img_denoise_step} steps, "
+            f"size={width}x{height}, seed={seed}"
         )
+        t_diff = time.monotonic()
         images = pipe.generate(
             f_prompt,
             num_inference_steps=img_denoise_step,
@@ -209,8 +210,19 @@ def _generate_one(
             width=width,
             seed=seed,
         )
-        for raw_image in images:
+        logger.info(
+            f"✓  Diffusion [{item.name}] — "
+            f"{time.monotonic() - t_diff:.1f}s, {len(images)} image(s)"
+        )
+        for img_idx, raw_image in enumerate(images):
+            logger.info(
+                f"▶  Background removal [{item.name}] image {img_idx + 1}/{len(images)} (rembg CPU)..."
+            )
+            t_bg = time.monotonic()
             seg_image = bg_remover(raw_image)
+            logger.info(
+                f"✓  Background removal [{item.name}] — {time.monotonic() - t_bg:.1f}s"
+            )
             if skip_qa:
                 raw_image.save(out_path.replace(".png", "_raw.png"))
                 seg_image.save(out_path)
@@ -246,7 +258,10 @@ def _generate_one(
             "using last generated image."
         )
         if images:
+            logger.info(f"▶  Background removal [{item.name}] fallback (rembg CPU)...")
+            t_bg = time.monotonic()
             seg_image = bg_remover(images[-1])
+            logger.info(f"✓  Background removal [{item.name}] — {time.monotonic() - t_bg:.1f}s")
             seg_image.save(out_path)
             return out_path
         return None
