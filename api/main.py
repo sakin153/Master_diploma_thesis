@@ -1,9 +1,14 @@
 import io
+import os
 import zipfile
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
+
+# Open3D's EGL headless renderer crashes on Windows and non-EGL Linux.
+# Set before any import that might trigger Open3D initialisation.
+os.environ.setdefault("SKIP_OPEN3D_RENDER", "1")
 
 from api.job_manager import job_manager
 from api.models import GenerateRequest, GenerateResponse, JobState, JobStatus

@@ -16,9 +16,11 @@ import torch
 from abc import ABC, abstractmethod
 
 torch.set_float32_matmul_precision("high")
-torch.backends.cuda.matmul.allow_tf32 = True  # игнорируется на Turing, но не вредит
+torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
-torch.backends.cudnn.benchmark = True
+# benchmark=False: diffusion models are transformer-based, not conv-heavy.
+# benchmark=True costs 3-5 min on first run (CUDA kernel compilation) with no benefit.
+torch.backends.cudnn.benchmark = False
 
 from diffusers import (
     AutoencoderKL,
