@@ -128,8 +128,6 @@ def _relative_score(
 
     target_item = placed.get(target)
     if target_item is None:
-        # Fallback: planner targets like "table_1" don't match the dict
-        # keys; iterate by bare Model name (ignoring `_N` instance suffix).
         base_target, _ = parse_instance_target(str(target))
         for p in placed.values():
             if str(p.get("Model", "")) == base_target:
@@ -227,9 +225,11 @@ def _relative_score(
     if ctype == "face_to":
         if dist < 1e-6:
             return 1.0
+        # Angle from object toward target — object's front should point at target
         target_yaw = math.degrees(math.atan2(ty - y, tx - x))
-        diff = abs((yaw_deg - target_yaw + 180.0) % 360.0 - 180.0)
-        score = max(0.0, 1.0 - diff / 180.0)
+        diff = abs((yaw_deg - target_yaw) % 360.0 - 180.0)
+        diff = min(diff, 360.0 - diff)
+        score = max(0.0, 1.0 - diff / 90.0)
         return score
 
     if ctype == "face_same_as":
@@ -287,7 +287,10 @@ def _score_candidate(
 
     # Soft constraint scoring
     total = 0.0
-    is_anchor = any(c.get("anchor") for c in constraints if isinstance(c, dict))
+    is_anchor = any(
+        c.get("anchor") or (str(c.get("type","")).lower() == "region" and str(c.get("value","")).lower() == "middle")
+        for c in constraints if isinstance(c, dict)
+    )
     
     for c in constraints:
         ctype = str(c.get("type", "")).lower()
@@ -1067,7 +1070,7 @@ def _prepare_indexed_models(
     # them to "this item is associated with anchor X" and let the ring
     # spread distribute the group around X.
     _ANCHOR_CONSTRAINT_TYPES = (
-        "near", "face_to", "left_of", "right_of",
+        "near", "face_to", "beside", "left_of", "right_of",
         "in_front_of", "behind", "center_aligned",
     )
     groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}

@@ -467,15 +467,9 @@ def solve_small_object_placements(
         cs = constraint_rows[i] if i < len(constraint_rows) else []
         on_target = _extract_on_target(cs)
         if on_target:
+            # on_top_of always wins — even if the object also has near/region
             base, _ = parse_instance_target(on_target)
             eligible.append((_stacking_depth(nm, base, name_to_target), i, on_target))
-        elif _volume(m) < small_threshold_volume:
-            # Skip objects already handled by floor solver (beside/near/face_to)
-            floor_types = {"beside", "near", "face_to", "region", "center_aligned",
-                           "left_of", "right_of", "in_front_of", "behind"}
-            if any(str(c.get("type", "")).lower() in floor_types for c in cs if isinstance(c, dict)):
-                continue
-            eligible.append((1, i, ""))
 
     eligible.sort(key=lambda t: (t[0], t[1]))
 

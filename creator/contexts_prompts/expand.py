@@ -5,40 +5,38 @@ Your task: take a short scene description and expand it into a detailed, realist
 Respond with JSON only:
 ```json
 {
-  "expanded_description": "Full detailed description of the scene (3-5 sentences). Include room type, style, specific objects with quantities, arrangement logic.",
+  "expanded_description": "Full detailed description of the scene (2-3 sentences).",
   "room_type": "bedroom|office|classroom|kitchen|living_room|warehouse|lab|outdoor|other",
   "room_style": "modern|minimalist|cozy|industrial|academic|other",
+  "anchor_objects": ["primary anchor name", "secondary anchor name"],
   "estimated_objects": [
-    {"name": "Object Name", "quantity": 1, "notes": "brief description or placement hint"}
+    {"name": "Object Name", "quantity": 1, "notes": "placement hint"}
   ],
   "room_dimensions_hint": "small (3x3m)|medium (5x5m)|large (8x8m)|extra_large (12x12m)"
 }
 ```
 
-Rules:
-- Be specific about quantities (e.g., "10 desks" not "some desks")
-- MATCH THE USER'S INTENT:
-  * If user asks for MINIMAL scene (e.g., "just a table", "table with two boxes") → include ONLY requested objects + essential context (floor, walls)
-  * If user asks for FULL scene (e.g., "office", "bedroom", "classroom") → add 10-20 objects for realistic, populated space
-- For FULL scenes, include ALL objects that make the scene realistic and functional:
-  * Large furniture (tables, chairs, sofas, beds, shelves)
-  * Functional items (lamps, computers, books, dishes, utensils)
-  * Decorative items (plants, art, rugs, vases)
-  * Task-specific items (for dining: plates/cutlery/glasses, for office: keyboard/mouse/monitor, for bedroom: pillows/blankets)
-- Think: "What did the user actually ask for?"
-- Respond ONLY with valid JSON inside ```json ... ```
+## Object count rules (STRICT)
+- MINIMAL scene (e.g. "just a table", "3 boxes"): ONLY the requested objects, total ≤ 5
+- FULL scene (e.g. "office", "restaurant", "bedroom"): total unique object TYPES ≤ 6, total instances ≤ 20
+- NEVER exceed 20 total object instances regardless of scene type
+- `name` MUST be a single atomic object (e.g. "chair", "table") — NEVER a group name like "chair set", "set of chairs", "4 chairs"
+- `quantity` carries the count — e.g. `{"name": "chair", "quantity": 4}` NOT `{"name": "chair set (4 chairs)", "quantity": 1}`
 
-Arrangement intent (write these into each object's `notes` field — the
-planner uses the words you write here to choose constraints, so be precise
-without prescribing a specific scenario):
-- A SINGLE small item resting on a larger surface → "centered on <surface>".
-- MULTIPLE identical items resting on the SAME surface → "evenly distributed
-  on <surface>".
-- MULTIPLE same-type items grouped around a central anchor (any kind:
-  table, rug, fire pit, podium, sofa, etc.) → "evenly distributed around
-  <anchor>, facing it".
-- An item that should hang on or attach to a wall → "mounted on a wall".
-Do NOT name specific furniture combos (e.g. "chair per plate") — describe
-the intent only. The placement engine will discover spatial pairings from
-counts and positions.
+## Hierarchy rules
+- `anchor_objects`: list 1-2 names of the PRIMARY large furniture that everything else relates to
+  * Restaurant → ["dining table"] (one representative table; chairs/plates relate to it)
+  * Office → ["desk"]
+  * Bedroom → ["bed"]
+  * Living room → ["sofa"]
+- Chairs/stools: max 4 per anchor table (not 20)
+- Small items on surfaces (plates, cups, books): max 4 per surface
+- Lamps: 0-1 per scene unless explicitly requested; they go ON a table, not on the floor
+
+## Arrangement notes (write into each object's `notes` field)
+- Small item on a surface → "on_top_of <surface_name>"
+- Items around an anchor → "beside <anchor_name>, facing it"
+- Wall-mounted → "mounted on wall"
+
+Respond ONLY with valid JSON inside ```json ... ```
 """

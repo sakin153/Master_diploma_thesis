@@ -110,6 +110,20 @@ def detect_arrangement_groups(
         follower = max(chair_candidates, key=lambda n: counts.get(n, 0))
         near_pairs[follower] = anchor
 
+    # Objects with explicit positional constraints (beside/face_to) should
+    # always go through beam search so the solver can honour those constraints.
+    # Grid arrangement ignores them and places objects at (0,0) offsets.
+    _POSITIONAL_CTYPES = frozenset({"beside", "face_to", "on_top_of"})
+    has_positional: set = set()
+    for obj in objects:
+        if not isinstance(obj, dict):
+            continue
+        name = str(obj.get("Model") or "")
+        for c in (obj.get("constraints") or []):
+            if isinstance(c, dict) and str(c.get("type", "")).lower() in _POSITIONAL_CTYPES:
+                has_positional.add(name)
+                break
+
     # Group models
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     for m in models:
@@ -125,7 +139,10 @@ def detect_arrangement_groups(
         n = len(mlist)
 
         anchor_for_name = near_pairs.get(name, "")
-        anchor_count = counts.get(anchor_for_name, 0) if anchor_for_name else 0
+        # Strip _N suffix: "table_1" → "table" for counts lookup
+        import re as _re
+        anchor_base = _re.sub(r'_\d+$', '', anchor_for_name) if anchor_for_name else ""
+        anchor_count = counts.get(anchor_base, 0) if anchor_base else 0
 
         # Pair has priority over standalone grid so follower groups are
         # consumed by anchor+follower classroom arrangement.
@@ -148,7 +165,7 @@ def detect_arrangement_groups(
                 paired_with=anchor_for_name,
             ))
             handled.add(name)
-        elif n >= grid_threshold:
+        elif n >= grid_threshold and name not in has_positional:
             groups.append(ArrangementGroup(
                 model_name=name,
                 models=mlist,
@@ -466,12 +483,93 @@ def apply_arrangements(
             arranged.extend(updated)
             arranged_names.add(group.model_name)
 
-    # Second pass: handle pair groups whose anchor was not gridded
+    # Second pass: handle "around" groups — place anchor at center, followers by side+offset
     for group in groups:
-        if group.arrangement != "pair" or group.model_name in arranged_names:
+        if group.arrangement != "around" or group.model_name in arranged_names:
             continue
-        # Will be handled by beam search with near-target sampling
-        pass
+
+        anchor_name_raw = group.paired_with  # e.g. "table_1"
+        import re as _re
+        anchor_base = _re.sub(r'_\d+$', '', anchor_name_raw)
+        anchor_list = by_name.get(anchor_base, [])
+        if not anchor_list or anchor_base in arranged_names:
+            continue
+
+        anchor = anchor_list[0]
+        followers = by_name.get(group.model_name, [])
+        if not followers:
+            continue
+
+        # Place anchor at room center
+        a_size = anchor.get("size") or [1.0, 1.0, 1.0]
+        a_hz = max(0.01, float(a_size[1])) / 2.0
+        # Half-extents of anchor footprint: size[0]=width(X), size[2]=depth(Y)
+        a_hx = max(0.01, float(a_size[0])) / 2.0
+        a_hy = max(0.01, float(a_size[2]) if len(a_size) > 2 else float(a_size[0])) / 2.0
+        a = dict(anchor)
+        a["Pose"] = {"x": 0.0, "y": 0.0, "z": a_hz}
+        a["yaw_deg"] = 0.0
+        arranged.append(a)
+        arranged_names.add(anchor_base)
+
+        f_size = followers[0].get("size") or [0.5, 0.5, 0.5]
+        f_hz = max(0.01, float(f_size[1])) / 2.0
+
+        # Side vectors: normal (away from anchor) and tangent (along edge)
+        _SIDE_NORMAL = {
+            "front": (0.0,  1.0),
+            "back":  (0.0, -1.0),
+            "left":  (-1.0, 0.0),
+            "right": (1.0,  0.0),
+        }
+        _SIDE_HALF_EXTENT = {
+            "front": a_hy, "back": a_hy,
+            "left":  a_hx, "right": a_hx,
+        }
+        _SIDE_TANGENT = {
+            "front": (1.0, 0.0), "back": (1.0, 0.0),
+            "left":  (0.0, 1.0), "right": (0.0, 1.0),
+        }
+
+        # Build beside constraint list per follower instance from semantic_plan (in order)
+        objects_list = semantic_plan.get("objects", []) if isinstance(semantic_plan, dict) else []
+        follower_constraints = []
+        for obj in objects_list:
+            if not isinstance(obj, dict):
+                continue
+            if str(obj.get("Model", "")).lower() == group.model_name.lower():
+                for c in (obj.get("constraints") or []):
+                    if isinstance(c, dict) and str(c.get("type", "")).lower() == "beside":
+                        follower_constraints.append(c)
+                        break
+                else:
+                    follower_constraints.append({})
+
+        for k, follower in enumerate(followers):
+            c = follower_constraints[k] if k < len(follower_constraints) else (follower_constraints[k % len(follower_constraints)] if follower_constraints else {})
+            side = str(c.get("side", "front")).lower()
+            if side not in _SIDE_NORMAL:
+                side = "front"
+            offset = float(c.get("offset", 0.0))
+            distance = c.get("distance", 0.5)
+            if isinstance(distance, (list, tuple)):
+                distance = (float(distance[0]) + float(distance[1])) / 2.0
+            else:
+                distance = float(distance)
+
+            nx, ny = _SIDE_NORMAL[side]
+            tx, ty = _SIDE_TANGENT[side]
+            half_ext = _SIDE_HALF_EXTENT[side]
+
+            fx = nx * (half_ext + distance) + tx * offset
+            fy = ny * (half_ext + distance) + ty * offset
+            yaw = math.degrees(math.atan2(-fy, -fx)) % 360.0
+
+            f = dict(follower)
+            f["Pose"] = {"x": fx, "y": fy, "z": f_hz}
+            f["yaw_deg"] = yaw
+            arranged.append(f)
+        arranged_names.add(group.model_name)
 
     # Remaining: beam search
     remaining = [

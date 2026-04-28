@@ -110,6 +110,16 @@ def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
     if not objects:
         raise ValueError("LLM returned no objects in estimated_objects")
 
+    # Hard cap: never exceed 20 total instances
+    _MAX_TOTAL = 20
+    total = sum(o.quantity for o in objects)
+    if total > _MAX_TOTAL:
+        scale = _MAX_TOTAL / total
+        for o in objects:
+            o.quantity = max(1, int(o.quantity * scale))
+
+    anchor_objects = [str(a).strip().lower() for a in data.get("anchor_objects", []) if a]
+
     dim_hint = str(data.get("room_dimensions_hint", "medium (5x5m)"))
     room_half = _parse_room_dim_hint(dim_hint)
 
@@ -124,6 +134,7 @@ def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
         room_style=str(data.get("room_style", "modern")),
         estimated_objects=objects,
         room_half_size=room_half,
+        anchor_objects=anchor_objects,
     )
 
 
@@ -209,13 +220,15 @@ class SceneSpec:
         room_style: str = "modern",
         estimated_objects: Optional[List[ObjectHint]] = None,
         room_half_size: float = 2.5,
+        anchor_objects: Optional[List[str]] = None,
     ) -> None:
         self.original_query = original_query
         self.expanded_description = expanded_description
         self.room_type = room_type
         self.room_style = room_style
         self.estimated_objects: List[ObjectHint] = estimated_objects or []
-        self.room_half_size = room_half_size   # initial estimate; may be revised by room_planner
+        self.room_half_size = room_half_size
+        self.anchor_objects: List[str] = anchor_objects or []   # initial estimate; may be revised by room_planner
 
     @property
     def effective_query(self) -> str:
