@@ -1,0 +1,26 @@
+{
+  "table": [
+    {
+      "uid": "wooden_patterned_table",
+      "name": "Wooden Patterned Table",
+      "category": "table",
+      "obj_file": "assets/table/wooden_patterned_table.glb"
+    }
+  ],
+  "crate": [
+    {
+      "uid": "fcc2d9ff0b5fc320",
+      "name": "2 Containers100X100",
+      "category": "crate",
+      "obj_file": "assets/crate/2_Containers100x100.STL"
+    }
+  ],
+  "apple": [
+    {
+      "uid": "apple2",
+      "name": "Apple",
+      "category": "apple",
+      "obj_file": "assets/apple/apple2.glb"
+    }
+  ]
+}

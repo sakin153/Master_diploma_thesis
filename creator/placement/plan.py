@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Sequence, Tuple
 
 
 def _safe_str(v: Any) -> str:
@@ -19,6 +19,9 @@ def _normalize_constraint(c: Dict[str, Any]) -> Dict[str, Any]:
     is_pair = isinstance(c.get("distance"), (list, tuple)) and len(c["distance"]) == 2
     if has_distance and is_pair:
         out["distance"] = [float(c["distance"][0]), float(c["distance"][1])]
+    side = _safe_str(c.get("side")).lower()
+    if side in ("front", "back", "left", "right"):
+        out["side"] = side
     return out
 
 
@@ -54,20 +57,28 @@ def _ensure_plan_covers_chosen_models(
     preserves multiplicity and injects simple region constraints for missing
     entries so downstream placement still receives a complete plan.
     """
+    import re
+    
+    def _normalize_name(name: str) -> str:
+        """Remove _N suffixes: box_1 -> box, apple_2 -> apple"""
+        return re.sub(r'_\d+$', '', name)
+    
     out = [dict(o) for o in objects if isinstance(o, dict) and _safe_str(o.get("Model"))]
 
     remaining: Dict[str, int] = {}
     for o in out:
         n = _safe_str(o.get("Model"))
-        remaining[n] = remaining.get(n, 0) + 1
+        base = _normalize_name(n)
+        remaining[base] = remaining.get(base, 0) + 1
 
     for cm in chosen_models:
         name = _safe_str(cm.get("Model") or cm.get("name"))
         if not name:
             continue
-        cnt = remaining.get(name, 0)
+        base = _normalize_name(name)
+        cnt = remaining.get(base, 0)
         if cnt > 0:
-            remaining[name] = cnt - 1
+            remaining[base] = cnt - 1
             continue
         out.append(
             {
@@ -99,6 +110,48 @@ def _name_is_facing_subject(name: str) -> bool:
     """Heuristic: this object meaningfully has a "front" that should face a target."""
     lname = (name or "").lower()
     return any(k in lname for k in _FACING_OBJECT_HINTS)
+
+
+def _distribute_identical_around_anchor(objects: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Auto-add directional constraints for identical objects around common anchor."""
+    groups: Dict[Tuple[str, str], List[Tuple[int, Dict]]] = {}
+    for idx, obj in enumerate(objects):
+        name = _safe_str(obj.get("Model"))
+        anchor = None
+        for c in obj.get("constraints", []):
+            if isinstance(c, dict) and _safe_str(c.get("type")).lower() == "face_to":
+                anchor = _safe_str(c.get("target"))
+                break
+        if anchor:
+            groups.setdefault((name, anchor), []).append((idx, obj))
+    
+    result = list(objects)
+    for (_, anchor), items in groups.items():
+        n = len(items)
+        if not (2 <= n <= 8):
+            continue
+        dirs = (["left_of", "right_of", "in_front_of", "behind"] * 2)[:n]
+        for i, (idx, obj) in enumerate(items):
+            new_obj = dict(obj)
+            cons = []
+            # Remove conflicting region constraints, boost face_to heavily
+            for c in obj.get("constraints", []):
+                if not isinstance(c, dict):
+                    continue
+                ctype = _safe_str(c.get("type")).lower()
+                if ctype == "region":
+                    continue  # Remove region constraint
+                if ctype == "face_to":
+                    c = dict(c)
+                    c["weight"] = 10.0
+                cons.append(c)
+            cons.extend([
+                {"type": dirs[i], "target": anchor, "value": None, "hard": False, "weight": 0.5},
+                {"type": "near", "target": anchor, "distance": [0.4, 1.2], "hard": False, "weight": 0.6}
+            ])
+            new_obj["constraints"] = cons
+            result[idx] = new_obj
+    return result
 
 
 def _infer_face_to_from_near(
@@ -202,6 +255,11 @@ def _stabilize_dense_group_constraints(
         if not keep:
             keep = [{"type": "region", "target": "", "value": "middle", "hard": False, "weight": 1.0}]
 
+        # beside and on_top_of are mutually exclusive
+        has_beside = any(_safe_str(c.get("type")).lower() == "beside" for c in keep)
+        if has_beside:
+            keep = [c for c in keep if _safe_str(c.get("type")).lower() != "on_top_of"]
+
         out.append({"Model": name, "constraints": keep})
 
     return out
@@ -216,21 +274,9 @@ def build_semantic_plan(
     chosen_models: Sequence[Dict[str, Any]],
     context_models: Sequence[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    catalog = []
-    for m in context_models:
-        name = _safe_str(m.get("name"))
-        if not name:
-            continue
-        catalog.append(
-            {
-                "name": name,
-                "tags": m.get("tags") or [],
-                "categories": m.get("categories") or [],
-            }
-        )
-
+    # Build prompt with query and chosen models
     content = prompt_template.format(
-        catalog_str=str(catalog),
+        query=query,
         models_str=str(list(chosen_models)),
     )
 
@@ -264,13 +310,40 @@ def build_semantic_plan(
                     nc = _normalize_constraint(c)
                     if nc["type"]:
                         norm_constraints.append(nc)
-        objects.append({"Model": model_name, "constraints": norm_constraints})
+        
+        obj_entry: Dict[str, Any] = {
+            "Model": model_name,
+            "constraints": norm_constraints
+        }
+        
+        # beside and on_top_of are mutually exclusive: an object cannot
+        # simultaneously stand beside a target AND rest on top of it.
+        has_beside = any(c["type"] == "beside" for c in norm_constraints)
+        if has_beside:
+            norm_constraints = [c for c in norm_constraints if c["type"] != "on_top_of"]
+            obj_entry["constraints"] = norm_constraints
+        
+        # Parse is_static from LLM response
+        if "is_static" in item:
+            obj_entry["is_static"] = bool(item["is_static"])
+        
+        objects.append(obj_entry)
 
     if not objects:
         return _fallback_plan(chosen_models)
 
     objects = _ensure_plan_covers_chosen_models(objects, chosen_models)
     objects = _stabilize_dense_group_constraints(objects)
+    objects = _distribute_identical_around_anchor(objects)
     objects = _infer_face_to_from_near(objects)
+    
+    # Auto-set is_static=True for wall-mounted objects
+    for obj in objects:
+        constraints = obj.get("constraints", [])
+        if isinstance(constraints, list):
+            for c in constraints:
+                if isinstance(c, dict) and c.get("type") in ("wall_mount", "wall_mounted"):
+                    obj["is_static"] = True
+                    break
 
     return {"objects": objects}

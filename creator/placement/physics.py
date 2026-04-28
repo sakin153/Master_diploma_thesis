@@ -7,7 +7,7 @@ Improvements:
 """
 
 import math
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from creator.placement.geometry import (
     Vec2,
@@ -31,6 +31,7 @@ def validate_and_repair_layout(
     room_half_size: float = 5.0,
     repair_iters: int = 8,
     push_step: float = 0.06,
+    semantic_plan: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Validate layout and resolve overlaps using gradient-based resolution.
 
@@ -38,6 +39,7 @@ def validate_and_repair_layout(
     1. Fix Z positions (ensure objects rest on floor or support)
     2. Resolve XY overlaps using gradient descent (ImperativeScene approach)
     """
+    print(f"[validate_and_repair] Starting with {len(placed_models)} models...")
     repaired: List[Dict[str, Any]] = []
     for m in placed_models:
         item = dict(m)
@@ -56,6 +58,7 @@ def validate_and_repair_layout(
         iterations=repair_iters * 20,
         step_size=push_step,
         collision_margin=0.01,
+        semantic_plan=semantic_plan,
     )
 
     return repaired

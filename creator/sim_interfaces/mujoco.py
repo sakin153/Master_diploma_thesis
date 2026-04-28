@@ -48,69 +48,6 @@ class MujocoSimInterface(BaseSimInterface):
         (("tray",), 0.50),
     )
 
-    _HEIGHT_TARGETS_M: Tuple[Tuple[Tuple[str, ...], float], ...] = (
-        # Small objects
-        (("cup", "mug"), 0.11),
-        (("plate", "dish"), 0.04),
-        (("bowl",), 0.09),
-        (("bottle", "water bottle"), 0.26),
-        (("phone", "smartphone"), 0.15),
-        (("laptop",), 0.02),   # closed lid height
-        (("book",), 0.24),
-        (("keyboard",), 0.04),
-        (("remote",), 0.03),
-        (("candle",), 0.12),
-        (("apple", "fruit"), 0.08),
-        (("vase",), 0.30),
-        (("pillow", "cushion"), 0.15),
-        (("crate", "container", "box"), 0.35),
-        # Furniture
-        (("stool",), 0.45),
-        (("coffee table", "cocktail table"), 0.45),
-        (("side table", "end table", "accent table"), 0.55),
-        (("nightstand", "bedside"), 0.60),
-        (("ottoman",), 0.45),
-        (("chair", "armchair", "seat"), 0.85),
-        (("bar stool",), 0.75),
-        (("sofa", "couch", "loveseat", "settee"), 0.85),
-        (("table", "dining table"), 0.75),
-        (("desk", "writing desk", "work table"), 0.75),
-        (("counter", "kitchen counter"), 0.90),
-        (("bed", "mattress"), 0.55),
-        (("bench",), 0.50),
-        (("bookcase", "bookshelf"), 1.80),
-        (("shelf", "shelving", "rack"), 1.60),
-        (("cabinet", "cupboard"), 1.80),
-        (("wardrobe", "closet", "armoire"), 2.00),
-        (("dresser", "chest", "sideboard", "buffet"), 1.00),
-        # Electronics / appliances
-        (("tv", "television", "flat screen"), 0.60),
-        (("monitor", "screen", "display"), 0.40),
-        (("refrigerator", "fridge"), 1.70),
-        (("microwave",), 0.35),
-        (("oven", "stove", "range"), 0.90),
-        (("washing machine", "washer", "dryer"), 0.90),
-        # Lighting
-        (("floor lamp", "standing lamp", "torchiere"), 1.60),
-        (("table lamp", "desk lamp", "bedside lamp"), 0.45),
-        (("chandelier",), 0.60),
-        (("lamp",), 0.50),
-        # Sanitaryware
-        (("toilet",), 0.75),
-        (("sink", "wash basin"), 0.90),
-        (("bathtub",), 0.55),
-        # Structural
-        (("door",), 2.10),
-        (("window",), 1.20),
-        (("stairs", "staircase"), 2.40),
-        # Decor
-        (("plant", "potted plant", "tree"), 1.00),
-        (("painting", "picture frame", "wall art"), 0.60),
-        (("mirror",), 1.20),
-        # Vehicles
-        (("car", "vehicle", "truck"), 1.50),
-    )
-
     _CONCAVE_COLLISION_HINTS: Tuple[str, ...] = (
         "crate",
         "container",
@@ -220,7 +157,11 @@ class MujocoSimInterface(BaseSimInterface):
                 small_threshold_volume=0.06,
             )
 
-            full_placed_models = validate_and_repair_layout(full_placed_models)
+            full_placed_models = validate_and_repair_layout(
+                full_placed_models,
+                semantic_plan=semantic_plan,
+                room_half_size=room_half_size,
+            )
 
             violations_before = evaluate_constraint_violations(
                 full_placed_models,
@@ -285,16 +226,26 @@ class MujocoSimInterface(BaseSimInterface):
     ) -> List[Dict]:
         full_placed_models = []
         per_name_cursor: Dict[str, int] = {}
+        models_by_uuid = {
+            str(m.get("uuid")): m for m in models if m.get("uuid")
+        }
         for model in placed_models:
-            locs, model_entries = self.find_entries_by_name(model["Model"], models)
-            if not model_entries:
-                continue
+            # If the runner picked a specific uuid (LLM disambiguation),
+            # honor it exactly. Otherwise fall back to name + per-name cursor
+            # so repeated names still cycle through different uuids.
+            uid = str(model.get("uuid") or "").strip()
+            selected_entry: Optional[Dict] = None
+            if uid and uid in models_by_uuid:
+                selected_entry = copy.deepcopy(models_by_uuid[uid])
+            else:
+                _locs, model_entries = self.find_entries_by_name(model["Model"], models)
+                if not model_entries:
+                    continue
+                name = str(model.get("Model", ""))
+                idx = per_name_cursor.get(name, 0) % len(model_entries)
+                per_name_cursor[name] = per_name_cursor.get(name, 0) + 1
+                selected_entry = copy.deepcopy(model_entries[idx])
 
-            name = str(model.get("Model", ""))
-            idx = per_name_cursor.get(name, 0) % len(model_entries)
-            per_name_cursor[name] = per_name_cursor.get(name, 0) + 1
-
-            selected_entry = copy.deepcopy(model_entries[idx])
             selected_entry.update(model)
             full_placed_models.append(selected_entry)
         return full_placed_models
@@ -435,9 +386,17 @@ class MujocoSimInterface(BaseSimInterface):
         """Like `target_height_m` but returns None for unknown categories
         (no LLM call). Used by up-axis detection to avoid recursion / cost."""
         name = str(model_name or "").lower()
-        for keywords, height in self._HEIGHT_TARGETS_M:
-            if any(kw in name for kw in keywords):
-                return float(height)
+        
+        # Only basic fallbacks to avoid LLM call during up-axis detection
+        if any(kw in name for kw in ["cup", "mug"]):
+            return 0.11
+        elif any(kw in name for kw in ["apple", "fruit"]):
+            return 0.08
+        elif any(kw in name for kw in ["table", "desk"]):
+            return 0.75
+        elif any(kw in name for kw in ["chair"]):
+            return 0.85
+        
         return None
 
     def update_model_sizes(self, models: List[Dict]) -> List[Dict]:
@@ -450,9 +409,13 @@ class MujocoSimInterface(BaseSimInterface):
                 mesh = trimesh.load(model["model_loc"], force="mesh")
                 updated_models[i]["size"] = mesh.extents
                 model_name = str(model.get("Model") or model.get("name") or "")
-                updated_models[i]["_up_axis"] = self._detect_up_axis(
-                    model_name, mesh,
-                )
+                # Honor an up-axis already supplied by the loader (e.g.
+                # EmbodiedGenLoader knows the dataset is glTF Y-up). Only
+                # run the geometric detector for unknown sources.
+                if not updated_models[i].get("_up_axis"):
+                    updated_models[i]["_up_axis"] = self._detect_up_axis(
+                        model_name, mesh,
+                    )
             except Exception as e:
                 print(f"Warning: Failed to load mesh for {model.get('Model')}: {e}")
                 # Keep original size, will use fallback
@@ -482,24 +445,12 @@ class MujocoSimInterface(BaseSimInterface):
             return 10.0
         return 1.0
     def target_height_m(self, model_name: str) -> float:
-        """Return expected real-world height (Z after rotation) in metres.
-
-        Uses the hardcoded table first; falls back to LLM inference for
-        categories not covered by the table.
-        """
-        name = str(model_name or "").lower()
-        for keywords, height in self._HEIGHT_TARGETS_M:
-            if any(kw in name for kw in keywords):
-                return height
-
-        # Unknown category: ask LLM (result is cached in SQLite)
+        """Return expected real-world height (Z after rotation) in metres."""
         from creator.llm.model import ask_object_height_m
         llm_h = ask_object_height_m(model_name)
-        if llm_h is not None:
+        if llm_h is not None and 0.05 < llm_h < 5.0:
             return llm_h
-
-        return 1.0  # last-resort generic fallback
-
+        return 1.0
     def target_height_bounds_m(self, model_name: str) -> Tuple[float, float]:
         """Acceptable height range: [65%, 160%] of target."""
         target = self.target_height_m(model_name)
@@ -607,19 +558,48 @@ class MujocoSimInterface(BaseSimInterface):
             unit_scale = self.infer_unit_scale(max_dim)
 
             # Step 2: height in metres after unit normalisation.
-            # For Y-up models (standard GLB): mesh Y → scene Z after euler="90 0 yaw".
-            # For Z-up models (some Objaverse assets): mesh Z → scene Z, no rotation.
-            if up_axis == "z":
-                height_raw = sz if sz >= 0.05 * max_dim else max_dim
-            elif sy >= 0.05 * max_dim:
-                height_raw = sy
+            # Special handling for elongated objects (bananas, etc.)
+            name_lower = model_name.lower()
+            is_elongated = any(kw in name_lower for kw in ["banana", "cucumber", "carrot", "stick", "rod", "pencil"])
+            
+            if is_elongated:
+                # For elongated objects, use the smaller horizontal dimension as "height"
+                if up_axis == "z":
+                    horizontal_dims = [sx, sy]
+                    height_raw = min(horizontal_dims)
+                else:  # up_axis == "y"
+                    horizontal_dims = [sx, sz]
+                    height_raw = min(horizontal_dims)
             else:
-                height_raw = max_dim  # atypical orientation; use max
+                # Normal objects: use the up-axis dimension
+                if up_axis == "z":
+                    height_raw = sz if sz >= 0.05 * max_dim else max_dim
+                elif sy >= 0.05 * max_dim:
+                    height_raw = sy
+                else:
+                    height_raw = max_dim  # atypical orientation; use max
 
             height_m = height_raw * unit_scale
 
             # Step 3: deterministic scale based on target height
             target_h = self.target_height_m(model_name)
+            
+            # Check if object is already reasonably sized (within 20% of target)
+            current_height_m = height_m
+            if 0.8 * target_h <= current_height_m <= 1.2 * target_h:
+                # Object is already well-sized, minimal scaling
+                final_scale = unit_scale
+                model["scale"] = final_scale
+                
+                # Store normalized size
+                if up_axis == "z":
+                    model["size"] = [sx * final_scale, sz * final_scale, sy * final_scale]
+                    model["_height_m"] = sz * final_scale
+                else:
+                    model["size"] = [sx * final_scale, sy * final_scale, sz * final_scale]
+                    model["_height_m"] = sy * final_scale
+                continue
+            
             deterministic_scale = unit_scale * (target_h / max(1e-6, height_m))
 
             # Step 4: optional LLM refinement
@@ -642,14 +622,28 @@ class MujocoSimInterface(BaseSimInterface):
 
             final_scale = max(1e-4, min(1000.0, final_scale))
 
-            # Step 6: clamp horizontal extent for flat/compact objects.
+            # Step 6: clamp horizontal extent for flat/compact objects and elongated objects.
             lname_lower = model_name.lower()
-            for h_keywords, max_horiz in self._MAX_HORIZ_M:
-                if any(kw in lname_lower for kw in h_keywords):
-                    actual_horiz = max(sx, sz) * final_scale
-                    if actual_horiz > max_horiz:
-                        final_scale *= max_horiz / actual_horiz
-                    break
+            
+            # Special limits for elongated objects
+            if any(kw in lname_lower for kw in ["banana", "cucumber", "carrot"]):
+                max_length = 0.20  # 20cm max length for fruits/vegetables
+                actual_length = max(sx, sz) * final_scale
+                if actual_length > max_length:
+                    final_scale *= max_length / actual_length
+            elif any(kw in lname_lower for kw in ["stick", "rod", "pencil"]):
+                max_length = 0.30  # 30cm max for tools/utensils
+                actual_length = max(sx, sz) * final_scale
+                if actual_length > max_length:
+                    final_scale *= max_length / actual_length
+            else:
+                # Original logic for flat/compact objects
+                for h_keywords, max_horiz in self._MAX_HORIZ_M:
+                    if any(kw in lname_lower for kw in h_keywords):
+                        actual_horiz = max(sx, sz) * final_scale
+                        if actual_horiz > max_horiz:
+                            final_scale *= max_horiz / actual_horiz
+                        break
 
             final_scale = max(1e-4, min(1000.0, final_scale))
             model["scale"] = final_scale
@@ -705,6 +699,7 @@ class MujocoSimInterface(BaseSimInterface):
         visual_count = 0
         collision_count = 0
         material_count = 0
+        included_paths: set = set()
         for i, _ in enumerate(full_placed_models):
             material_map = {}
             model = full_placed_models[i]
@@ -717,7 +712,9 @@ class MujocoSimInterface(BaseSimInterface):
                 model_name = model.get('Model', model.get('name', 'unknown'))
                 print(f"Model '{model_name}' not found in local assets, using fallback cube.")
                 fallback_xml = self.create_fallback_cube_xml(path, model)
-                self.insert_include_tags(main_root, fallback_xml)
+                if str(fallback_xml) not in included_paths:
+                    included_paths.add(str(fallback_xml))
+                    self.insert_include_tags(main_root, fallback_xml)
                 continue
 
             mesh = self.load_and_scale_mesh(model)
@@ -736,7 +733,9 @@ class MujocoSimInterface(BaseSimInterface):
                         " it will be replaced with fallback cube."
                     )
                     fallback_xml = self.create_fallback_cube_xml(path, model)
-                    self.insert_include_tags(main_root, fallback_xml)
+                    if str(fallback_xml) not in included_paths:
+                        included_paths.add(str(fallback_xml))
+                        self.insert_include_tags(main_root, fallback_xml)
                     continue
             tree, root, included_tree, included_root = self.parse_xml(saved_mjc_path)
 
@@ -751,7 +750,9 @@ class MujocoSimInterface(BaseSimInterface):
             )
             material_count += 1
             self.write_modified_xml(included_tree, saved_mjc_path)
-            self.insert_include_tags(main_root, saved_mjc_path)
+            if str(saved_mjc_path) not in included_paths:
+                included_paths.add(str(saved_mjc_path))
+                self.insert_include_tags(main_root, saved_mjc_path)
         return main_root
 
 
@@ -808,10 +809,12 @@ class MujocoSimInterface(BaseSimInterface):
         The child body has NO joint → rigidly attached to the wall.
         Position is relative to the wall body's coordinate frame.
         """
-        from creator.scene.physics_profile import get_physics_profile
+        from creator.scene.physics_profile import get_physics_profile_for_model
 
         model_name = str(model.get("Model") or model.get("name") or "")
-        profile = get_physics_profile(model_name)
+        size = model.get("size")
+        is_static = model.get("is_static")
+        profile = get_physics_profile_for_model(model_name, size=size, is_static=is_static)
 
         pose = model.get("Pose") or {}
         px = float(pose.get("x", 0.0))
@@ -984,8 +987,14 @@ class MujocoSimInterface(BaseSimInterface):
         save_fn = re.sub(r"[^a-zA-Z0-9_]+", "_", str(model.get("save_fn") or "0"))
         unique_name = f"fallback_{safe_name}_{save_fn}"
 
-        from creator.scene.physics_profile import get_physics_profile
-        fallback_profile = get_physics_profile(str(model.get("Model") or model.get("name") or ""))
+        from creator.scene.physics_profile import get_physics_profile_for_model
+        size = model.get("size")
+        is_static = model.get("is_static")
+        fallback_profile = get_physics_profile_for_model(
+            str(model.get("Model") or model.get("name") or ""),
+            size=size,
+            is_static=is_static
+        )
         friction_str = " ".join(str(v) for v in fallback_profile.friction)
         solref_str = " ".join(str(v) for v in fallback_profile.solref)
         solimp_str = " ".join(str(v) for v in fallback_profile.solimp)
@@ -1202,7 +1211,7 @@ class MujocoSimInterface(BaseSimInterface):
     def modify_body_tag(
         self, included_root: ET.Element, model: Dict[str, Union[str, int, float]]
     ) -> None:
-        from creator.scene.physics_profile import get_physics_profile
+        from creator.scene.physics_profile import get_physics_profile_for_model
 
         yaw_deg = float(model.get("yaw_deg", 0.0))
         pose = model.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0}
@@ -1210,7 +1219,9 @@ class MujocoSimInterface(BaseSimInterface):
         py = float(pose.get("y", 0.0))
         pz = float(pose.get("z", 0.0))
         model_name = str(model.get("Model") or model.get("name") or "")
-        profile = get_physics_profile(model_name)
+        size = model.get("size")
+        is_static = model.get("is_static")
+        profile = get_physics_profile_for_model(model_name, size=size, is_static=is_static)
 
         # MuJoCo uses XYZ-intrinsic Tait-Bryan euler. The third angle rotates
         # around the body's already-rotated Z axis, not the world Z.
@@ -1494,3 +1505,201 @@ class MujocoSimInterface(BaseSimInterface):
 
     def write_tree_to_file(self, tree: ET.ElementTree, path: str) -> None:
         tree.write(path, encoding="utf-8", xml_declaration=True)
+
+    def add_robot(
+        self,
+        main_root: ET.Element,
+        robot_placement: Dict[str, Any]
+    ) -> None:
+        """Inline robot XML into the scene with prefixed class names and correct position.
+
+        Avoids <include childclass=...> which cannot rename nested default classes
+        (e.g. 'visual'/'collision') and does not support pos/euler attributes.
+
+        Strategy:
+          1. Parse robot XML directly.
+          2. Rename every class="X" / childclass="X" to "robot_<id>_X" so two
+             robots with the same internal class names don't collide.
+          3. Merge <default>, <asset>, <actuator>, <contact>, <equality>,
+             <sensor> sections into the main document.
+          4. Wrap the robot's root <body> in a positioning <body pos=... euler=...>
+             and append it to <worldbody>.
+        """
+        import math
+        from pathlib import Path
+
+        robot_id = robot_placement["robot_id"]
+        xml_path = robot_placement["xml_path"]
+        pos = robot_placement.get("pos", [0.0, 0.0, 0.0])
+        yaw_deg = float(robot_placement.get("yaw", 0.0))
+
+        project_root = Path(__file__).parent.parent.parent
+        full_path = project_root / xml_path
+
+        if not full_path.exists():
+            print(f"[add_robot] Robot XML not found: {full_path}")
+            return
+
+        robot_tree = ET.parse(str(full_path))
+        robot_root = robot_tree.getroot()
+
+        prefix = f"robot_{robot_id}_"
+
+        # Collect asset names defined in this robot's <asset> section so we
+        # can prefix both their definitions and every reference to them.
+        robot_asset_elem = robot_root.find("asset")
+        _asset_names: set = set()
+        if robot_asset_elem is not None:
+            for child in robot_asset_elem:
+                n = child.get("name")
+                if n:
+                    _asset_names.add(n)
+
+        # Collect all element names that will be prefixed so we can update references
+        _element_names: set = set()
+        def _collect_names(elem: ET.Element) -> None:
+            if elem.tag in ("body", "site", "joint", "actuator", "sensor"):
+                name = elem.get("name")
+                if name:
+                    _element_names.add(name)
+            for child in elem:
+                _collect_names(child)
+        
+        _collect_names(robot_root)
+
+        def _rename_all(elem: ET.Element) -> None:
+            """Recursively prefix class/childclass attrs, asset name refs, element names and references."""
+            for attr in ("class", "childclass"):
+                val = elem.get(attr)
+                if val is not None:
+                    elem.set(attr, prefix + val)
+            # Prefix asset name definitions and references
+            for attr in ("name", "material", "texture", "mesh"):
+                val = elem.get(attr)
+                if val is not None and val in _asset_names:
+                    elem.set(attr, prefix + val)
+            # Prefix element names to avoid conflicts between robots
+            if elem.tag in ("body", "site", "joint", "actuator", "sensor"):
+                name = elem.get("name")
+                if name is not None:
+                    elem.set("name", prefix + name)
+            # Update references to renamed elements
+            for attr in ("body1", "body2", "joint", "site", "actuator", "sensor"):
+                val = elem.get(attr)
+                if val is not None and val in _element_names:
+                    elem.set(attr, prefix + val)
+            for child in elem:
+                _rename_all(child)
+
+        # Fix meshdir so asset paths resolve from the robot's own directory
+        robot_dir = str(full_path.parent.absolute())
+        compiler = robot_root.find("compiler")
+        meshdir = "assets"
+        if compiler is not None:
+            meshdir = compiler.get("meshdir", "assets")
+        abs_meshdir = str((full_path.parent / meshdir).resolve()) if not __import__("pathlib").Path(meshdir).is_absolute() else meshdir
+
+        # Rewrite all <mesh file=...> to absolute paths so they resolve
+        # correctly regardless of where the main scene XML lives.
+        robot_asset = robot_root.find("asset")
+        if robot_asset is not None:
+            for mesh_elem in robot_asset.findall("mesh"):
+                f = mesh_elem.get("file", "")
+                if f and not __import__("pathlib").Path(f).is_absolute():
+                    mesh_elem.set("file", str((__import__("pathlib").Path(abs_meshdir) / f).resolve()))
+
+        # Load standalone model to get real joint ranges and ctrlranges.
+        # Problem: main scene has no <compiler angle="radian">, defaults to "degree".
+        # - Joint ranges in XML are interpreted as degrees → convert rad→deg
+        # - Actuator ctrlrange is NOT angle-dependent → keep in radians
+        try:
+            import math as _math
+            import mujoco as _mj
+            _m = _mj.MjModel.from_xml_path(str(full_path))
+
+            # Detect robot's own angle unit
+            _robot_compiler = robot_root.find("compiler")
+            _robot_angle = (_robot_compiler.get("angle", "radian") if _robot_compiler is not None else "radian")
+            _to_deg = (_robot_angle == "radian")
+
+            def _cvt(v: float) -> float:
+                return _math.degrees(v) if _to_deg else v
+
+            # Build joint name → range map (convert to degrees for main scene)
+            _jnt_ranges: Dict[str, list] = {}
+            for i in range(_m.njnt):
+                n = _mj.mj_id2name(_m, _mj.mjtObj.mjOBJ_JOINT, i)
+                if n:
+                    lo, hi = _m.jnt_range[i].tolist()
+                    _jnt_ranges[n] = [_cvt(lo), _cvt(hi)]
+
+            # Build actuator name → ctrlrange map (keep in radians - NOT angle-dependent)
+            _act_ranges: Dict[str, list] = {}
+            for i in range(_m.nu):
+                n = _mj.mj_id2name(_m, _mj.mjtObj.mjOBJ_ACTUATOR, i)
+                if n:
+                    _act_ranges[n] = _m.actuator_ctrlrange[i].tolist()
+
+            # Patch all <joint> elements with converted range
+            for jelem in robot_root.iter("joint"):
+                jname = jelem.get("name", "")
+                if jname in _jnt_ranges:
+                    lo, hi = _jnt_ranges[jname]
+                    jelem.set("range", f"{lo} {hi}")
+
+            # Patch actuator ctrlrange (keep original radians)
+            robot_actuator = robot_root.find("actuator")
+            if robot_actuator is not None:
+                for act_elem in robot_actuator:
+                    aname = act_elem.get("name", "")
+                    if aname in _act_ranges:
+                        lo, hi = _act_ranges[aname]
+                        act_elem.set("ctrlrange", f"{lo} {hi}")
+            for pos_elem in robot_root.iter("position"):
+                pos_elem.attrib.pop("inheritrange", None)
+
+        except Exception as _e:
+            print(f"[add_robot] Warning: could not fix joint/ctrl ranges: {_e}")
+
+        # Prefix all class/childclass names and asset name refs in the robot XML before merging
+        _rename_all(robot_root)
+
+        # Sections to merge (everything except worldbody)
+        MERGE_TAGS = ("default", "asset", "actuator", "contact", "equality", "sensor", "tendon")
+
+        for tag in MERGE_TAGS:
+            robot_section = robot_root.find(tag)
+            if robot_section is None:
+                continue
+            main_section = main_root.find(tag)
+            if main_section is None:
+                # Insert before worldbody
+                worldbody = main_root.find("worldbody")
+                wb_idx = list(main_root).index(worldbody) if worldbody is not None else len(list(main_root))
+                main_root.insert(wb_idx, robot_section)
+            else:
+                for child in list(robot_section):
+                    main_section.append(child)
+
+        # Find robot's root body inside its worldbody
+        robot_worldbody = robot_root.find("worldbody")
+        if robot_worldbody is None:
+            print(f"[add_robot] No worldbody in robot XML: {full_path}")
+            return
+
+        main_worldbody = main_root.find("worldbody")
+        if main_worldbody is None:
+            print("[add_robot] No worldbody in main scene")
+            return
+
+        # Build euler string from yaw (rotation around Z axis)
+        euler_str = f"0 0 {yaw_deg}"
+        pos_str = f"{pos[0]} {pos[1]} {pos[2]}"
+
+        # Wrap robot bodies in a positioning body
+        wrapper = ET.Element("body", name=f"robot_{robot_id}_mount", pos=pos_str, euler=euler_str)
+        for child in list(robot_worldbody):
+            wrapper.append(child)
+        main_worldbody.append(wrapper)
+
+        print(f"[add_robot] Inlined {robot_id} at pos={pos_str} euler={euler_str}")

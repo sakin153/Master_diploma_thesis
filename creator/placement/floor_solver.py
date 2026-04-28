@@ -15,6 +15,7 @@ import random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from creator.placement.arranger import apply_arrangements
+from creator.placement.targets import parse_instance_target
 from creator.placement.geometry import (
     AABB,
     ClearanceZone,
@@ -127,8 +128,11 @@ def _relative_score(
 
     target_item = placed.get(target)
     if target_item is None:
+        # Fallback: planner targets like "table_1" don't match the dict
+        # keys; iterate by bare Model name (ignoring `_N` instance suffix).
+        base_target, _ = parse_instance_target(str(target))
         for p in placed.values():
-            if str(p.get("Model", "")) == str(target):
+            if str(p.get("Model", "")) == base_target:
                 target_item = p
                 break
     if target_item is None:
@@ -164,12 +168,69 @@ def _relative_score(
     if ctype == "behind":
         return 1.0 if y < ty else max(0.0, 1.0 - (y - ty) * 2.0)
 
+    if ctype == "beside":
+        # Placement relative to target's local orientation
+        side = str(constraint.get("side", "")).lower()
+        
+        # Get target's yaw (default 0 if not set)
+        target_yaw_deg = float(target_item.get("yaw_deg", 0.0))
+        target_yaw_rad = math.radians(target_yaw_deg)
+        
+        # Transform to target's local frame
+        dx_global = x - tx
+        dy_global = y - ty
+        
+        # Rotate by -target_yaw to get local coordinates
+        cos_t = math.cos(-target_yaw_rad)
+        sin_t = math.sin(-target_yaw_rad)
+        dx_local = dx_global * cos_t - dy_global * sin_t
+        dy_local = dx_global * sin_t + dy_global * cos_t
+        
+        # Check distance constraint (default: close proximity for functional placement)
+        dist_range = constraint.get("distance", [0.2, 0.6])
+        dist_min, dist_max = float(dist_range[0]), float(dist_range[1])
+        actual_dist = math.sqrt(dx_local**2 + dy_local**2)
+        
+        # If no side specified, just check distance (like "near")
+        if not side:
+            if dist_min <= actual_dist <= dist_max:
+                return 1.0
+            elif actual_dist < dist_min:
+                return max(0.0, 1.0 - (dist_min - actual_dist) / dist_max)
+            else:
+                return max(0.0, 1.0 - (actual_dist - dist_max) / dist_max)
+        
+        if actual_dist < dist_min or actual_dist > dist_max:
+            return max(0.0, 1.0 - min(abs(actual_dist - dist_min), abs(actual_dist - dist_max)) / dist_max)
+        
+        # Check side alignment
+        score = 0.0
+        if side == "right":
+            # Right side: positive dx_local, small dy_local
+            if dx_local > 0:
+                score = 1.0 - abs(dy_local) / max(0.1, abs(dx_local))
+        elif side == "left":
+            # Left side: negative dx_local, small dy_local
+            if dx_local < 0:
+                score = 1.0 - abs(dy_local) / max(0.1, abs(dx_local))
+        elif side == "front":
+            # Front: positive dy_local, small dx_local
+            if dy_local > 0:
+                score = 1.0 - abs(dx_local) / max(0.1, abs(dy_local))
+        elif side == "back":
+            # Back: negative dy_local, small dx_local
+            if dy_local < 0:
+                score = 1.0 - abs(dx_local) / max(0.1, abs(dy_local))
+        
+        return max(0.0, score)
+
     if ctype == "face_to":
         if dist < 1e-6:
             return 1.0
         target_yaw = math.degrees(math.atan2(ty - y, tx - x))
         diff = abs((yaw_deg - target_yaw + 180.0) % 360.0 - 180.0)
-        return max(0.0, 1.0 - diff / 180.0)
+        score = max(0.0, 1.0 - diff / 180.0)
+        return score
 
     if ctype == "face_same_as":
         tyaw = float(target_item.get("yaw_deg", 0.0))
@@ -177,7 +238,22 @@ def _relative_score(
         return max(0.0, 1.0 - diff / 180.0)
 
     if ctype == "center_aligned":
-        return max(0.0, 1.0 - (abs(x - tx) + abs(y - ty)) * 0.5)
+        # Center alignment: align along the axis perpendicular to the
+        # direction from target. If chair is in front of table (dy > dx),
+        # align X; if to the side (dx > dy), align Y.
+        dx_abs = abs(x - tx)
+        dy_abs = abs(y - ty)
+        
+        # Determine primary approach direction
+        if dx_abs > dy_abs:
+            # Approaching from side → align Y (vertical centering)
+            alignment_error = dy_abs
+        else:
+            # Approaching from front/back → align X (horizontal centering)
+            alignment_error = dx_abs
+        
+        # Strong penalty for misalignment (×6 to dominate other constraints)
+        return max(0.0, 1.0 - alignment_error * 6.0)
 
     return 0.0
 
@@ -211,9 +287,16 @@ def _score_candidate(
 
     # Soft constraint scoring
     total = 0.0
+    is_anchor = any(c.get("anchor") for c in constraints if isinstance(c, dict))
+    
     for c in constraints:
         ctype = str(c.get("type", "")).lower()
         w = float(c.get("weight", 1.0))
+        
+        # Anchor objects get massive weight boost for region constraint
+        if is_anchor and ctype == "region":
+            w *= 10.0
+        
         if ctype == "region":
             pref = str(c.get("value", "")).lower()
             s = _region_score(x, y, room_half_size, pref)
@@ -223,14 +306,37 @@ def _score_candidate(
         else:
             total += w * _relative_score(x, y, yaw_deg, c, placed)
 
-    # Ring spread for duplicate objects around their target
-    if ring_target and ring_total > 1 and ring_target in placed:
-        tpose = placed[ring_target]["Pose"]
+    # Ring spread for duplicate objects around their target.
+    # `placed` is keyed by composite instance IDs ("table__0", "table__arr_0"),
+    # while `ring_target` is the bare model name from the LLM constraints —
+    # so we have to look the anchor up by Model field, mirroring the same
+    # fallback used by `_relative_score`.
+    ring_anchor = None
+    if ring_target and ring_total > 1:
+        base_target, _ = parse_instance_target(str(ring_target))
+        for p in placed.values():
+            if str(p.get("Model", "")) == base_target:
+                ring_anchor = p
+                break
+
+    if ring_anchor is not None and ring_total > 1:
+        tpose = ring_anchor["Pose"]
         tx, ty = float(tpose["x"]), float(tpose["y"])
         ang = math.atan2(y - ty, x - tx)
-        desired_ang = (2.0 * math.pi * float(ring_index)) / float(ring_total)
+        anchor_yaw_rad = math.radians(float(ring_anchor.get("yaw_deg", 0.0)))
+        desired_ang = (2.0 * math.pi * float(ring_index)) / float(ring_total) + anchor_yaw_rad
         diff = abs((ang - desired_ang + math.pi) % (2.0 * math.pi) - math.pi)
-        total += 0.8 * max(0.0, 1.0 - diff / math.pi)
+        ring_score = max(0.0, 1.0 - diff / math.pi)
+        # High weight so angular spread dominates other soft preferences:
+        # without this, `face_to(table)` weight=10 (typical from the LLM)
+        # pulls every chair toward whichever side gets picked first and
+        # they clump on one side.
+        total += 5.0 * ring_score
+        # Reward yaw aligned to face the anchor (180° from outward radial).
+        outward = math.degrees(math.atan2(y - ty, x - tx))
+        face_yaw_target = (outward + 180.0) % 360.0
+        yaw_diff = abs(((yaw_deg - face_yaw_target + 180.0) % 360.0) - 180.0)
+        total += 2.0 * max(0.0, 1.0 - yaw_diff / 180.0)
 
     # Repulsion from same-class objects (avoid clustering)
     for p in placed.values():
@@ -259,7 +365,7 @@ def solve_floor_placements(
     grid_step: Optional[float] = None,
     yaw_candidates_deg: Sequence[float] = (0.0, 90.0, 180.0, 270.0),
     beam_width: int = 12,
-    collision_inflation: float = 0.01,
+    collision_inflation: float = 0.05,
     seed: int = 42,
     max_backtracks: int = 4,
 ) -> List[Dict[str, Any]]:
@@ -334,7 +440,7 @@ def solve_floor_placements(
     grid = _grid_candidates(room_half_size=room_half_size, step=grid_step)
     # Add jittered points for finer placement
     jittered = _jittered_candidates(grid, jitter=grid_step * 0.3, rng=rng, count=1)
-    all_candidates = grid + jittered
+    all_candidates = [(0.0, 0.0)] + grid + jittered
 
     # DFS + Beam search — seed state with pre-arranged objects
     pre_arranged_obbs = [
@@ -384,6 +490,51 @@ def solve_floor_placements(
                                     rng=rng,
                                 )
                             )
+
+        # Ring-around candidates: when N>=2 items orbit the same anchor,
+        # sample positions along a ring around the anchor regardless of
+        # whether the LLM emitted a `near` constraint. Without this, items
+        # whose constraints are only `face_to`/`left_of`/etc. never see
+        # candidates around the anchor at all and clump on whatever side
+        # the room-grid happens to favour.
+        if ring_target and ring_total > 1:
+            for st in states_in[:1]:
+                for p in st["placed"].values():
+                    if str(p.get("Model", "")) != ring_target:
+                        continue
+                    pp = p.get("Pose", {})
+                    ax = float(pp.get("x", 0.0))
+                    ay = float(pp.get("y", 0.0))
+                    asize = p.get("size") or [1.0, 1.0, 1.0]
+                    a_hx = float(asize[0]) / 2.0
+                    a_hy = (float(asize[2]) / 2.0
+                            if len(asize) > 2 else a_hx)
+                    msize = m.get("size") or [0.5, 0.5, 0.5]
+                    m_hx = float(msize[0]) / 2.0
+                    m_hy = (float(msize[2]) / 2.0
+                            if len(msize) > 2 else m_hx)
+                    # Place items just outside the anchor footprint.
+                    radius_min = max(a_hx, a_hy) + max(m_hx, m_hy) + 0.05
+                    radius_max = radius_min + 0.6
+                    extra_candidates.extend(
+                        _near_target_candidates(
+                            (ax, ay),
+                            (radius_min, radius_max),
+                            n_samples=max(32, ring_total * 8),
+                            rng=rng,
+                        )
+                    )
+                    # Plus the exact desired-angle position (helps when
+                    # the random ring missed the right slice).
+                    desired_ang = (
+                        2.0 * math.pi * float(ring_index) / float(ring_total)
+                    )
+                    r_mid = (radius_min + radius_max) / 2.0
+                    extra_candidates.append(
+                        (ax + r_mid * math.cos(desired_ang),
+                         ay + r_mid * math.sin(desired_ang))
+                    )
+                    break  # one anchor instance is enough
 
         candidates = all_candidates + extra_candidates
 
@@ -598,6 +749,7 @@ def solve_floor_placements(
         iterations=100,
         step_size=0.04,
         collision_margin=collision_inflation,
+        semantic_plan=semantic_plan,
     )
 
     # Orientation search post-pass (ImperativeScene-inspired):
@@ -608,6 +760,10 @@ def solve_floor_placements(
         room_half_size=room_half_size,
         collision_inflation=collision_inflation,
     )
+
+    for m in out:
+        p = m.get("Pose", {})
+        print(f"[placed] {m.get('Model')} → x={p.get('x',0):.2f} y={p.get('y',0):.2f} yaw={m.get('yaw_deg',0):.0f}°")
 
     return out
 
@@ -686,10 +842,20 @@ def _topological_sort_models(
     result: List[Dict[str, Any]] = []
     visited: set = set()
 
+    # Helper to check if object is anchor
+    def _is_anchor(m: Dict[str, Any]) -> bool:
+        for c in m.get("_constraints", []):
+            if isinstance(c, dict) and c.get("anchor"):
+                return True
+        return False
+
     while queue:
-        # Largest-footprint-first within the current ready-set
+        # Sort by: 1) anchor first, 2) largest footprint
         queue.sort(
-            key=lambda k: -_footprint(key_to_model.get(k, {})),
+            key=lambda k: (
+                not _is_anchor(key_to_model.get(k, {})),  # False (anchor) sorts before True
+                -_footprint(key_to_model.get(k, {}))
+            ),
         )
         k = queue.pop(0)
         if k in visited:
@@ -742,7 +908,7 @@ def _orientation_search_postpass(
         placed_lookup.setdefault(n, []).append(m)
 
     result = list(out)
-    yaw_candidates = [0.0, 90.0, 180.0, 270.0]
+    yaw_candidates = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
 
     for i, m in enumerate(result):
         name = str(m.get("Model") or m.get("name") or "")
@@ -779,6 +945,7 @@ def _orientation_search_postpass(
                 best_yaw = yaw
 
         if abs(best_yaw - current_yaw) > 1.0:
+            print(f"[orientation_postpass] {name}: {current_yaw:.0f}° -> {best_yaw:.0f}° (score {best_score:.2f})")
             result[i] = dict(m)
             result[i]["yaw_deg"] = best_yaw
 
@@ -815,7 +982,7 @@ def _score_orientation(
     for c in constraints:
         ctype = str(c.get("type", "")).lower()
         if ctype == "near":
-            target_name = str(c.get("target", ""))
+            target_name, _ = parse_instance_target(str(c.get("target", "")))
             dist_range = c.get("distance", [0.3, 2.0])
             lo, hi = float(dist_range[0]), float(dist_range[1])
             best_dist = float("inf")
@@ -829,6 +996,20 @@ def _score_orientation(
                     constraint_score += 10.0
                 else:
                     constraint_score -= min(10.0, abs(best_dist - (lo + hi) / 2.0) * 2.0)
+        
+        elif ctype == "face_to":
+            target_name, _ = parse_instance_target(str(c.get("target", "")))
+            for p in placed.values():
+                if str(p.get("Model", "")) == target_name:
+                    pp = p.get("Pose", {})
+                    tx, ty = float(pp.get("x", 0)), float(pp.get("y", 0))
+                    dist = math.sqrt((x - tx) ** 2 + (y - ty) ** 2)
+                    if dist > 1e-6:
+                        target_yaw = math.degrees(math.atan2(ty - y, tx - x))
+                        diff = abs((yaw - target_yaw + 180.0) % 360.0 - 180.0)
+                        face_score = max(0.0, 1.0 - diff / 180.0)
+                        weight = float(c.get("weight", 1.0))
+                        constraint_score += weight * face_score * 10.0  # Scale up for importance
 
     return constraint_score - 250.0 * inbound - 100.0 * overlap
 
@@ -841,6 +1022,7 @@ def _prepare_indexed_models(
     """Prepare and sort models for placement (largest footprint first)."""
     indexed_models = []
     rr_instance_idx: Dict[str, int] = {}
+    _ON_TOP_TYPES = frozenset({"on_top_of", "on", "on-top-of", "on top of", "on_top"})
 
     for i, m in enumerate(full_placed_models):
         mm = dict(m)
@@ -870,29 +1052,55 @@ def _prepare_indexed_models(
             else:
                 mm["_constraints"] = []
 
+        # Skip objects that only have on_top_of constraints — they belong
+        # to solve_small_object_placements, not the floor beam search.
+        cs = mm.get("_constraints", [])
+        if cs and all(str(c.get("type", "")).lower() in _ON_TOP_TYPES for c in cs):
+            continue
+
         indexed_models.append(mm)
 
-    # Ring metadata for near(target) constraints
+    # Ring metadata for items orbiting a common anchor.
+    # Source: any constraint that references an anchor (`near`, `face_to`,
+    # `left_of`, `right_of`, `in_front_of`, `behind`, `center_aligned`).
+    # The LLM is inconsistent about which it emits, so collapse all of
+    # them to "this item is associated with anchor X" and let the ring
+    # spread distribute the group around X.
+    _ANCHOR_CONSTRAINT_TYPES = (
+        "near", "face_to", "left_of", "right_of",
+        "in_front_of", "behind", "center_aligned",
+    )
     groups: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
     for m in indexed_models:
         constraints = m.get("_constraints", [])
-        near_target = ""
+        ring_target = ""
         for c in constraints:
-            if str(c.get("type", "")).lower() == "near":
-                near_target = str(c.get("target", ""))
-                if near_target:
+            if str(c.get("type", "")).lower() in _ANCHOR_CONSTRAINT_TYPES:
+                ring_target = str(c.get("target", ""))
+                if ring_target:
                     break
-        m["_ring_target"] = near_target
-        key = (m["Model"], near_target)
+        m["_ring_target"] = ring_target
+        key = (m["Model"], ring_target)
         groups.setdefault(key, []).append(m)
 
     for (_name, target), group in groups.items():
         if not target:
             continue
         total = len(group)
+        # If items have beside.side, assign ring_index so desired_ang matches:
+        # front=0°, right=90°, back=180°, left=270°
+        _side_to_idx = {"front": 0, "right": 1, "back": 2, "left": 3}
         for idx, item in enumerate(group):
-            item["_ring_index"] = idx
+            side_idx = None
+            for c in item.get("_constraints", []):
+                if str(c.get("type", "")).lower() == "beside":
+                    side = str(c.get("side", "")).lower()
+                    if side in _side_to_idx:
+                        side_idx = _side_to_idx[side]
+                    break
+            item["_ring_index"] = side_idx if side_idx is not None else idx
             item["_ring_total"] = total
+            print(f"[ring] {item['Model']} side={side if 'side' in dir() else '?'} → ring_index={item['_ring_index']} / {total}")
 
     # Sort: largest footprint first to reduce dead-ends
     indexed_models.sort(

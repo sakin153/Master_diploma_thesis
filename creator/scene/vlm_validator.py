@@ -34,9 +34,9 @@ def render_mujoco_scene(
     *,
     width: int = 640,
     height: int = 480,
-    camera_distance: float = 10.0,
+    camera_distance: float = 8.0,
     camera_azimuth: float = 45.0,
-    camera_elevation: float = -30.0,
+    camera_elevation: float = -15.0,
 ) -> Optional[str]:
     """Render the MuJoCo XML scene to a base64-encoded PNG string.
 
@@ -61,7 +61,7 @@ def render_mujoco_scene(
         cam.distance = camera_distance
         cam.azimuth = camera_azimuth
         cam.elevation = camera_elevation
-        cam.lookat[:] = [0.0, 0.0, 0.8]  # look at ~waist height
+        cam.lookat[:] = [0.0, 0.0, 0.5]  # look at table height
 
         renderer.update_scene(data, camera=cam)
 

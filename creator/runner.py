@@ -2,14 +2,14 @@ import json
 import os
 import re
 import uuid
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from tinydb import TinyDB
 
 from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
-from creator.contexts_prompts.model import fmt_model_qa_tmpl
+from creator.contexts_prompts.disambiguation import fmt_disambiguation_tmpl
 from creator.contexts_prompts.objects import fmt_objects_qa_tmpl
-from creator.model_databases.local_assets import LocalAssetsLoader
+from creator.model_databases.embodied_gen import EmbodiedGenLoader
 from creator.placement import (
     build_semantic_plan,
     repair_layout_by_constraints,
@@ -23,13 +23,25 @@ from creator.postprocess import refine_scene_with_engine
 from creator.sim_interfaces.mujoco import MujocoSimInterface
 from creator.utils.cache import Cache
 from creator.utils.json import NumpyEncoder
-from creator.xml.worlds import find_model
-
-Simulator = Literal["mujoco"]
 
 def _tokenize(text: str) -> List[str]:
     # Support both Latin and Cyrillic (Russian) characters
     return re.findall(r"[a-zа-яё0-9]+", (text or "").lower())
+
+
+# Fallback mapping for common objects not in catalog
+_OBJECT_FALLBACKS = {
+    "book": "box",
+    "lamp": "bottle",
+    "light": "bottle",
+    "pillow": "cushion",
+    "cushion": "pillow",
+    "tv": "television",
+    "tv stand": "table",
+    "sofa": "lounge chair",
+    "couch": "lounge chair",
+    "rug": "carpet",
+}
 
 
 def _singularize(word: str) -> str:
@@ -55,8 +67,13 @@ def _score_model_for_object(obj: str, model: Dict[str, Any]) -> int:
 
     score = 0
 
-    if obj_l in name:
+    # Exact match in name - highest priority
+    if obj_l == name:
+        score += 20
+    elif obj_l in name:
         score += 12
+    
+    # Match in categories/tags
     if obj_l in meta:
         score += 6
 
@@ -64,6 +81,7 @@ def _score_model_for_object(obj: str, model: Dict[str, Any]) -> int:
     if not obj_tokens:
         return score
 
+    # Token matching
     for t in obj_tokens:
         if t in name:
             score += 4
@@ -72,23 +90,29 @@ def _score_model_for_object(obj: str, model: Dict[str, Any]) -> int:
 
     head = _singularize(obj_tokens[-1]) if obj_tokens else obj_l
 
-    # Disambiguate common ambiguous nouns.
-    if head in {"desk", "table"}:
-        if "table" in name and head == "desk":
-            score += 5
-        if "desk" in name and head == "table":
-            score += 3
-        if any(k in name for k in ["lamp", "light", "fan", "desktop"]):
-            score -= 18
+    # Universal category relevance - penalize obviously wrong categories
+    category_str = " ".join(str(c).lower() for c in categories)
+    
+    # If object name appears in categories, boost
+    if head in category_str:
+        score += 5
+    
+    # Generic irrelevant category penalties
+    irrelevant_for_physical_objects = ["abstract", "icon", "logo", "symbol", "ui", "interface"]
+    if any(k in category_str for k in irrelevant_for_physical_objects):
+        score -= 15
+    
+    # Penalize miniatures/toys when looking for real objects
+    if any(k in name for k in ["miniature", "toy", "lego", "figurine"]) and head not in {"toy"}:
+        score -= 10
 
-    if head in {"whiteboard", "blackboard", "board"}:
-        if any(k in name for k in ["whiteboard", "blackboard", "board"]):
-            score += 5
-        if any(k in name for k in ["surfboard", "skateboard", "snowboard"]):
-            score -= 20
-
+    # Common disambiguation
     if head == "chair" and "wheelchair" in name:
         score -= 12
+    
+    if head in {"desk", "table"}:
+        if any(k in name for k in ["lamp", "light", "fan"]):
+            score -= 15
 
     return score
 
@@ -129,7 +153,7 @@ def _objects_from_llm_output(raw: Any) -> List[str]:
                 if item.strip():
                     out.append(item.strip())
             elif isinstance(item, dict):
-                v = item.get("Object") or item.get("object")
+                v = item.get("name") or item.get("Object") or item.get("object")
                 if isinstance(v, str) and v.strip():
                     out.append(v.strip())
         return out
@@ -138,32 +162,79 @@ def _objects_from_llm_output(raw: Any) -> List[str]:
     return []
 
 
-def _normalize_chosen_models(raw: Any) -> List[Dict[str, str]]:
-    if raw is None:
-        return []
-    out: List[Dict[str, str]] = []
-    if isinstance(raw, list):
-        for item in raw:
-            if isinstance(item, dict):
-                model_name = item.get("Model") or item.get("model")
-                if isinstance(model_name, str) and model_name.strip():
-                    out.append({"Model": model_name.strip()})
-            elif isinstance(item, str) and item.strip():
-                out.append({"Model": item.strip()})
-    elif isinstance(raw, dict):
-        model_name = raw.get("Model") or raw.get("model")
-        if isinstance(model_name, str) and model_name.strip():
-            out.append({"Model": model_name.strip()})
-    elif isinstance(raw, str) and raw.strip():
-        out.append({"Model": raw.strip()})
-    return out
+REJECTED = object()  # sentinel: LLM explicitly said no candidate fits
 
 
-def _noun_key(text: str) -> str:
-    toks = _tokenize(text)
-    if not toks:
-        return ""
-    return _singularize(toks[-1])
+def _llm_pick_candidate(
+    *,
+    obj: str,
+    scene_query: str,
+    candidates: Sequence[Dict[str, Any]],
+    prompt_model_fn: Any,
+    llm_model: str,
+) -> Any:
+    """Ask the LLM to pick the best candidate uuid from a small ranked list.
+
+    Sends a compact JSON payload (uuid + name + description, ≤10 rows) so the
+    prompt stays small.
+
+    Return values:
+      - candidate dict        — LLM picked it
+      - REJECTED (sentinel)   — LLM said "none" (categorical mismatch);
+                                caller should drop the request
+      - None                  — call failed / unparsable; caller falls back
+                                to candidates[0]
+    """
+    if not candidates:
+        return None
+
+    payload = []
+    for c in candidates:
+        uid = str(c.get("uuid") or "").strip()
+        if not uid:
+            continue
+        payload.append({
+            "uuid": uid,
+            "name": str(c.get("name") or ""),
+            "description": str(c.get("description") or ""),
+        })
+    if not payload:
+        return None
+
+    by_uuid = {str(c.get("uuid") or ""): c for c in candidates}
+
+    prompt = fmt_disambiguation_tmpl.format(
+        scene_query=scene_query,
+        object=obj,
+        candidates=json.dumps(payload, ensure_ascii=False),
+    )
+
+    try:
+        raw = prompt_model_fn(prompt, str(obj), llm_model)
+    except Exception as e:  # noqa: BLE001
+        print(f"[disambiguation] LLM call failed for {obj!r}: {e}")
+        return None
+
+    chosen_uuid = ""
+    if isinstance(raw, dict):
+        chosen_uuid = str(raw.get("uuid") or raw.get("UUID") or "").strip()
+    elif isinstance(raw, str):
+        if "none" in raw.lower():
+            chosen_uuid = "none"
+        else:
+            m = re.search(r"[0-9a-f]{16,32}", raw)
+            if m:
+                chosen_uuid = m.group(0)
+    elif isinstance(raw, list) and raw:
+        first = raw[0]
+        if isinstance(first, dict):
+            chosen_uuid = str(first.get("uuid") or "").strip()
+
+    if chosen_uuid.lower() == "none":
+        return REJECTED
+
+    return by_uuid.get(chosen_uuid)
+
 
 def _merge_objects_with_scene_hints(
     objects: Sequence[str],
@@ -184,61 +255,14 @@ def _merge_objects_with_scene_hints(
     return merged
 
 
-def _model_matches_object(model_name: str, obj_name: str) -> bool:
-    m_tokens = {_singularize(t) for t in _tokenize(model_name)}
-    o_tokens = [_singularize(t) for t in _tokenize(obj_name)]
-    if not m_tokens or not o_tokens:
-        return False
-
-    # Exact noun match on head token is strongest.
-    if o_tokens[-1] in m_tokens:
-        return True
-
-    # Otherwise require at least one semantic token overlap.
-    return any(t in m_tokens for t in o_tokens if len(t) > 2)
-
-
-def _ensure_models_cover_objects(
-    chosen_models: Sequence[Dict[str, str]],
-    objects: Sequence[str],
-    models_catalog: Sequence[Dict[str, Any]],
-) -> List[Dict[str, str]]:
-    out = [dict(m) for m in chosen_models if isinstance(m, dict) and m.get("Model")]
-    if not objects:
-        return out
-
-    required_unique: List[str] = []
-    seen_req: set = set()
-    for obj in objects:
-        key = _noun_key(obj) or str(obj).strip().lower()
-        if not key or key in seen_req:
-            continue
-        seen_req.add(key)
-        required_unique.append(str(obj))
-
-    for obj in required_unique:
-        covered = any(_model_matches_object(str(m.get("Model", "")), obj) for m in out)
-        if covered:
-            continue
-        ranked = _rank_models_for_object(obj, models_catalog, limit=1)
-        if not ranked:
-            continue
-        name = str(ranked[0].get("name", "")).strip()
-        if not name:
-            continue
-        out.append({"Model": name})
-
-    return out
-
-
 def generate_world(
     *,
-    simulator: Simulator,
     query: str,
     cache_dir: Optional[str] = None,
-    vlm_validation: bool = True,   # enable VLM layout validation loop
+    vlm_validation: bool = True,
     max_vlm_iters: int = 1,
     assets_dir: Optional[str] = None,
+    seed: int = 42,
 ) -> str:
     """Generate a 3D MuJoCo scene from a text query.
 
@@ -272,15 +296,12 @@ def generate_world(
 
     chosen_model = "gpt-oss:120b-cloud"
 
-    if simulator == "mujoco":
-        loader = LocalAssetsLoader(assets_dir=assets_dir)
-        interface = MujocoSimInterface(chosen_model, cache_dir=cache_dir)
-    else:
-        raise ValueError(f"Unsupported simulator: {simulator}")
+    loader = EmbodiedGenLoader(dataset_dir=assets_dir)
+    interface = MujocoSimInterface(chosen_model, cache_dir=cache_dir)
 
     models, _worlds = loader.get_models()
     models_full = loader.get_models_full()
-    print(f"[pipeline] Loaded {len(models)} local assets from: {loader.assets_dir}")
+    print(f"[pipeline] Loaded {len(models)} models from EmbodiedGen dataset: {loader.dataset_dir}")
 
     # ---------------------------------------------------------------
     # Stage 0: Prompt expansion
@@ -298,52 +319,212 @@ def generate_world(
     # ---------------------------------------------------------------
     # Stage 1: Object extraction
     # ---------------------------------------------------------------
-    raw_objects = prompt_model(fmt_objects_qa_tmpl, effective_query, chosen_model)
-    objects = _objects_from_llm_output(raw_objects)
-    objects = _merge_objects_with_scene_hints(objects, scene_spec)
-    if not objects:
-        hints = [getattr(h, "name", "") for h in (scene_spec.estimated_objects or [])]
-        objects = [h for h in hints if isinstance(h, str) and h.strip()] or [effective_query]
-
-    candidates: List[Dict[str, Any]] = []
-    for obj in objects:
-        candidates.extend(_rank_models_for_object(obj, models, limit=10))
-    if not candidates:
-        candidates = _rank_models_for_object(effective_query, models, limit=40)
-
-    context: List[Dict[str, Any]] = []
-    seen_names: set = set()
+    # Build available objects list from catalog for LLM context
+    available_objects = set()
     for m in models:
-        name = m.get("name")
-        if not name or name in seen_names:
-            continue
-        seen_names.add(name)
-        context.append({"name": name, "metadata": {
-            "tags": m.get("tags"),
-            "categories": m.get("categories"),
-            "uuid": m.get("uuid"),
-        }})
+        name = str(m.get("name", "")).lower()
+        if name:
+            # Extract main object type from name
+            tokens = _tokenize(name)
+            if tokens:
+                available_objects.add(_singularize(tokens[-1]))
+    
+    # Add common categories
+    for m in models:
+        cats = m.get("categories", [])
+        for c in cats:
+            c_str = str(c).lower()
+            if "/" in c_str:
+                c_str = c_str.split("/")[-1]  # Take last part: "furniture/chair" -> "chair"
+            if c_str and len(c_str) > 2:
+                available_objects.add(c_str)
+    
+    available_list = sorted(list(available_objects))[:100]  # Top 100 most common
+    available_hint = f"\n\nAvailable objects in catalog (prefer these): {', '.join(available_list)}"
+    
+    # Extract objects from LLM
+    raw_objects = prompt_model(fmt_objects_qa_tmpl + available_hint, effective_query, chosen_model)
+    llm_objects = _objects_from_llm_output(raw_objects)
+    
+    # Build objects list from prompt expander hints
+    hint_objects = []
+    for h in (scene_spec.estimated_objects or []):
+        name = str(getattr(h, "name", "")).strip()
+        qty = int(getattr(h, "quantity", 1))
+        qty = max(1, min(qty, 20))  # limit 1-20
+        hint_objects.extend([name] * qty)
+    
+    print(f"[pipeline] Estimated objects from prompt expander: {hint_objects}")
+    
+    # Use hints if available, otherwise use LLM extraction
+    objects = hint_objects if hint_objects else llm_objects
+    if not objects:
+        objects = [effective_query]  # fallback
+    
+    print(f"[pipeline] Final objects list: {objects}")
 
-    content = fmt_model_qa_tmpl.format(context_str=context)
-    chosen_models_raw = prompt_model(content, effective_query, chosen_model)
-    chosen_models = _normalize_chosen_models(chosen_models_raw)
+    # Two-stage matching: local prefilter → small-context LLM disambiguation.
+    # 1) For each abstract object, score-rank top-K catalog entries locally
+    #    (no LLM, deterministic).
+    # 2) Send only those K candidates (uuid + name + description) plus the
+    #    original query to the LLM and let it pick the best uuid. This keeps
+    #    the LLM context tiny (~10 short rows) while letting it leverage the
+    #    rich per-asset descriptions in EmbodiedGen.
+    # 3) For repeated occurrences of the same obj (e.g. "10 apples of
+    #    different colors"), call the LLM once to anchor the primary pick,
+    #    then round-robin through the remaining ranked candidates so the
+    #    scene gets visual variety instead of N identical clones.
+    chosen_models: List[Dict[str, str]] = []
+    obj_state: Dict[str, Dict[str, Any]] = {}  # obj_key → {ranked, order, idx}
+    dropped_objects: List[str] = []
+    used_uuids: set = set()  # global: any uuid already chosen for the scene
+    reused_uuids: List[str] = []  # for end-of-stage summary
+    for obj in objects:
+        obj_raw = str(obj).strip()
+        obj_key = obj_raw.lower()
+        
+        # Remove parentheses and content: "Sofa (blue)" -> "Sofa"
+        obj_clean = re.sub(r'\([^)]*\)', '', obj_key).strip()
+        
+        # Remove adjectives (colors, materials, sizes)
+        adjectives = ["blue", "red", "green", "yellow", "white", "black", "wooden", "metal", "glass", 
+                     "large", "small", "tall", "short", "neutral", "area", "floor", "table", "wall", "side"]
+        for adj in adjectives:
+            obj_clean = obj_clean.replace(adj + " ", "").strip()
+        
+        # Apply fallback mapping
+        search_key = _OBJECT_FALLBACKS.get(obj_clean, obj_clean)
+        
+        # Use search_key for state lookup
+        state = obj_state.get(search_key)
+        if state is None:
+            ranked = _rank_models_for_object(search_key, models, limit=10)
+            if not ranked:
+                print(
+                    f"[pipeline] WARN: '{obj}' has no catalog match "
+                    f"(score<3), dropped"
+                )
+                dropped_objects.append(obj_key)
+                continue
 
-    filtered_models = [m for m in chosen_models if find_model(m["Model"], models)]
-    chosen_models = _ensure_models_cover_objects(filtered_models, objects, models)
+            # Prefer candidates whose uuid hasn't been used by an earlier
+            # (different) request. Without this filter, "coffee table" and
+            # "side table" both pick the same `table` uuid and the scene
+            # ends up with N identical clones.
+            unused = [
+                r for r in ranked
+                if str(r.get("uuid") or "") not in used_uuids
+            ]
+            had_unused = bool(unused)
+            candidate_pool = unused if unused else ranked
 
-    # Last-resort fallback
+            if len(candidate_pool) == 1:
+                primary = candidate_pool[0]
+            else:
+                # Log candidates for debugging
+                cand_names = [f"{c.get('name')}({c.get('uuid')[:8]})" for c in candidate_pool[:5]]
+                print(f"[disambiguation] '{obj}' → candidates: {', '.join(cand_names)}")
+                pick = _llm_pick_candidate(
+                    obj=obj,
+                    scene_query=effective_query,
+                    candidates=candidate_pool,
+                    prompt_model_fn=prompt_model,
+                    llm_model=chosen_model,
+                )
+                if pick is REJECTED:
+                    print(
+                        f"[pipeline] WARN: '{obj}' — LLM rejected all "
+                        f"catalog candidates, using best local match"
+                    )
+                primary = (pick if pick and pick is not REJECTED else candidate_pool[0])
+
+            if not had_unused:
+                # All catalog matches for this request are already in the
+                # scene. Allow reuse but log it so the user can see when
+                # the catalog is the bottleneck.
+                print(
+                    f"[pipeline] note: '{obj}' reuses catalog model "
+                    f"'{primary.get('name', '')}' (no unused matches left)"
+                )
+                reused_uuids.append(str(primary.get("uuid") or ""))
+
+            # Rotation pool for THIS obj_key (used when the same request
+            # repeats, e.g. armchair x2): primary first, then the rest of
+            # ranked, skipping primary AND any uuid already used elsewhere
+            # in the scene so duplicates don't sneak in via rotation.
+            #
+            # If the scored pool is thin (often happens when the request
+            # uses a synonym only one asset's description carries — e.g.
+            # "armchair" only matches the single lounge chair whose desc
+            # mentions it), allow reuse of the primary model for repeated
+            # requests instead of switching to unrelated categories.
+            order: List[Dict[str, Any]] = [primary]
+            primary_uid = str(primary.get("uuid") or "")
+            order_uids = {primary_uid}
+            for r in ranked:
+                r_uid = str(r.get("uuid") or "")
+                if r_uid in order_uids or r_uid in used_uuids:
+                    continue
+                order.append(r)
+                order_uids.add(r_uid)
+
+            # Only add category siblings if we have very few direct matches
+            # and avoid mixing unrelated object types (apple -> book)
+            if len(order) <= 2:
+                primary_cats = {
+                    str(c).lower() for c in (primary.get("categories") or []) if c
+                }
+                if primary_cats:
+                    for m in models:
+                        m_uid = str(m.get("uuid") or "")
+                        if m_uid in order_uids or m_uid in used_uuids:
+                            continue
+                        m_cats = {
+                            str(c).lower() for c in (m.get("categories") or []) if c
+                        }
+                        # Only add if categories overlap AND names are similar
+                        if (m_cats & primary_cats and 
+                            _score_model_for_object(search_key, m) >= 3):
+                            order.append(m)
+                            order_uuids.add(m_uid)
+
+            state = {"order": order, "idx": 0}
+            obj_state[search_key] = state
+
+        order = state["order"]
+        picked = order[0]  # always reuse the same asset for identical object types
+
+        name = str(picked.get("name", "")).strip()
+        uid = str(picked.get("uuid", "")).strip()
+        print(f"[Stage1] '{obj_raw}' → {name} (uuid={uid[:8] if uid else 'none'})")
+        if uid:
+            used_uuids.add(uid)
+        if name and uid:
+            chosen_models.append({"Model": name, "uuid": uid})
+        elif name:
+            chosen_models.append({"Model": name})
+
+    if dropped_objects:
+        from collections import Counter
+        cnt = Counter(dropped_objects)
+        summary = ", ".join(f"{n}×{c}" if c > 1 else n for n, c in cnt.items())
+        print(
+            f"[pipeline] Stage 1: {len(dropped_objects)} object instance(s) "
+            f"dropped (no catalog match): {summary}"
+        )
+
+    # Last-resort: if nothing matched any individual object, rank against the
+    # full effective query once and take the top few unique names.
     if not chosen_models:
         fallback_candidates = _rank_models_for_object(effective_query, models, limit=8)
         seen_fb: set = set()
-        fallback: List[Dict[str, str]] = []
         for m in fallback_candidates:
-            name = m.get("name")
-            if isinstance(name, str) and name and name not in seen_fb:
+            name = str(m.get("name", "")).strip()
+            if name and name not in seen_fb:
                 seen_fb.add(name)
-                fallback.append({"Model": name})
-                if len(fallback) >= 6:
+                chosen_models.append({"Model": name})
+                if len(chosen_models) >= 6:
                     break
-        chosen_models = fallback
 
     if not chosen_models:
         raise RuntimeError(
@@ -413,21 +594,65 @@ def generate_world(
         semantic_plan=semantic_plan,
         room_half_size=room_half_size,
         grid_step=None,  # auto-adapt from min footprint
-        yaw_candidates_deg=(0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0),
-        beam_width=24,
+        yaw_candidates_deg=(0.0, 90.0, 180.0, 270.0),
+        beam_width=12,
+        seed=seed,
     )
     full_placed_models = solve_wall_placements(
         placed_models=full_placed_models,
         semantic_plan=semantic_plan,
         room_half_size=room_half_size,
     )
+    
+    # ---------------------------------------------------------------
+    # Stage 4.5: Detect and place robots as virtual objects
+    # ---------------------------------------------------------------
+    from creator.robots.detector import detect_robots
+    from creator.robots.placer import place_robots
+    
+    detected_robots = detect_robots(query)
+    robot_placements = []
+    if detected_robots:
+        print(f"[pipeline] Detected robots: {detected_robots}")
+        robot_placements = place_robots(detected_robots, full_placed_models, room_half_size)
+        
+        # Add robots as virtual objects so small_object solver avoids them
+        for placement in robot_placements:
+            from creator.robots.catalog import get_robot_info
+            robot_info = get_robot_info(placement["robot_id"])
+            if not robot_info:
+                continue
+            
+            base_size = robot_info.get("base_size", [0.3, 0.6, 0.3])
+            pos = placement["pos"]
+            
+            # Calculate volume (make it large so small_objects solver skips it)
+            volume = base_size[0] * base_size[1] * base_size[2]
+            
+            # Add as virtual object with is_robot flag
+            virtual_robot = {
+                "Model": f"robot_{placement['robot_id']}",
+                "uuid": f"robot_{placement['robot_id']}",
+                "is_robot": True,
+                "robot_placement": placement,
+                "size": base_size,
+                "volume": max(volume, 1.0),  # Ensure volume > small_threshold (0.06)
+                "Pose": {"x": pos[0], "y": pos[1], "z": pos[2]},
+                "is_static": True,
+            }
+            full_placed_models.append(virtual_robot)
+            print(f"[pipeline] Added virtual robot {placement['robot_id']} at {pos}")
+    
     full_placed_models = solve_small_object_placements(
         placed_models=full_placed_models,
         semantic_plan=semantic_plan,
         small_threshold_volume=0.06,
+        seed=seed,
     )
     full_placed_models = validate_and_repair_layout(
-        full_placed_models, room_half_size=room_half_size,
+        full_placed_models,
+        room_half_size=room_half_size,
+        semantic_plan=semantic_plan,
     )
     full_placed_models = repair_layout_by_constraints(
         full_placed_models, semantic_plan=semantic_plan,
@@ -442,15 +667,46 @@ def generate_world(
         os.path.join(cache.worlds_path, world_name) + interface.get_world_extension()
     )
 
+    # Filter out virtual robots before add_models (they'll be added via add_robot)
+    models_for_assembly = [m for m in full_placed_models if not m.get("is_robot", False)]
+    
+    # Build chosen_models list from models_for_assembly (ensures consistency)
+    chosen_models_for_assembly = [
+        {"Model": m.get("Model", m.get("name", "")), "uuid": m.get("uuid", "")}
+        for m in models_for_assembly
+    ]
+
     saved_models = interface.add_models(
-        chosen_models,
+        chosen_models_for_assembly,
         models_full,
         effective_query,
         world_path,
         room_half_size=room_half_size,
-        pre_placed_models=full_placed_models,
+        pre_placed_models=models_for_assembly,
         semantic_plan=semantic_plan,
     )
+
+    # ---------------------------------------------------------------
+    # Stage 5.5: Add robots to XML
+    # ---------------------------------------------------------------
+    import xml.etree.ElementTree as ET
+    
+    if robot_placements:
+        print(f"[pipeline] Adding {len(robot_placements)} robot(s) to scene")
+        # Load existing XML
+        tree = ET.parse(world_path)
+        root = tree.getroot()
+        
+        # Add each robot
+        for placement in robot_placements:
+            print(f"[pipeline] Adding robot: {placement['robot_id']}")
+            interface.add_robot(root, placement)
+        
+        # Save updated XML
+        tree.write(world_path, encoding="utf-8", xml_declaration=True)
+        print(f"[pipeline] Added {len(robot_placements)} robot(s) to scene")
+    else:
+        print("[pipeline] No robots detected in query")
 
     # ---------------------------------------------------------------
     # Stage 6: Physics refinement

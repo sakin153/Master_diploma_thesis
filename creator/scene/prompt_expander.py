@@ -8,64 +8,16 @@ Also extracts a structured SceneSpec (room_type, style, key requirements).
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 
 # ---------------------------------------------------------------------------
 # Prompt expansion
 # ---------------------------------------------------------------------------
 
-_EXPAND_PROMPT = """\
-You are a 3D scene designer for a robotics simulator (MuJoCo).
-Your task: take a short scene description and expand it into a detailed, realistic scene specification.
-
-User query: "{query}"
-
-Respond with JSON only:
-```json
-{{
-  "expanded_description": "Full detailed description of the scene (3-5 sentences). Include room type, style, specific objects with quantities, arrangement logic.",
-  "room_type": "bedroom|office|classroom|kitchen|living_room|warehouse|lab|outdoor|other",
-  "room_style": "modern|minimalist|cozy|industrial|academic|other",
-  "estimated_objects": [
-    {{"name": "Object Name", "quantity": 1, "notes": "brief description or placement hint"}}
-  ],
-  "room_dimensions_hint": "small (3x3m)|medium (5x5m)|large (8x8m)|extra_large (12x12m)"
-}}
-```
-
-Rules:
-- Be specific about quantities (e.g., "10 desks" not "some desks")
-- Include typical supporting objects (a bedroom always has a bed, nightstand, lamp, wardrobe)
-- Keep the style coherent and realistic
-- Respond ONLY with valid JSON inside ```json ... ```
-"""
+from creator.contexts_prompts.expand import fmt_expand_system as _EXPAND_SYSTEM
 
 _SCENE_TOO_SHORT_WORDS = 8   # expand if fewer than this many words
-
-_ROOM_DEFAULTS: Dict[str, List[tuple]] = {
-    "classroom": [
-        ("desk", 10, "student desks arranged in rows"),
-        ("chair", 10, "chairs aligned with desks"),
-        ("teacher desk", 1, "at front of the room"),
-        ("whiteboard", 1, "mounted on front wall"),
-    ],
-    "office": [
-        ("desk", 1, "main work desk"),
-        ("office chair", 1, "near desk"),
-        ("bookshelf", 1, "against wall"),
-    ],
-    "bedroom": [
-        ("bed", 1, "main bed"),
-        ("nightstand", 2, "one on each side of bed"),
-        ("wardrobe", 1, "against wall"),
-    ],
-    "living_room": [
-        ("sofa", 1, "main seating"),
-        ("coffee table", 1, "in front of sofa"),
-        ("armchair", 2, "around coffee table"),
-    ],
-}
 
 
 def _word_count(text: str) -> int:
@@ -87,12 +39,6 @@ def _singularize(word: str) -> str:
     return w
 
 
-def _default_object_hints(room_type: str) -> List["ObjectHint"]:
-    return [
-        ObjectHint(name=name, quantity=qty, notes=notes)
-        for name, qty, notes in _ROOM_DEFAULTS.get(room_type, [])
-    ]
-
 
 def expand_prompt(
     query: str,
@@ -104,52 +50,51 @@ def expand_prompt(
 ) -> "SceneSpec":
     """Expand a short query into a full SceneSpec.
 
-    If the query is already detailed (>= _SCENE_TOO_SHORT_WORDS words),
-    we still parse a minimal SceneSpec from it.
-    Always returns a SceneSpec.
+    Always uses LLM to properly extract objects and quantities.
     """
-    needs_expansion = force or _word_count(query.strip()) < _SCENE_TOO_SHORT_WORDS
-
-    if needs_expansion:
-        if verbose:
-            print(f"[prompt_expander] Expanding short query: '{query}'")
-        prompt = _EXPAND_PROMPT.format(query=query)
-        try:
-            raw = prompt_model_fn(prompt, query, llm_model)
-            spec = _parse_expand_output(raw, original_query=query)
-            if verbose:
-                print(f"[prompt_expander] Expanded: {spec.expanded_description[:80]}...")
-            return spec
-        except Exception as exc:
-            if verbose:
-                print(f"[prompt_expander] LLM expansion failed ({exc}), using heuristic")
-
-    return _heuristic_scene_spec(query)
+    if verbose:
+        print(f"[prompt_expander] Expanding query: '{query}'")
+    raw = prompt_model_fn(_EXPAND_SYSTEM, query, llm_model)
+    spec = _parse_expand_output(raw, original_query=query)
+    if verbose:
+        print(f"[prompt_expander] Expanded: {spec.expanded_description[:80]}...")
+    return spec
 
 
 def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
-    """Parse LLM JSON output into SceneSpec."""
-    text = str(raw) if not isinstance(raw, str) else raw
+    """Parse LLM output into SceneSpec.
 
-    # Extract JSON block
-    match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-    if not match:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        return _heuristic_scene_spec(original_query)
-
+    `prompt_model` already runs `parse_output_to_json`, so `raw` is usually
+    a dict. Fall back to text-extraction only when the LLM returned a
+    plain string (e.g. JSON wasn't fenced and the upstream parser raised).
+    """
     import json
-    try:
-        data = json.loads(match.group(1) if "```" in text else match.group(0))
-    except json.JSONDecodeError:
-        return _heuristic_scene_spec(original_query)
+
+    if isinstance(raw, dict):
+        data = raw
+    else:
+        text = raw if isinstance(raw, str) else str(raw)
+        match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+        else:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            json_str = match.group(0) if match else ""
+
+        if not json_str:
+            raise ValueError("LLM returned no JSON in output")
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"LLM returned invalid JSON: {exc}") from exc
 
     room_type = str(data.get("room_type", "other"))
     if room_type not in {
         "bedroom", "office", "classroom", "kitchen",
         "living_room", "warehouse", "lab", "outdoor", "other",
     }:
-        room_type = _heuristic_scene_spec(original_query).room_type
+        raise ValueError(f"LLM returned unknown room_type: {room_type!r}")
 
     objects = []
     for o in data.get("estimated_objects", []):
@@ -163,7 +108,7 @@ def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
             objects.append(ObjectHint(name=o.strip(), quantity=1, notes=""))
 
     if not objects:
-        objects = _default_object_hints(room_type)
+        raise ValueError("LLM returned no objects in estimated_objects")
 
     dim_hint = str(data.get("room_dimensions_hint", "medium (5x5m)"))
     room_half = _parse_room_dim_hint(dim_hint)
@@ -182,6 +127,46 @@ def _parse_expand_output(raw: Any, original_query: str) -> "SceneSpec":
     )
 
 
+def _create_minimal_spec(query: str) -> "SceneSpec":
+    """Create minimal SceneSpec for simple, specific requests."""
+    import re
+    
+    # Extract objects from simple patterns
+    objects = []
+    query_lower = query.lower()
+    
+    # Common object patterns
+    object_patterns = {
+        r'стол|table': 'table',
+        r'яблок|apple': 'apple', 
+        r'банан|banana': 'banana',
+        r'книг|book': 'book',
+        r'чашк|cup': 'cup',
+        r'ящик|коробк|box': 'box',
+    }
+    
+    for pattern, obj_name in object_patterns.items():
+        if re.search(pattern, query_lower):
+            # Count quantity if specified
+            qty_match = re.search(rf'(\d+).*{pattern}', query_lower)
+            if qty_match:
+                qty = int(qty_match.group(1))
+            else:
+                qty = 1
+            
+            objects.append(ObjectHint(name=obj_name, quantity=qty))
+    
+    # Default room settings for simple requests
+    return SceneSpec(
+        original_query=query,
+        expanded_description=query,  # Don't expand
+        room_type="other",
+        room_style="simple", 
+        estimated_objects=objects,
+        room_half_size=2.0,  # Small room for simple scenes
+    )
+
+
 def _parse_room_dim_hint(hint: str) -> float:
     """Extract room half-size in metres from dimension hint string."""
     # Try to extract numbers like "5x5" or "8x8"
@@ -196,41 +181,6 @@ def _parse_room_dim_hint(hint: str) -> float:
         return 4.0
     return 2.5  # medium default
 
-
-def _heuristic_scene_spec(query: str) -> "SceneSpec":
-    """Build a minimal SceneSpec from the query without LLM."""
-    lq = query.lower()
-
-    # Guess room type
-    room_type = "other"
-    for rt, keywords in {
-        "bedroom": ["bedroom", "bed room", "спальн"],
-        "office": ["office", "офис", "workspace"],
-        "classroom": ["classroom", "class", "школьн", "аудитори"],
-        "kitchen": ["kitchen", "кухн"],
-        "living_room": ["living room", "гостин", "lounge"],
-        "warehouse": ["warehouse", "склад"],
-        "lab": ["lab", "laboratory", "лаборатори"],
-    }.items():
-        if any(kw in lq for kw in keywords):
-            room_type = rt
-            break
-
-    hints = _default_object_hints(room_type)
-    obj_text = ", ".join(f"{h.quantity} {h.name}" for h in hints[:6])
-    expanded = (
-        f"{query}. This is a {room_type.replace('_', ' ')} scene with coherent furnishing. "
-        f"Suggested objects: {obj_text}. Arrange objects with realistic spacing and circulation."
-    )
-
-    return SceneSpec(
-        original_query=query,
-        expanded_description=expanded,
-        room_type=room_type,
-        room_style="modern",
-        estimated_objects=hints,
-        room_half_size=2.5,
-    )
 
 
 # ---------------------------------------------------------------------------

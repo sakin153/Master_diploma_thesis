@@ -25,7 +25,9 @@ _CIRCULATION: Dict[str, float] = {
     "living_room":  3.5,
     "warehouse":    2.5,
     "lab":          3.5,
-    "other":        3.0,
+    "dining":       4.0,
+    "restaurant":   4.5,
+    "other":        4.0,
 }
 
 # Minimum room half-size per type (metres)
@@ -37,7 +39,9 @@ _MIN_ROOM_HALF: Dict[str, float] = {
     "living_room":  2.5,
     "warehouse":    3.0,
     "lab":          2.5,
-    "other":        2.0,
+    "dining":       3.0,
+    "restaurant":   4.0,
+    "other":        3.0,
 }
 
 # Maximum sensible half-size (avoid absurdly large rooms)

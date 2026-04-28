@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//tmp/**)",
+      "Bash(gh api *)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(python3 *)",
+      "Bash(.venv/bin/python3)",
+      "WebSearch",
+      "WebFetch(domain:mujoco.readthedocs.io)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(python -c \"import mujoco; print\\(mujoco.__version__\\)\")",
+      "Bash(python -c \"from PIL import Image; print\\('PIL ok'\\)\")",
+      "Bash(python -c \"import numpy; print\\('numpy ok'\\)\")",
+      "Bash(.venv/bin/python -c \"import mujoco; print\\(mujoco.__version__\\)\")",
+      "Bash(.venv/bin/python -c \"from PIL import Image; print\\('PIL ok'\\)\")",
+      "Bash(.venv/bin/python -c \"import numpy; print\\('numpy ok'\\)\")",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(grep -n \"size\\\\[1\\\\]\\\\|size\\\\[2\\\\]\" creator/placement/*.py creator/postprocess/*.py)",
+      "Read(//home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/blobs/**)",
+      "Bash(awk -F, 'NR>1{print $2\"/\"$3\"/\"$4}' /home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/dataset_index.csv)",
+      "Bash(awk -F',' 'NR>1 {print $4}' /home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/dataset_index.csv)"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+<mujoco model="franka_fr3_positioned">
+  <!-- This is a wrapper that includes the robot and allows positioning -->
+  <include file="fr3.xml"/>
+  
+  <!-- The robot's body will be positioned via the pos/euler attributes in the parent scene -->
+</mujoco>

@@ -65,31 +65,41 @@ def detect_arrangement_groups(
             return "chair"
         return "other"
 
+    # Anchor extraction: an object's "anchor" is whatever it has a positional
+    # constraint to. We accept BOTH `near` and `face_to` as anchor signals —
+    # the LLM sometimes emits only `face_to` for surrounding items (e.g. 4
+    # chairs around a table get `face_to(table)` but no `near(table)`), and
+    # without this fallback the chairs would fall into a 2×2 grid in the
+    # room centre and lose all connection to the anchor.
+    _ANCHOR_CTYPES = ("near", "face_to")
     objects = semantic_plan.get("objects", []) if isinstance(semantic_plan, dict) else []
     for obj in objects:
         if not isinstance(obj, dict):
             continue
         name = str(obj.get("Model") or "")
+        anchor: str = ""
         for c in (obj.get("constraints") or []):
             if not isinstance(c, dict):
                 continue
-            if str(c.get("type", "")).lower() == "near":
-                target = str(c.get("target", ""))
-                if target and counts.get(target, 0) >= grid_threshold:
-                    src_role = _role(name)
-                    tgt_role = _role(target)
-
-                    # Classroom specialization:
-                    # if desks are constrained near chairs, treat chairs as
-                    # followers of desks so we can place desk+chair pairs.
-                    if (
-                        src_role == "desk"
-                        and tgt_role == "chair"
-                        and counts.get(name, 0) >= grid_threshold
-                    ):
-                        near_pairs[target] = name
-                    else:
-                        near_pairs[name] = target
+            if str(c.get("type", "")).lower() in _ANCHOR_CTYPES:
+                target = str(c.get("target", "")).strip()
+                if target:
+                    anchor = target
+                    break
+        if anchor and counts.get(anchor, 0) >= grid_threshold:
+            src_role = _role(name)
+            tgt_role = _role(anchor)
+            if (
+                src_role == "desk" and tgt_role == "chair"
+                and counts.get(name, 0) >= grid_threshold
+            ):
+                near_pairs[anchor] = name
+            else:
+                near_pairs[name] = anchor
+        elif anchor:
+            # Even when the anchor is a single instance (count=1), record
+            # it so the "around" classifier downstream picks it up.
+            near_pairs.setdefault(name, anchor)
 
     # Extra classroom guard: if both desk-like and chair-like groups are large,
     # enforce chair→desk pairing even if the LLM constraints are noisy.
@@ -113,14 +123,29 @@ def detect_arrangement_groups(
         if name in handled:
             continue
         n = len(mlist)
+
+        anchor_for_name = near_pairs.get(name, "")
+        anchor_count = counts.get(anchor_for_name, 0) if anchor_for_name else 0
+
         # Pair has priority over standalone grid so follower groups are
         # consumed by anchor+follower classroom arrangement.
-        if name in near_pairs and counts.get(near_pairs[name], 0) >= grid_threshold:
+        if anchor_for_name and anchor_count >= grid_threshold:
             groups.append(ArrangementGroup(
                 model_name=name,
                 models=mlist,
                 arrangement="pair",
-                paired_with=near_pairs[name],
+                paired_with=anchor_for_name,
+            ))
+            handled.add(name)
+        elif n >= 3 and anchor_for_name and anchor_count == 1:
+            # N items orbiting a single anchor (chairs around table, plants
+            # around fountain, …). Don't grid them — let beam search +
+            # ring-spread place them around the anchor's perimeter.
+            groups.append(ArrangementGroup(
+                model_name=name,
+                models=mlist,
+                arrangement="around",
+                paired_with=anchor_for_name,
             ))
             handled.add(name)
         elif n >= grid_threshold:

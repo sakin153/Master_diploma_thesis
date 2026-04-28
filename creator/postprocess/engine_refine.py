@@ -12,6 +12,7 @@ from creator.placement import (
     repair_layout_by_constraints,
     validate_and_repair_layout,
 )
+from creator.placement.targets import matching_models
 
 _ON_TYPES = {"on", "on_top_of", "on-top-of", "on top of", "on_top"}
 
@@ -44,7 +45,7 @@ def _build_proxy_world_xml(placed_models: List[Dict[str, Any]]) -> str:
     Uses box colliders per object with category-aware physics (static furniture
     stays fixed; dynamic small objects settle under gravity).
     """
-    from creator.scene.physics_profile import get_physics_profile
+    from creator.scene.physics_profile import get_physics_profile_for_model
 
     root = ET.Element("mujoco", model="proxy_refine")
     ET.SubElement(root, "compiler", angle="degree")
@@ -81,7 +82,9 @@ def _build_proxy_world_xml(placed_models: List[Dict[str, Any]]) -> str:
         py = float(pose.get("y", 0.0))
         yaw_deg = float(model.get("yaw_deg", 0.0))
         model_name = str(model.get("Model") or model.get("name") or "")
-        profile = get_physics_profile(model_name)
+        size = model.get("size")
+        is_static = model.get("is_static")
+        profile = get_physics_profile_for_model(model_name, size=size, is_static=is_static)
 
         # Use actual placed z so that objects on shelves/tables start at the
         # correct height in the proxy world (not collapsed to floor level).
@@ -133,7 +136,7 @@ def _simulate_proxy_settle(
     except ImportError:
         return placed_models, False, "mujoco is not installed"
 
-    from creator.scene.physics_profile import get_physics_profile
+    from creator.scene.physics_profile import get_physics_profile_for_model
 
     xml_text = _build_proxy_world_xml(placed_models)
     try:
@@ -155,7 +158,9 @@ def _simulate_proxy_settle(
     settled = [copy.deepcopy(model) for model in placed_models]
     for idx, model in enumerate(settled):
         model_name = str(model.get("Model") or model.get("name") or "")
-        profile = get_physics_profile(model_name)
+        size = model.get("size")
+        is_static = model.get("is_static")
+        profile = get_physics_profile_for_model(model_name, size=size, is_static=is_static)
 
         # Static objects: keep original placement, don't update from sim
         if profile.is_static:
@@ -198,12 +203,14 @@ def _reanchor_fallen_objects(
     This preserves surface placements that the physics proxy world may not
     faithfully reproduce (shelf geometry is approximate in the proxy).
     """
-    from creator.scene.physics_profile import get_physics_profile
+    from creator.scene.physics_profile import get_physics_profile_for_model
 
     result = [dict(m) for m in settled]
     for i, (orig, s) in enumerate(zip(original, settled)):
         model_name = str(orig.get("Model") or orig.get("name") or "")
-        profile = get_physics_profile(model_name)
+        size = orig.get("size")
+        is_static = orig.get("is_static")
+        profile = get_physics_profile_for_model(model_name, size=size, is_static=is_static)
         if profile.is_static:
             continue  # static objects are never updated by settle anyway
 
@@ -265,7 +272,7 @@ def _find_target(
     target_name: str,
     models: Sequence[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    candidates = [m for m in models if str(m.get("Model") or m.get("name")) == target_name]
+    candidates = matching_models(target_name, models)
     if not candidates:
         return {}
     return min(candidates, key=lambda t: _dist_xy(source, t))
@@ -443,7 +450,11 @@ def refine_scene_with_engine(
         )
         if ok:
             settled = _reanchor_fallen_objects(settled, search_seed)
-            settled = validate_and_repair_layout(settled)
+            settled = validate_and_repair_layout(
+                settled,
+                room_half_size=room_half_size,
+                semantic_plan=semantic_plan,
+            )
             candidates.append(settled)
             for it in (1, 2, 3):
                 repaired = repair_layout_by_constraints(

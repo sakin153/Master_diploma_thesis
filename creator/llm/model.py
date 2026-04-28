@@ -8,7 +8,7 @@ import requests
 from creator.utils.json import parse_output_to_json
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "qwen3.5:cloud"
+OLLAMA_MODEL = "gpt-oss:120b-cloud"
 OLLAMA_TIMEOUT_S = 120
 
 _DEFAULT_CACHE_DB_PATH = "/var/tmp/ciare/.ollama_cache.sqlite3"
@@ -67,21 +67,24 @@ def _ollama_chat(
     timeout_s: int,
     base_url: str,
 ) -> str:
+    import json as _json
+
     url = f"{base_url}/api/chat"
     payload: Dict[str, Any] = {
         "model": model,
-        "stream": False,
+        "stream": True,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         "options": {
             "temperature": 0,
+            "seed": 42,
         },
     }
 
     try:
-        resp = requests.post(url, json=payload, timeout=timeout_s)
+        resp = requests.post(url, json=payload, timeout=timeout_s, stream=True)
     except requests.exceptions.Timeout:
         raise TimeoutError("Timeout while waiting for Ollama response")
     except requests.exceptions.ConnectionError as e:
@@ -92,11 +95,20 @@ def _ollama_chat(
     if resp.status_code != 200:
         raise RuntimeError(f"Ollama error {resp.status_code}: {resp.text}")
 
-    data: Dict[str, Any] = resp.json()
-    message: Optional[Dict[str, Any]] = data.get("message")
-    if not message or "content" not in message:
-        raise RuntimeError(f"Unexpected Ollama response: {data}")
-    return str(message["content"])
+    chunks: list = []
+    print("[llm] ", end="", flush=True)
+    for line in resp.iter_lines():
+        if not line:
+            continue
+        data = _json.loads(line)
+        token = (data.get("message") or {}).get("content", "")
+        if token:
+            print(token, end="", flush=True)
+            chunks.append(token)
+        if data.get("done"):
+            break
+    print()
+    return "".join(chunks)
 
 
 def prompt_model(context: str, prompt: str, model: str = "gpt-3.5-turbo-16k"):
@@ -114,6 +126,7 @@ def prompt_model(context: str, prompt: str, model: str = "gpt-3.5-turbo-16k"):
             print("Using cached query result.")
             return parse_output_to_json(cached_text)
 
+        print(f"[llm] calling {OLLAMA_MODEL} (timeout={OLLAMA_TIMEOUT_S}s, prompt_len={len(context)+len(prompt)})")
         ans_text = _ollama_chat(
             system_prompt=context,
             user_prompt=prompt,
@@ -192,8 +205,9 @@ def ask_object_height_m(object_name: str) -> Optional[float]:
         "Answer with ONLY a single decimal number in metres, no units, no text."
     )
     user_prompt = (
-        f"Typical real-world height in metres of a '{object_name}' "
-        "(common household/furniture item). Example answers: 0.75, 1.80, 0.12"
+        f"Total height from floor to top (including backrest for chairs, lid for boxes) "
+        f"in metres of a '{object_name}' (common household/furniture item). "
+        f"Example answers: 0.75, 1.80, 0.12"
     )
     try:
         ans = _ollama_chat(

@@ -323,6 +323,7 @@ def gradient_resolve_overlaps(
     iterations: int = 200,
     step_size: float = 0.05,
     collision_margin: float = 0.01,
+    semantic_plan: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Move objects apart using gradient-based overlap resolution.
 
@@ -332,9 +333,56 @@ def gradient_resolve_overlaps(
 
     Objects at different Z levels (stacked) are excluded from XY separation
     to preserve "on" placements.
+    
+    Objects with on_top_of constraints are marked as anchored and excluded
+    from gradient updates to preserve LLM-based surface positioning.
     """
     resolved = [dict(m) for m in models]
     n = len(resolved)
+    
+    # Identify anchored objects (on surfaces) from semantic plan
+    anchored = [False] * n
+    if semantic_plan and isinstance(semantic_plan, dict):
+        objects = semantic_plan.get("objects", [])
+        if isinstance(objects, list):
+            # Build name->constraints map
+            constraints_by_name: Dict[str, List[Dict]] = {}
+            for obj in objects:
+                if not isinstance(obj, dict):
+                    continue
+                name = str(obj.get("Model") or obj.get("name") or "")
+                if not name:
+                    continue
+                cs = obj.get("constraints", [])
+                if isinstance(cs, list):
+                    constraints_by_name.setdefault(name, []).extend(cs)
+            
+            # Mark objects with on_top_of as anchored
+            name_counts: Dict[str, int] = {}
+            for i, m in enumerate(resolved):
+                name = str(m.get("Model") or m.get("name") or "")
+                if not name:
+                    continue
+                idx = name_counts.get(name, 0)
+                name_counts[name] = idx + 1
+                
+                cs = constraints_by_name.get(name, [])
+                for c in cs:
+                    if not isinstance(c, dict):
+                        continue
+                    ctype = str(c.get("type", "")).lower()
+                    if ctype in {"on", "on_top_of", "on-top-of", "on top of", "on_top"}:
+                        anchored[i] = True
+                        break
+                    # Also anchor the scene anchor (region:middle + is_static)
+                    if (ctype == "region"
+                            and str(c.get("value", "")).lower() == "middle"
+                            and c.get("weight", 1.0) >= 4.0):
+                        m = resolved[i]
+                        if m.get("is_static", True):
+                            anchored[i] = True
+                            print(f"[anchor] {m.get('Model')} anchored (region:middle)")
+                        break
 
     for _ in range(iterations):
         grads = [Vec2(0.0, 0.0) for _ in range(n)]
@@ -343,8 +391,21 @@ def gradient_resolve_overlaps(
         # Pairwise overlap gradients (only for objects at same Z level)
         for i in range(n):
             for j in range(i + 1, n):
+                # Skip if both objects are anchored (on surfaces)
+                if anchored[i] and anchored[j]:
+                    continue
+                
                 # Skip objects at different Z levels (stacked objects)
                 if not _z_intervals_overlap(resolved[i], resolved[j]):
+                    continue
+                
+                # Skip small objects that are likely on surfaces (z > 0.5m)
+                # These were carefully positioned by LLM and shouldn't be moved
+                pose_i = resolved[i].get("Pose") or {"z": 0.0}
+                pose_j = resolved[j].get("Pose") or {"z": 0.0}
+                z_i = float(pose_i.get("z", 0.0))
+                z_j = float(pose_j.get("z", 0.0))
+                if z_i > 0.5 and z_j > 0.5:
                     continue
 
                 obb_i = model_to_obb(resolved[i], inflation=collision_margin)
@@ -382,11 +443,15 @@ def gradient_resolve_overlaps(
         if not any_overlap and all_in_bounds:
             break
 
-        # Apply gradients
+        # Apply gradients (skip anchored objects on surfaces)
         for i in range(n):
+            if anchored[i]:
+                continue
+            
             g = grads[i]
             if g.length() < 1e-8:
                 continue
+            
             pose = dict(resolved[i].get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0})
             pose["x"] = float(pose.get("x", 0.0)) + step_size * g.x
             pose["y"] = float(pose.get("y", 0.0)) + step_size * g.y
@@ -396,6 +461,34 @@ def gradient_resolve_overlaps(
     # rest correctly on the floor (or on top of their support if stacked).
     # Floor objects: bottom must be at z=0, so z = half-height.
     # Stacked objects: keep their existing z (set by small-objects/repair pass).
+    
+    # Restore surface-relative positions for anchored objects
+    for i in range(n):
+        if not anchored[i] or "_surface_offset" not in resolved[i]:
+            continue
+            
+        offset = resolved[i]["_surface_offset"]
+        receptacle_name = offset.get("receptacle", "")
+        if not receptacle_name:
+            continue
+        
+        # Find receptacle by name
+        for j in range(n):
+            if i == j:
+                continue
+            model_name = str(resolved[j].get("Model") or resolved[j].get("name") or "")
+            if model_name == receptacle_name:
+                pose_j = resolved[j].get("Pose") or {}
+                rx = float(pose_j.get("x", 0.0))
+                ry = float(pose_j.get("y", 0.0))
+                
+                # Restore relative position
+                pose = dict(resolved[i].get("Pose") or {})
+                pose["x"] = rx + offset["x"]
+                pose["y"] = ry + offset["y"]
+                resolved[i]["Pose"] = pose
+                break
+    
     for i in range(n):
         obb_i = model_to_obb(resolved[i])
         pose = dict(resolved[i].get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0})

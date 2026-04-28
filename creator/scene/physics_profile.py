@@ -46,8 +46,7 @@ class PhysicsProfile:
 
 
 # ---------------------------------------------------------------------------
-# Predefined profiles (density here is a sensible fallback; the pipeline
-# overrides it with compute_density_for_mass() for dynamic objects)
+# Predefined profiles
 # ---------------------------------------------------------------------------
 
 # Heavy, stable furniture: tables, chairs, sofas, cabinets…
@@ -60,16 +59,6 @@ STATIC_FURNITURE = PhysicsProfile(
     solimp=(0.95, 0.99, 0.001, 0.5, 2),
 )
 
-# Light static decoration: lamps, plants, TVs
-STATIC_LIGHT = PhysicsProfile(
-    is_static=True,
-    friction=(0.7, 0.004, 0.0001),
-    density=200.0,
-    condim=3,
-    solref=(0.01, 1.0),
-    solimp=(0.9, 0.99, 0.001, 0.5, 2),
-)
-
 # Small dynamic objects: books, cups, bottles, phones, laptops…
 DYNAMIC_SMALL = PhysicsProfile(
     is_static=False,
@@ -79,80 +68,6 @@ DYNAMIC_SMALL = PhysicsProfile(
     solref=(0.01, 1.0),
     solimp=(0.9, 0.95, 0.001, 0.5, 2),
 )
-
-# Heavy appliances: refrigerator, washing machine
-STATIC_APPLIANCE = PhysicsProfile(
-    is_static=True,
-    friction=(0.9, 0.005, 0.0001),
-    density=400.0,
-    condim=3,
-    solref=(0.01, 1.0),
-    solimp=(0.95, 0.99, 0.001, 0.5, 2),
-)
-
-
-# ---------------------------------------------------------------------------
-# Keyword → profile mapping
-# ---------------------------------------------------------------------------
-
-_PROFILE_RULES: Tuple[Tuple[Tuple[str, ...], PhysicsProfile], ...] = (
-    # Dynamic small objects
-    (
-        (
-            "book", "cup", "mug", "glass", "bottle", "plate", "dish", "bowl",
-            "phone", "smartphone", "laptop", "keyboard", "mouse", "pen",
-            "pencil", "marker", "ball", "toy", "vase", "pot", "flower",
-            "remote", "controller", "pillow", "cushion", "apple", "fruit",
-            "candle", "figurine", "stapler", "scissors", "tape",
-            "box", "crate", "container", "package", "parcel",
-        ),
-        DYNAMIC_SMALL,
-    ),
-    # Heavy appliances (static)
-    (
-        (
-            "refrigerator", "fridge", "washing machine", "washer", "dryer",
-            "dishwasher", "oven", "stove", "microwave", "air conditioner",
-        ),
-        STATIC_APPLIANCE,
-    ),
-    # Light decoration (static but light)
-    (
-        (
-            "lamp", "chandelier", "ceiling light", "light fixture",
-            "plant stand", "tv", "television", "monitor", "screen",
-            "picture frame", "painting", "wall art", "clock", "mirror",
-        ),
-        STATIC_LIGHT,
-    ),
-    # Heavy furniture (static) — catch-all for furniture
-    (
-        (
-            "table", "desk", "chair", "sofa", "couch", "bed", "mattress",
-            "cabinet", "wardrobe", "closet", "shelf", "bookcase", "bookshelf",
-            "rack", "bench", "armchair", "ottoman", "stool", "seat",
-            "nightstand", "dresser", "chest", "sideboard", "buffet",
-            "toilet", "sink", "bathtub", "shower", "door", "window",
-            "stairs", "staircase", "counter", "bar", "podium",
-        ),
-        STATIC_FURNITURE,
-    ),
-)
-
-
-def get_physics_profile(model_name: str) -> PhysicsProfile:
-    """Return the most appropriate physics profile for a model by name."""
-    lname = (model_name or "").lower()
-    for keywords, profile in _PROFILE_RULES:
-        if any(kw in lname for kw in keywords):
-            return profile
-    # Default: treat unknown objects as static furniture (safe — prevents
-    # unknown objects from flying off).
-    return STATIC_FURNITURE
-
-
-def is_static_object(model_name: str) -> bool:
-    return get_physics_profile(model_name).is_static
 
 
 # ---------------------------------------------------------------------------
@@ -262,26 +177,49 @@ def compute_density_for_mass(
 def get_physics_profile_for_model(
     model_name: str,
     size: Optional[Sequence[float]] = None,
+    is_static: Optional[bool] = None,
 ) -> PhysicsProfile:
     """Return a PhysicsProfile with density tuned to achieve realistic mass.
+
+    Args:
+        model_name: Name of the model
+        size: Bounding box size [width, height, depth] in meters
+        is_static: If provided, overrides automatic detection.
+                   True = welded to world (no joint)
+                   False = dynamic with free joint
+                   None = auto-detect based on size (small objects → dynamic)
 
     For dynamic objects the density is computed from the target mass and the
     actual model bounding box so that MuJoCo computes the correct mass.
     For static objects the profile is returned unchanged (mass doesn't affect
     their dynamics since they are welded).
     """
-    profile = get_physics_profile(model_name)
-    if profile.is_static or size is None or len(size) < 3:
-        return profile
+    # Auto-detect is_static based on object size if not provided
+    if is_static is None:
+        if size is not None and len(size) >= 3:
+            # Calculate volume
+            volume = float(size[0]) * float(size[1]) * float(size[2])
+            # Small objects (< 0.1 m³) are likely dynamic (books, cups, etc.)
+            # Large objects (>= 0.1 m³) are likely static (furniture)
+            is_static = volume >= 0.1
+        else:
+            # No size info → default to static for safety
+            is_static = True
+    
+    # Select base profile
+    base_profile = STATIC_FURNITURE if is_static else DYNAMIC_SMALL
+    
+    if is_static or size is None or len(size) < 3:
+        return base_profile
 
     # Dynamic object: override density to match realistic mass
     density = compute_density_for_mass(model_name, size)
     # Return a new frozen instance with updated density
     return PhysicsProfile(
-        is_static=profile.is_static,
-        friction=profile.friction,
+        is_static=base_profile.is_static,
+        friction=base_profile.friction,
         density=density,
-        condim=profile.condim,
-        solref=profile.solref,
-        solimp=profile.solimp,
+        condim=base_profile.condim,
+        solref=base_profile.solref,
+        solimp=base_profile.solimp,
     )

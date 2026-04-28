@@ -9,6 +9,7 @@ Improvements:
 import math
 from typing import Any, Dict, List, Sequence, Tuple
 
+from creator.placement.targets import matching_models
 from creator.placement.geometry import (
     gradient_resolve_overlaps,
     model_to_obb,
@@ -141,9 +142,31 @@ def _pick_on_surface_slot(
     prefer_edge: bool = False,
 ) -> Tuple[float, float]:
     s_hx, s_hy = _footprint_half(source)
-    candidates = _on_surface_candidates(source, target, current_xy)
     tp = target.get("Pose") or {"x": 0.0, "y": 0.0}
     tx, ty = float(tp.get("x", 0.0)), float(tp.get("y", 0.0))
+
+    # If the geometric small-object solver already placed this item on this
+    # receptacle, trust its offset: it knew about all sibling items, item
+    # sizes, and surface aspect when picking the slot. Re-picking here only
+    # destroys that work (the `prefer_edge` heuristic, in particular, slams
+    # the first item into the OBB corner — past the visible mesh top of the
+    # receptacle when its bounding box exceeds the actual surface, e.g. a
+    # table whose legs flare wider than the tabletop).
+    surface_offset = source.get("_surface_offset")
+    if isinstance(surface_offset, dict):
+        recept_name = str(surface_offset.get("receptacle", ""))
+        target_name = str(target.get("Model") or target.get("name") or "")
+        if recept_name and recept_name == target_name:
+            slot_x = tx + float(surface_offset.get("x", 0.0))
+            slot_y = ty + float(surface_offset.get("y", 0.0))
+            t_hx, t_hy = _footprint_half(target)
+            usable_hx = max(0.0, t_hx - s_hx - 0.01)
+            usable_hy = max(0.0, t_hy - s_hy - 0.01)
+            slot_x = _clip(slot_x, tx - usable_hx, tx + usable_hx)
+            slot_y = _clip(slot_y, ty - usable_hy, ty + usable_hy)
+            return slot_x, slot_y
+
+    candidates = _on_surface_candidates(source, target, current_xy)
 
     best_xy = candidates[0]
     best_score = -float("inf")
@@ -176,10 +199,7 @@ def _find_target(
     target_name: str,
     models: Sequence[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    candidates = [
-        m for m in models
-        if str(m.get("Model") or m.get("name")) == target_name
-    ]
+    candidates = matching_models(target_name, models)
     if not candidates:
         return {}
     return min(candidates, key=lambda t: _dist_xy(source, t))
@@ -416,13 +436,15 @@ def repair_layout_by_constraints(
             pose["z"] = max(0.01, sz)
             source["Pose"] = pose
 
-        # After constraint repair, resolve any newly introduced overlaps using OBB/SAT
+        # After constraint repair, resolve any newly introduced overlaps using OBB/SAT.
+        # Pass semantic_plan so on_top_of items stay anchored to their support.
         repaired = gradient_resolve_overlaps(
             repaired,
             room_half_size=room_half_size,
             iterations=60,
             step_size=0.04,
             collision_margin=0.01,
+            semantic_plan=semantic_plan,
         )
 
     # Final pass: hard-anchor "on" relations

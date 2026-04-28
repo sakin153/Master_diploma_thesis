@@ -25,7 +25,7 @@ def _find_latest_scene() -> str:
 
     candidates: list[str] = []
     for pattern in (
-        "/tmp/ciare_run_*/worlds/scene_latest.xml",
+        "/tmp/ciare_*/worlds/scene_latest.xml",
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             ".cache_ciare", "worlds", "scene_latest.xml",

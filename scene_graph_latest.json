@@ -1,67 +1,117 @@
 {
-  "query": "Кухня",
+  "query": "A small minimalist room with plain walls and floor, containing three identical tables evenly spaced across the area. The tables are positioned to allow clear space between them, creating a simple, functional layout without additional furniture or decorations.",
   "nodes": [
     {
       "id": "obj_0",
-      "name": "Stove",
-      "constraints_count": 2
+      "name": "table",
+      "constraints_count": 1
+    },
+    {
+      "id": "obj_1",
+      "name": "table",
+      "constraints_count": 1
+    },
+    {
+      "id": "obj_2",
+      "name": "table",
+      "constraints_count": 1
     }
   ],
   "edges": [
     {
       "from": "obj_0",
-      "from_name": "Stove",
+      "from_name": "table",
       "type": "region",
       "hard": false,
-      "weight": 1.0,
-      "value": "edge",
+      "weight": 5.0,
+      "value": "middle",
       "to": "",
       "to_name": ""
     },
     {
-      "from": "obj_0",
-      "from_name": "Stove",
-      "type": "near",
-      "hard": true,
-      "weight": 1.0,
+      "from": "obj_1",
+      "from_name": "table",
+      "type": "beside",
+      "hard": false,
+      "weight": 3.0,
       "value": "None",
       "distance": [
-        0.1,
-        0.3
+        2.0,
+        3.5
       ],
       "to": "",
-      "to_name": "Wall"
+      "to_name": "table_1"
+    },
+    {
+      "from": "obj_2",
+      "from_name": "table",
+      "type": "beside",
+      "hard": false,
+      "weight": 3.0,
+      "value": "None",
+      "distance": [
+        2.0,
+        3.5
+      ],
+      "to": "",
+      "to_name": "table_1"
     }
   ],
   "raw_plan": {
     "objects": [
       {
-        "Model": "Stove",
+        "Model": "table",
         "constraints": [
           {
             "type": "region",
             "target": "",
-            "value": "edge",
+            "value": "middle",
             "hard": false,
-            "weight": 1.0
-          },
-          {
-            "type": "near",
-            "target": "Wall",
-            "value": null,
-            "hard": true,
-            "weight": 1.0,
-            "distance": [
-              0.1,
-              0.3
-            ]
+            "weight": 5.0
           }
-        ]
+        ],
+        "is_static": true
+      },
+      {
+        "Model": "table",
+        "constraints": [
+          {
+            "type": "beside",
+            "target": "table_1",
+            "value": null,
+            "hard": false,
+            "weight": 3.0,
+            "distance": [
+              2.0,
+              3.5
+            ],
+            "side": "left"
+          }
+        ],
+        "is_static": true
+      },
+      {
+        "Model": "table",
+        "constraints": [
+          {
+            "type": "beside",
+            "target": "table_1",
+            "value": null,
+            "hard": false,
+            "weight": 3.0,
+            "distance": [
+              2.0,
+              3.5
+            ],
+            "side": "right"
+          }
+        ],
+        "is_static": true
       }
     ],
     "room": {
-      "half_size": 2.0,
-      "type": "kitchen"
+      "half_size": 3.0,
+      "type": "other"
     }
   }
 }
