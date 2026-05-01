@@ -1221,7 +1221,14 @@ class MujocoSimInterface(BaseSimInterface):
         model_name = str(model.get("Model") or model.get("name") or "")
         size = model.get("size")
         is_static = model.get("is_static")
+        
+        # DEBUG: Print is_static value
+        print(f"[modify_body_tag] {model_name}: is_static={is_static}, size={size}")
+        
         profile = get_physics_profile_for_model(model_name, size=size, is_static=is_static)
+        
+        # DEBUG: Print profile
+        print(f"[modify_body_tag] {model_name}: profile.is_static={profile.is_static}")
 
         # MuJoCo uses XYZ-intrinsic Tait-Bryan euler. The third angle rotates
         # around the body's already-rotated Z axis, not the world Z.
@@ -1243,8 +1250,11 @@ class MujocoSimInterface(BaseSimInterface):
 
             if not profile.is_static:
                 # Dynamic small objects: freejoint so they can fall/be picked up
+                print(f"[modify_body_tag] ✓ Adding freejoint to {model_name}")
                 ET.SubElement(body, "joint", type="free",
                                damping="0.01", stiffness="0")
+            else:
+                print(f"[modify_body_tag] ✗ {model_name} is static, NO joint")
             # Static objects: NO joint → welded to worldbody, never flies off.
 
             # Apply physics params to collision geoms (skip visual-only geoms)

@@ -1,0 +1,108 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Dynamic Objects Incorrectly Marked as Static
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: For deterministic bugs, scope the property to the concrete failing case(s) to ensure reproducibility
+  - Test implementation details from Bug Condition in design:
+    - Create test objects with volume < 0.3 m³ (e.g., apple with size=[0.08, 0.08, 0.08])
+    - Create test objects that are containers (e.g., "cardboard_box", "basket")
+    - Call `_generate_semantic_plan()` with these objects
+    - Assert that processed objects have `is_static=false`
+  - The test assertions should match the Expected Behavior Properties from design:
+    - For objects where `isBugCondition(object)` returns True, `is_static` MUST be False
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
+  - Document counterexamples found to understand root cause:
+    - Which objects have `is_static=true` when they should have `is_static=false`?
+    - Is the issue with LLM setting wrong values or with system not applying heuristics?
+    - Does the bug occur for all small objects or only specific types?
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Static Objects Remain Static
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs:
+    - Create test objects with volume ≥ 0.3 m³ (e.g., table with size=[1.5, 0.75, 0.8])
+    - Create test objects that are furniture (e.g., "wooden_patterned_table", "chair")
+    - Call `_generate_semantic_plan()` on UNFIXED code
+    - Record the actual `is_static` values returned
+  - Write property-based tests capturing observed behavior patterns from Preservation Requirements:
+    - For objects where `NOT isBugCondition(object)` (volume ≥ 0.3 m³ AND not a container), `is_static` should remain as set by LLM or default to True
+    - Test that large furniture objects continue to have `is_static=true`
+    - Test that floor placement logic is unchanged
+    - Test that all 8 pipeline stages execute in the same order
+  - Property-based testing generates many test cases for stronger guarantees:
+    - Generate random large objects (volume ≥ 0.3 m³) and verify `is_static` behavior is preserved
+    - Generate random furniture names and verify they remain static
+    - Generate random semantic plans with mixed object types and verify non-buggy objects are unchanged
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10_
+
+- [x] 3. Fix for dynamic objects incorrectly marked as static
+
+  - [x] 3.1 Implement LLM-based dynamics determination
+    - Create new method `_determine_object_dynamics()` in `creator/placement/universal_system.py`
+    - This method performs a separate LLM query to determine object dynamics
+    - System prompt: LLM acts as "robot training environment designer"
+    - LLM receives context:
+      - Original user prompt (scene description)
+      - List of objects with their sizes and types
+      - Physical properties (volume, dimensions)
+    - LLM returns JSON with `is_static` decisions for each object
+    - Include fallback to heuristic if LLM unavailable or fails
+    - Add logging for debugging dynamics determination
+    - _Bug_Condition: isBugCondition(object) where (volume < 0.3 OR is_container) AND is_static == True_
+    - _Expected_Behavior: LLM determines is_static based on scene context and robot training purpose_
+    - _Preservation: Large objects (volume ≥ 0.3 m³, not containers) maintain existing is_static behavior_
+    - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
+
+  - [x] 3.2 Integrate dynamics determination into semantic planning
+    - Modify `_generate_semantic_plan()` to call `_determine_object_dynamics()` after LLM generates semantic plan
+    - Pass user prompt, semantic plan, and prompt_model to dynamics determination
+    - Apply LLM decisions to semantic_plan["objects"]
+    - Ensure fallback mechanism works when LLM unavailable
+    - Update comments to reflect new LLM-based approach
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+
+  - [x] 3.3 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Dynamic Objects Have is_static=false
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - Verify that:
+      - Small objects (volume < 0.3 m³) now have `is_static=false`
+      - Container objects (box, basket, etc.) now have `is_static=false`
+      - Logging messages show LLM decisions for `is_static`
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+
+  - [x] 3.4 Verify preservation tests still pass
+    - **Property 2: Preservation** - Static Objects Remain Static
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Confirm all tests still pass after fix (no regressions):
+      - Large furniture objects still have `is_static=true`
+      - Floor placement logic unchanged
+      - All 8 pipeline stages execute correctly
+      - Export to MuJoCo XML includes all properties
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10_
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Run all tests (bug condition + preservation) to verify complete fix
+  - Run integration test: Generate scene with prompt "стол и две коробки на нем в каждой коробке по 3 яблока"
+  - Verify in generated MuJoCo XML:
+    - Apples have `is_static=false`
+    - Boxes have `is_static=false`
+    - Table has `is_static=true`
+  - Optional: Visual verification in MuJoCo simulator (apples should fall into boxes)
+  - If any issues arise, ask the user for guidance
+  - Document any edge cases or unexpected behaviors discovered

@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<mujoco model="semantic_scene">
+  <compiler angle="degree" coordinate="local"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <visual>
+    <headlight ambient="0.5 0.5 0.5" diffuse="0.8 0.8 0.8"/>
+  </visual>
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="10 10 0.1" rgba="0.8 0.8 0.8 1"/>
+    <geom name="north_wall" type="box" pos="0 5.0 1.5" size="5.0 0.1 1.5" rgba="0.9 0.9 0.9 1"/>
+    <geom name="south_wall" type="box" pos="0 -5.0 1.5" size="5.0 0.1 1.5" rgba="0.9 0.9 0.9 1"/>
+    <geom name="east_wall" type="box" pos="5.0 0 1.5" size="0.1 5.0 1.5" rgba="0.9 0.9 0.9 1"/>
+    <geom name="west_wall" type="box" pos="-5.0 0 1.5" size="0.1 5.0 1.5" rgba="0.9 0.9 0.9 1"/>
+    <body name="table_1" pos="0.0 0.0 0.375" euler="0.0 0.0 0.0">
+      <include file="assets/table/wooden_patterned_table.obj"/>
+    </body>
+  </worldbody>
+</mujoco>

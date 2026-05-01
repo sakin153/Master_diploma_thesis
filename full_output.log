@@ -1,0 +1,162 @@
+Traceback (most recent call last):
+  File "/home/sakin153/Рабочий стол/world-creator/main.py", line 51, in main
+    from save_scene_for_analysis import save_scene_for_analysis
+ModuleNotFoundError: No module named 'save_scene_for_analysis'
+[modify_body_tag] table: is_static=True, size=[1.096084177494049, 0.7750001549720764, 1.4094629883766174]
+[modify_body_tag] table: profile.is_static=True
+[modify_body_tag] ✗ table is static, NO joint
+MuJoCo compile validation: OK
+[validator] Scale OK — all 1 objects within expected ranges.
+[validator] Geometry OK — 1 objects, no issues.
+[validator] MuJoCo: 0 contacts at t=0, 0 penetrating.
+[pipeline] No robots detected in query
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] Starting with 1 models...
+[validate_and_repair] Using adaptive iteration limit: 160 iterations (base=160, objects=1)
+[validate_and_repair] Density check: footprint=1.54m², available=36.00m², ratio=0.04
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] SUCCESS: All collisions resolved after gradient resolution
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] Starting with 1 models...
+[validate_and_repair] Using adaptive iteration limit: 160 iterations (base=160, objects=1)
+[validate_and_repair] Density check: footprint=1.54m², available=36.00m², ratio=0.04
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] SUCCESS: All collisions resolved after gradient resolution
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+Engine refinement: rejected (hard 0 -> 0, total 0 -> 0).
+[vlm_validator] Preview saved → /tmp/ciare_fresh_1777510071/worlds/scene_latest_preview.png
+[pipeline] Preview saved → /tmp/ciare_fresh_1777510071/worlds/scene_latest_preview.png
+[pipeline] Done. Scene saved to: /tmp/ciare_fresh_1777510071/worlds/scene_latest.xml
+[pipeline] Loaded 452 models from EmbodiedGen dataset: /home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset
+[prompt_expander] Expanding query: 'стол'
+[llm] calling deepseek-v3.1:671b-cloud (timeout=180s, prompt_len=2016)
+[llm] ```json
+{
+  "expanded_description": "A simple, clean room featuring a single wooden table positioned centrally on a hardwood floor. The table has a minimalist design with clean lines and a smooth surface, unadorned except for subtle wood grain patterns.",
+  "room_type": "other",
+  "room_style": "minimalist",
+  "anchor_objects": ["table"],
+  "estimated_objects": [
+    {"name": "table", "quantity": 1, "notes": "centered in room"}
+  ],
+  "room_dimensions_hint": "small (3x3m)"
+}
+```
+[prompt_expander] Expanded: A simple, clean room featuring a single wooden table positioned centrally on a h...
+[pipeline] Room type: other, initial half-size estimate: 1.5m
+[pipeline] Objects: ['table']
+[disambiguation] 'table' → candidates: table(0033f5a7), table(0632cdfa), table(0a3e25e9), table(0e5037ee), table(126f60ba)
+[llm] calling deepseek-v3.1:671b-cloud (timeout=180s, prompt_len=3202)
+[llm] {"uuid": "0033f5a78e7f5843a139ea446f8b8bbd"}
+[Stage1] 'table' → table (uuid=0033f5a7)
+[llm] Querying height for 'table'...
+[llm] 0.75
+[llm] Height for 'table': 0.75m (cached)
+[room_planner] other: footprint=1.54m², ×10.0 → area=15.4m², room=6m×6m (half=3.0m)
+[pipeline] Final room: 6m × 6m
+[llm] calling deepseek-v3.1:671b-cloud (timeout=180s, prompt_len=6797)
+[llm] 
+```json
+{
+  "objects": [
+    {
+      "Model": "table",
+      "is_static": true,
+      "constraints": [
+        {"type": "region", "value": "middle", "hard": false, "weight": 5.0}
+      ]
+    }
+  ]
+}
+```
+[pipeline] Stage 4: Layout solving with Universal Placement System
+[UniversalPlacementSystem] Stage 1: Command Interpretation
+[UniversalPlacementSystem] Stage 2: Semantic Planning
+[UniversalPlacementSystem] Using pre-built semantic plan from runner
+[UniversalPlacementSystem] Stage 3: Scene Graph Construction
+[UniversalPlacementSystem] Stage 4: Anchor System Setup
+[UniversalPlacementSystem] Stage 5: Constraint Resolution
+[UniversalPlacementSystem] Stage 6: Layout Solving
+[layout_solver] WARNING: table_0 missing size, using default
+[layout_solver] table_0 has is_static: True
+[gradient_resolve] Converged successfully at iteration 0
+[placed] furniture → x=0.00 y=0.00 yaw=0°
+[UniversalPlacementSystem] Stage 7: Physics Validation
+[UniversalPlacementSystem] Stage 8: Export
+[UniversalPlacementSystem] Scene generation completed successfully in 0.02s
+[pipeline] Universal System placed 1 objects
+[pipeline] DEBUG: Objects from Universal System:
+  [0] Model=furniture, is_static=True, size=[1.0, 1.0, 1.0], _original_index=None
+[pipeline]   table: pos=(0.00, 0.00, 0.50), is_static=True, model_loc=OK
+[validate_and_repair] Starting with 1 models...
+[validate_and_repair] Using adaptive iteration limit: 160 iterations (base=160, objects=1)
+[validate_and_repair] Density check: footprint=1.54m², available=36.00m², ratio=0.04
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] SUCCESS: All collisions resolved after gradient resolution
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+[anchor] table anchored (region:middle)
+[gradient_resolve] Converged successfully at iteration 0
+
+Generated world at: /tmp/ciare_fresh_1777510071/worlds/scene_latest.xml
+⚠️  Could not save scene for analysis: No module named 'save_scene_for_analysis'
+[vlm_validator] Preview saved → /tmp/ciare_fresh_1777510071/worlds/scene_latest_top.png
+[vlm_validator] Preview saved → /tmp/ciare_fresh_1777510071/worlds/scene_latest_perspective.png
+[vlm_validator] Preview saved → /tmp/ciare_fresh_1777510071/worlds/scene_latest_side.png
+Saved renders: /tmp/ciare_fresh_1777510071/worlds/scene_latest_{top,perspective,side}.png
+WARNING: OpenGL error 0x502 in or before mjr_makeContext
+
+WARNING: OpenGL error 0x502 in or before mjr_makeContext
+
+WARNING: OpenGL error 0x502 in or before mjr_makeContext
+
+WARNING: OpenGL error 0x502 in or before mjr_makeContext
+

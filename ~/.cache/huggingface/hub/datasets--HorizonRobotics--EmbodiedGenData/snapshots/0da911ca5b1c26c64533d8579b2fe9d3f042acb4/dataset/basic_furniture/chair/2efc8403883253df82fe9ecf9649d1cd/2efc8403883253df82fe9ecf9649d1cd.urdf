@@ -1,0 +1,47 @@
+<?xml version="1.0" ?>
+<robot name="computer_chair_43">
+   <link name="computer_chair_43">
+      <visual>
+         <origin xyz="0 0 0" rpy="1.5708 0.0 0.0"/>
+         <geometry>
+            <mesh filename="mesh/computer_chair_43.obj" scale="1.0 1.0 1.0"/>
+         </geometry>
+      </visual>
+      <collision>
+         <origin xyz="0 0 0" rpy="1.5708 0.0 0.0"/>
+         <geometry>
+            <mesh filename="mesh/computer_chair_43_collision.obj" scale="1.0 1.0 1.0"/>
+         </geometry>
+         <gazebo>
+            <mu1>0.80</mu1>
+            <mu2>0.60</mu2>
+         </gazebo>
+      </collision>
+      <inertial>
+         <mass value="10.0000"/>
+         <origin xyz="0 0 0"/>
+         <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
+      </inertial>
+      <extra_info>
+         <scale>1.000000</scale>
+         <version>v0.1.5</version>
+         <category>computer_chair</category>
+         <description>black ergonomic office chair with armrests, mesh backrest, and wheeled base</description>
+         <min_height>0.9</min_height>
+         <max_height>1.1</max_height>
+         <real_height>1.0</real_height>
+         <min_mass>8.0</min_mass>
+         <max_mass>12.0</max_mass>
+         <generate_time>20251021130451</generate_time>
+         <gs_model>mesh/computer_chair_43_gs.ply</gs_model>
+      </extra_info>
+   </link>
+   <custom_data>
+      <quality>
+         <MeshGeoChecker>YES</MeshGeoChecker>
+         <ImageSegChecker>YES</ImageSegChecker>
+         <ImageAestheticChecker>4.922396302223206</ImageAestheticChecker>
+         <overall>YES</overall>
+      </quality>
+   </custom_data>
+</robot>

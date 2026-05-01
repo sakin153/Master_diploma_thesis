@@ -8,16 +8,18 @@ from tinydb import TinyDB
 
 from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
 from creator.contexts_prompts.disambiguation import fmt_disambiguation_tmpl
+from creator.contexts_prompts.semantic_plan import fmt_semantic_plan_tmpl
 from creator.model_databases.embodied_gen import EmbodiedGenLoader
 from creator.placement import (
     build_semantic_plan,
     repair_layout_by_constraints,
-    solve_floor_placements,
-    solve_small_object_placements,
-    solve_wall_placements,
     validate_and_repair_layout,
 )
 from creator.placement.plan import _stabilize_dense_group_constraints
+from creator.placement.semantic_enforcement.pipeline import (
+    SemanticEnforcementPipeline,
+    SchemaValidationError,
+)
 from creator.postprocess import refine_scene_with_engine
 from creator.sim_interfaces.mujoco import MujocoSimInterface
 from creator.utils.cache import Cache
@@ -216,6 +218,139 @@ def _llm_pick_candidate(
     return by_uuid.get(chosen_uuid)
 
 
+def _generate_semantic_plan_with_validation(
+    *,
+    prompt_model_fn,
+    llm_model: str,
+    query: str,
+    room_half_size: float,
+    full_placed_models: List[Dict[str, Any]],
+    max_retries: int = 3,
+) -> Dict[str, Any]:
+    """Generate semantic plan using new format with validation feedback loop.
+    
+    This function:
+    1. Generates semantic plan using the new prompt template
+    2. Validates the plan against the schema
+    3. If validation fails, sends error back to LLM for correction
+    4. Retries up to max_retries times
+    
+    Args:
+        prompt_model_fn: LLM prompt function
+        llm_model: LLM model name
+        query: User query
+        room_half_size: Room half size in meters
+        full_placed_models: List of models with sizes and metadata
+        max_retries: Maximum number of retry attempts
+        
+    Returns:
+        Valid semantic plan dictionary
+        
+    Raises:
+        RuntimeError: If all retry attempts fail
+    """
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Build models string for prompt
+    models_str_lines = []
+    for i, model in enumerate(full_placed_models):
+        model_name = model.get("Model", f"object_{i}")
+        size = model.get("size", [1.0, 1.0, 1.0])
+        model_uuid = model.get("uuid", "")
+        
+        models_str_lines.append(
+            f"  - Model: {model_name}\n"
+            f"    Size: {{'width': {size[0]:.2f}, 'length': {size[1]:.2f}, 'height': {size[2]:.2f}}}\n"
+            f"    uuid: {model_uuid}"
+        )
+    
+    models_str = "\n".join(models_str_lines)
+    
+    # Add explicit count instruction
+    object_count = len(full_placed_models)
+    count_instruction = f"\n\nCRITICAL: You MUST generate EXACTLY {object_count} objects in your semantic plan. The list above contains {object_count} entries - create one object specification for each entry, even if some have the same Model name."
+    models_str = models_str + count_instruction
+    
+    # Room dimensions
+    room_width = room_half_size * 2
+    room_length = room_half_size * 2
+    room_height = 3.0
+    
+    # Initial prompt
+    prompt = fmt_semantic_plan_tmpl.format(
+        query=query,
+        room_width=room_width,
+        room_length=room_length,
+        room_height=room_height,
+        models_str=models_str,
+    )
+    
+    # Validation feedback loop
+    for attempt in range(max_retries):
+        logger.info(f"[SemanticPlan] Generating semantic plan (attempt {attempt + 1}/{max_retries})")
+        
+        try:
+            # Call LLM
+            raw_response = prompt_model_fn(prompt, query, llm_model)
+            
+            # Parse response
+            if isinstance(raw_response, dict):
+                semantic_plan = raw_response
+            elif isinstance(raw_response, str):
+                semantic_plan = json.loads(raw_response)
+            else:
+                raise ValueError(f"Unexpected LLM response type: {type(raw_response)}")
+            
+            # Validate schema
+            from creator.placement.semantic_enforcement.schema_validator import SchemaValidator
+            validator = SchemaValidator()
+            validation_result = validator.validate_plan(semantic_plan)
+            
+            if validation_result.success:
+                logger.info(f"[SemanticPlan] Schema validation passed on attempt {attempt + 1}")
+                return semantic_plan
+            else:
+                # Validation failed - send error back to LLM
+                error_msg = "\n".join(validation_result.errors)
+                logger.warning(f"[SemanticPlan] Schema validation failed on attempt {attempt + 1}:\n{error_msg}")
+                
+                if attempt < max_retries - 1:
+                    # Retry with error feedback
+                    prompt = (
+                        f"The previous semantic plan had validation errors:\n\n{error_msg}\n\n"
+                        f"Please fix these errors and generate a corrected semantic plan.\n\n"
+                        f"Original request:\n{prompt}"
+                    )
+                else:
+                    raise SchemaValidationError(f"Schema validation failed after {max_retries} attempts:\n{error_msg}")
+                    
+        except json.JSONDecodeError as e:
+            logger.error(f"[SemanticPlan] JSON parsing failed on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                prompt = (
+                    f"The previous response was not valid JSON. Error: {e}\n\n"
+                    f"Please generate a valid JSON semantic plan.\n\n"
+                    f"Original request:\n{prompt}"
+                )
+            else:
+                raise RuntimeError(f"Failed to parse LLM response as JSON after {max_retries} attempts")
+        
+        except Exception as e:
+            logger.error(f"[SemanticPlan] Unexpected error on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                prompt = (
+                    f"An error occurred: {e}\n\n"
+                    f"Please try again.\n\n"
+                    f"Original request:\n{prompt}"
+                )
+            else:
+                raise RuntimeError(f"Failed to generate semantic plan after {max_retries} attempts: {e}")
+    
+    raise RuntimeError(f"Failed to generate valid semantic plan after {max_retries} attempts")
+
+
 def generate_world(
     *,
     query: str,
@@ -255,14 +390,23 @@ def generate_world(
     from creator.scene.prompt_expander import expand_prompt
     from creator.scene.room_planner import compute_room_half_size
 
-    chosen_model = "qwen3-coder-next:cloud"
+    chosen_model = "deepseek-v3.1:671b-cloud"
 
-    loader = EmbodiedGenLoader(dataset_dir=assets_dir)
+    # Try to load EmbodiedGen dataset, fallback to local assets if not available
+    try:
+        loader = EmbodiedGenLoader(dataset_dir=assets_dir)
+        print(f"[pipeline] Loaded {len(loader.get_models_full())} models from EmbodiedGen dataset: {loader.dataset_dir}")
+    except FileNotFoundError as e:
+        print(f"[pipeline] EmbodiedGen dataset not found: {e}")
+        print(f"[pipeline] Falling back to local assets directory")
+        from creator.model_databases.local_assets import LocalAssetsLoader
+        loader = LocalAssetsLoader(assets_dir=None)  # Use default assets/ directory
+        print(f"[pipeline] Loaded {len(loader.get_models_full())} models from local assets: {loader.assets_dir}")
+    
     interface = MujocoSimInterface(chosen_model, cache_dir=cache_dir)
 
     models, _worlds = loader.get_models()
     models_full = loader.get_models_full()
-    print(f"[pipeline] Loaded {len(models)} models from EmbodiedGen dataset: {loader.dataset_dir}")
 
     # ---------------------------------------------------------------
     # Stage 0: Prompt expansion
@@ -299,14 +443,15 @@ def generate_world(
     #    original query to the LLM and let it pick the best uuid. This keeps
     #    the LLM context tiny (~10 short rows) while letting it leverage the
     #    rich per-asset descriptions in EmbodiedGen.
-    # 3) For repeated occurrences of the same obj (e.g. "10 apples of
-    #    different colors"), call the LLM once to anchor the primary pick,
-    #    then round-robin through the remaining ranked candidates so the
-    #    scene gets visual variety instead of N identical clones.
+    # 3) Each object gets its own model selection (no caching by object type)
+    #    to ensure correct quantities (e.g., "3 chairs" → 3 separate chair models).
     chosen_models: List[Dict[str, str]] = []
-    obj_state: Dict[str, Dict[str, Any]] = {}
     dropped_objects: List[str] = []
     used_uuids: set = set()
+    
+    # Track first occurrence of each object type for LLM disambiguation
+    first_occurrence: Dict[str, bool] = {}
+    
     for obj in objects:
         obj_raw = str(obj).strip()
         obj_key = obj_raw.lower()
@@ -317,20 +462,26 @@ def generate_world(
         # Apply fallback mapping
         search_key = _OBJECT_FALLBACKS.get(obj_clean, obj_clean)
 
-        state = obj_state.get(search_key)
-        if state is None:
-            ranked = _rank_models_for_object(search_key, models, limit=10)
-            if not ranked:
-                print(f"[pipeline] WARN: '{obj}' has no catalog match, dropped")
-                dropped_objects.append(obj_key)
-                continue
+        # Always rank models for this object (no caching)
+        ranked = _rank_models_for_object(search_key, models, limit=10)
+        if not ranked:
+            print(f"[pipeline] WARN: '{obj}' has no catalog match, dropped")
+            dropped_objects.append(obj_key)
+            continue
 
-            unused = [r for r in ranked if str(r.get("uuid") or "") not in used_uuids]
-            candidate_pool = unused if unused else ranked
+        # Prefer unused models for variety
+        unused = [r for r in ranked if str(r.get("uuid") or "") not in used_uuids]
+        candidate_pool = unused if unused else ranked
 
-            if len(candidate_pool) == 1:
-                primary = candidate_pool[0]
-            else:
+        # Select model for this object
+        if len(candidate_pool) == 1:
+            primary = candidate_pool[0]
+        else:
+            # Use LLM disambiguation only for first occurrence of each object type
+            # to save time and API calls
+            is_first = search_key not in first_occurrence
+            if is_first:
+                first_occurrence[search_key] = True
                 cand_names = [f"{c.get('name')}({c.get('uuid')[:8]})" for c in candidate_pool[:5]]
                 print(f"[disambiguation] '{obj}' → candidates: {', '.join(cand_names)}")
                 pick = _llm_pick_candidate(
@@ -341,14 +492,14 @@ def generate_world(
                     llm_model=chosen_model,
                 )
                 primary = (pick if pick and pick is not REJECTED else candidate_pool[0])
+            else:
+                # For subsequent occurrences, just take the first unused model
+                primary = candidate_pool[0]
 
-            state = {"order": [primary], "idx": 0}
-            obj_state[search_key] = state
-
-        picked = state["order"][0]
-        name = str(picked.get("name", "")).strip()
-        uid = str(picked.get("uuid", "")).strip()
+        name = str(primary.get("name", "")).strip()
+        uid = str(primary.get("uuid", "")).strip()
         print(f"[Stage1] '{obj_raw}' → {name} (uuid={uid[:8] if uid else 'none'})")
+        
         if uid:
             used_uuids.add(uid)
         if name and uid:
@@ -438,22 +589,110 @@ def generate_world(
     )
 
     # ---------------------------------------------------------------
-    # Stage 4: Layout solving
+    # Stage 4: Layout solving (Semantic Enforcement Pipeline ONLY)
     # ---------------------------------------------------------------
-    full_placed_models = solve_floor_placements(
+    print("[pipeline] Stage 4: Semantic Enforcement Pipeline")
+    
+    # Generate semantic plan using new format
+    print("[pipeline] Generating semantic plan...")
+    semantic_plan_new_format = _generate_semantic_plan_with_validation(
+        prompt_model_fn=prompt_model,
+        llm_model=chosen_model,
+        query=effective_query,
+        room_half_size=room_half_size,
         full_placed_models=full_placed_models,
-        semantic_plan=semantic_plan,
-        room_half_size=room_half_size,
-        grid_step=None,  # auto-adapt from min footprint
-        yaw_candidates_deg=(0.0, 90.0, 180.0, 270.0),
-        beam_width=12,
-        seed=seed,
+        max_retries=3,
     )
-    full_placed_models = solve_wall_placements(
-        placed_models=full_placed_models,
-        semantic_plan=semantic_plan,
-        room_half_size=room_half_size,
+    
+    print(f"[pipeline] ✓ Generated semantic plan with {len(semantic_plan_new_format.get('objects', []))} objects")
+    
+    # Add model_loc to each object in semantic plan BEFORE pipeline execution
+    # LLM doesn't generate model_loc, so we add it from full_placed_models
+    print("[pipeline] Adding model_loc to semantic plan objects...")
+    for obj in semantic_plan_new_format.get('objects', []):
+        model_name = obj.get('Model', '')
+        # Find matching model in full_placed_models
+        matching_model = next(
+            (m for m in full_placed_models if m.get('Model') == model_name),
+            None
+        )
+        if matching_model:
+            obj['model_loc'] = matching_model.get('model_loc', '')
+            obj['uuid'] = matching_model.get('uuid', obj.get('id', ''))
+            obj['save_fn'] = matching_model.get('save_fn', '')
+            obj['_up_axis'] = matching_model.get('_up_axis', 'y')
+            print(f"[pipeline]   {model_name}: model_loc={obj['model_loc'][:50]}..." if len(obj['model_loc']) > 50 else f"[pipeline]   {model_name}: model_loc={obj['model_loc']}")
+        else:
+            print(f"[pipeline] WARNING: No model_loc found for {model_name}, using empty string")
+            obj['model_loc'] = ''
+            obj['uuid'] = obj.get('id', '')
+            obj['save_fn'] = ''
+            obj['_up_axis'] = 'y'
+    
+    # Execute pipeline
+    print("[pipeline] Executing Semantic Enforcement Pipeline...")
+    pipeline = SemanticEnforcementPipeline(
+        workspace_root=".",
+        output_dir=cache.cache_path,
+        enable_tracking=True,
+        enable_collision_check=True,
     )
+    
+    mujoco_xml, placement_solution, pipeline_trace = pipeline.execute_pipeline(
+        semantic_plan_dict=semantic_plan_new_format,
+        output_filename="scene_latest_semantic",
+    )
+    
+    print(f"[pipeline] ✓ Placed {len(placement_solution.objects)} objects")
+    
+    # Convert PlacementSolution back to full_placed_models format
+    new_full_placed_models = []
+    for i, placed_obj in enumerate(placement_solution.objects):
+        obj_uuid = placed_obj.uuid if hasattr(placed_obj, 'uuid') else placed_obj.id
+        original = next(
+            (m for m in full_placed_models if m.get("uuid") == obj_uuid),
+            next((m for m in full_placed_models if m.get("Model") == placed_obj.Model), {})
+        )
+        
+        # Generate unique save_fn for each object instance
+        safe_uuid = re.sub(r"[^a-zA-Z0-9_]+", "_", obj_uuid)
+        unique_save_fn = f"{safe_uuid}_{i}"
+        
+        merged = {
+            "Model": placed_obj.Model,
+            "uuid": obj_uuid,
+            "model_loc": placed_obj.model_loc,
+            "save_fn": unique_save_fn,  # ← Use unique save_fn for each instance
+            "_up_axis": original.get("_up_axis", "y"),
+            "size": [placed_obj.size["width"], placed_obj.size["length"], placed_obj.size["height"]],
+            "is_static": placed_obj.is_static,
+            "Pose": {
+                "x": placed_obj.position["x"],
+                "y": placed_obj.position["y"],
+                "z": placed_obj.position["z"],
+            },
+            "yaw_deg": placed_obj.orientation["yaw_deg"],
+        }
+        
+        new_full_placed_models.append(merged)
+        
+        pose = merged.get("Pose", {})
+        print(f"[pipeline]   {merged.get('Model')}: pos=({pose.get('x', 0):.2f}, {pose.get('y', 0):.2f}, {pose.get('z', 0):.2f}), yaw={merged.get('yaw_deg', 0):.0f}°")
+    
+    full_placed_models = new_full_placed_models
+    
+    # Save the MuJoCo XML from pipeline
+    world_name = "scene_latest"
+    world_path = (
+        os.path.join(cache.worlds_path, world_name) + interface.get_world_extension()
+    )
+    with open(world_path, "w", encoding="utf-8") as f:
+        f.write(mujoco_xml)
+    
+    print(f"[pipeline] ✓ Saved MuJoCo XML to {world_path}")
+    
+    # Mark that we used the semantic pipeline
+    used_semantic_pipeline = True
     
     # ---------------------------------------------------------------
     # Stage 4.5: Detect and place robots as virtual objects
@@ -494,12 +733,8 @@ def generate_world(
             full_placed_models.append(virtual_robot)
             print(f"[pipeline] Added virtual robot {placement['robot_id']} at {pos}")
     
-    full_placed_models = solve_small_object_placements(
-        placed_models=full_placed_models,
-        semantic_plan=semantic_plan,
-        small_threshold_volume=0.06,
-        seed=seed,
-    )
+    # Note: solve_small_object_placements is removed - Universal System handles all placement
+    
     full_placed_models = validate_and_repair_layout(
         full_placed_models,
         room_half_size=room_half_size,
@@ -511,31 +746,25 @@ def generate_world(
     )
 
     # ---------------------------------------------------------------
-    # Stage 5: MuJoCo assembly
+    # Stage 5: MuJoCo assembly - Convert meshes using add_models
     # ---------------------------------------------------------------
-    world_name = "scene_latest"
-    world_path = (
-        os.path.join(cache.worlds_path, world_name) + interface.get_world_extension()
-    )
-
-    # Filter out virtual robots before add_models (they'll be added via add_robot)
-    models_for_assembly = [m for m in full_placed_models if not m.get("is_robot", False)]
+    print("[pipeline] Stage 5: MuJoCo assembly - converting meshes...")
     
-    # Build chosen_models list from models_for_assembly (ensures consistency)
-    chosen_models_for_assembly = [
-        {"Model": m.get("Model", m.get("name", "")), "uuid": m.get("uuid", "")}
-        for m in models_for_assembly
-    ]
-
+    # Convert .glb files to MuJoCo XML using add_models
+    # This will convert meshes and create proper XML with <include> tags
+    # We pass full_placed_models as pre_placed_models to preserve positions
     saved_models = interface.add_models(
-        chosen_models_for_assembly,
-        models_full,
-        effective_query,
-        world_path,
+        chosen_models=chosen_models,
+        models=models_full,
+        query=effective_query,
+        path_to_save=world_path,  # ← FIX: Use world_path (file) instead of cache.cache_path (directory)
+        world_path=world_path,
         room_half_size=room_half_size,
-        pre_placed_models=models_for_assembly,
+        pre_placed_models=full_placed_models,
         semantic_plan=semantic_plan,
     )
+    
+    print(f"[pipeline] ✓ Converted and assembled {len(saved_models)} models")
 
     # ---------------------------------------------------------------
     # Stage 5.5: Add robots to XML

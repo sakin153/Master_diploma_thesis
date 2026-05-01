@@ -16,18 +16,20 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 # ---------------------------------------------------------------------------
 # Circulation multipliers per room type
 # These account for walkways, doors, empty space between furniture.
+# INCREASED: Much larger multipliers to give objects more space and avoid
+# walls constraining scene formation.
 # ---------------------------------------------------------------------------
 _CIRCULATION: Dict[str, float] = {
-    "bedroom":      3.0,
-    "office":       3.5,
-    "classroom":    3.0,
-    "kitchen":      4.0,
-    "living_room":  3.5,
-    "warehouse":    2.5,
-    "lab":          3.5,
-    "dining":       4.0,
-    "restaurant":   4.5,
-    "other":        4.0,
+    "bedroom":      8.0,   # was 3.0
+    "office":       8.0,   # was 3.5
+    "classroom":    8.0,   # was 3.0
+    "kitchen":      10.0,  # was 4.0
+    "living_room":  8.0,   # was 3.5
+    "warehouse":    6.0,   # was 2.5
+    "lab":          8.0,   # was 3.5
+    "dining":       10.0,  # was 4.0
+    "restaurant":   12.0,  # was 4.5
+    "other":        10.0,  # was 4.0
 }
 
 # Minimum room half-size per type (metres)
@@ -44,8 +46,8 @@ _MIN_ROOM_HALF: Dict[str, float] = {
     "other":        3.0,
 }
 
-# Maximum sensible half-size (avoid absurdly large rooms)
-_MAX_ROOM_HALF = 12.0
+# Maximum sensible half-size (increased to allow much larger rooms)
+_MAX_ROOM_HALF = 25.0  # was 12.0
 
 # Room aspect ratios — rooms wider than this are unusual for indoor scenes
 _PREFERRED_ASPECT = 1.4  # max width/depth ratio

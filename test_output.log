@@ -1,0 +1,152 @@
+WARNING:root:Stage 1 (anchors): Expected 1 table(s), but only 0 were placed. Fallback will add missing anchors.
+WARNING:creator.placement.semantic_enforcement.placement_executor:[PlacementExecutor] Potential collision detected between table_1 and chair_1. Objects will be placed as specified.
+WARNING:creator.placement.semantic_enforcement.placement_executor:[PlacementExecutor] Potential collision detected between table_1 and chair_2. Objects will be placed as specified.
+WARNING:creator.placement.semantic_enforcement.placement_executor:[PlacementExecutor] Potential collision detected between table_1 and chair_3. Objects will be placed as specified.
+WARNING:creator.placement.semantic_enforcement.placement_executor:[PlacementExecutor] Potential collision detected between chair_1 and chair_2. Objects will be placed as specified.
+WARNING:creator.placement.semantic_enforcement.placement_executor:[PlacementExecutor] Potential collision detected between chair_1 and chair_3. Objects will be placed as specified.
+WARNING:creator.placement.semantic_enforcement.placement_executor:[PlacementExecutor] Object table_1 is outside room boundaries: z=0.00 (room height: 3.0). Object will be placed as specified.
+================================================================================
+REAL GENERATION TEST: стол и 3 стула
+================================================================================
+[pipeline] Loaded 452 models from EmbodiedGen dataset: /home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset
+[prompt_expander] Expanding query: 'стол и 3 стула'
+Using cached query result.
+[prompt_expander] Expanded: A simple dining setup featuring a wooden dining table with three matching wooden...
+[pipeline] Room type: other, initial half-size estimate: 1.5m
+[pipeline] Objects: ['dining table', 'chair', 'chair', 'chair']
+[disambiguation] 'dining table' → candidates: table(0033f5a7), table(0632cdfa), table(0a3e25e9), table(0e5037ee), table(126f60ba)
+Using cached query result.
+[Stage1] 'dining table' → table (uuid=0033f5a7)
+[disambiguation] 'chair' → candidates: computer chair(aeea9a5e), computer chair(2efc8403), computer chair(3c8316d2), computer chair(434ed818), computer chair(4c497ddf)
+Using cached query result.
+[Stage1] 'chair' → computer chair (uuid=aeea9a5e)
+[Stage1] 'chair' → computer chair (uuid=2efc8403)
+[Stage1] 'chair' → computer chair (uuid=3c8316d2)
+[room_planner] other: footprint=3.12m², ×10.0 → area=31.2m², room=6m×6m (half=3.0m)
+[pipeline] Final room: 6m × 6m
+Using cached query result.
+Using cached query result.
+[pipeline] Stage 4: Semantic Enforcement Pipeline
+[pipeline] Generating semantic plan...
+Using cached query result.
+[pipeline] ✓ Generated semantic plan with 4 objects
+[pipeline] Adding model_loc to semantic plan objects...
+[pipeline]   table: model_loc=/home/sakin153/.cache/huggingface/hub/datasets--Ho...
+[pipeline]   computer chair: model_loc=/home/sakin153/.cache/huggingface/hub/datasets--Ho...
+[pipeline]   computer chair: model_loc=/home/sakin153/.cache/huggingface/hub/datasets--Ho...
+[pipeline]   computer chair: model_loc=/home/sakin153/.cache/huggingface/hub/datasets--Ho...
+[pipeline] Executing Semantic Enforcement Pipeline...
+[PipelineTracker] Stage 'semantic_plan': 4 objects logged
+[PipelineTracker] Stage 'distance_resolver': 4 objects logged
+[PipelineTracker] Stage 'orientation_resolver': 4 objects logged
+[PipelineTracker] Stage 'placement_executor': 4 objects logged
+[PipelineTracker] Stage 'scene_assembly': 4 objects logged
+[PipelineTracker] Trace saved to: /home/sakin153/Рабочий стол/world-creator/.cache/ciare/analysis_logs/pipeline_trace_20260501_001303.json
+[pipeline] ✓ Placed 4 objects
+[pipeline]   table: pos=(0.00, 0.00, 0.00), yaw=0°
+[pipeline]   computer chair: pos=(0.00, 0.60, 0.34), yaw=0°
+[pipeline]   computer chair: pos=(-0.42, -0.42, 0.36), yaw=17°
+[pipeline]   computer chair: pos=(0.42, -0.42, 0.39), yaw=343°
+[pipeline] ✓ Saved MuJoCo XML to /home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest.xml
+[validate_and_repair] Starting with 4 models...
+[validate_and_repair] Using adaptive iteration limit: 160 iterations (base=160, objects=4)
+[validate_and_repair] Density check: footprint=3.12m², available=36.00m², ratio=0.09
+[gradient_resolve] Convergence failure detected at iteration 19: overlap count stuck at 3 for 20 iterations
+[validate_and_repair] Gradient resolution did not converge
+[validate_and_repair] CONVERGENCE FAILURE: 3 collision(s) remain after 160 iterations
+[validate_and_repair] Collision details:
+  [1] table <-> computer chair: overlap_depth=0.0132m, pos_a=(0.01, -0.07, 0.01), pos_b=(0.00, 1.00, 0.34)
+  [2] table <-> computer chair: overlap_depth=0.0174m, pos_a=(0.01, -0.07, 0.01), pos_b=(-1.02, -0.59, 0.36)
+  [3] table <-> computer chair: overlap_depth=0.0172m, pos_a=(0.01, -0.07, 0.01), pos_b=(1.02, -0.60, 0.39)
+[validate_and_repair] Invoking LLM fallback for layout replanning...
+[llm_replan_layout] Invoking LLM fallback for 4 objects
+[llm_replan_layout] Reason: 3 collision(s) after gradient resolution
+[llm_replan_layout] LLM attempt 1/3...
+Using cached query result.
+[llm_replan_layout] LLM reasoning: Centered the table at (0,0) to satisfy 'middle' region constraint. Positioned chairs around the table with 0.05m clearance: one directly in front (north side), one on the left (west side), and one on the right (east side). All chairs face toward the table center, maintaining 'beside' and 'face_to' constraints. Eliminated all overlaps while keeping all objects within room boundaries.
+[llm_replan_layout] SUCCESS: LLM replanning eliminated all collisions
+[validate_and_repair] LLM fallback succeeded - using replanned layout
+[validate_and_repair] SUCCESS: All collisions eliminated by LLM fallback
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[pipeline] Stage 5: MuJoCo assembly (converting meshes)
+[modify_body_tag] table: is_static=True, size=[1.1, 0.78, 1.41]
+[modify_body_tag] table: profile.is_static=True
+[modify_body_tag] ✗ table is static, NO joint
+[modify_body_tag] computer chair: is_static=True, size=[0.66, 1.2, 0.68]
+[modify_body_tag] computer chair: profile.is_static=True
+[modify_body_tag] ✗ computer chair is static, NO joint
+[modify_body_tag] computer chair: is_static=True, size=[0.76, 1.0, 0.73]
+[modify_body_tag] computer chair: profile.is_static=True
+[modify_body_tag] ✗ computer chair is static, NO joint
+[modify_body_tag] computer chair: is_static=True, size=[0.73, 1.1, 0.77]
+[modify_body_tag] computer chair: profile.is_static=True
+[modify_body_tag] ✗ computer chair is static, NO joint
+MuJoCo compile validation: OK
+[validator] Scale OK — all 4 objects within expected ranges.
+[validator] Geometry OK — 4 objects, no issues.
+[validator] MuJoCo: 0 contacts at t=0, 0 penetrating.
+[pipeline] No robots detected in query
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] Starting with 4 models...
+[validate_and_repair] Using adaptive iteration limit: 160 iterations (base=160, objects=4)
+[validate_and_repair] Density check: footprint=3.12m², available=36.00m², ratio=0.09
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] SUCCESS: All collisions resolved after gradient resolution
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] Starting with 4 models...
+[validate_and_repair] Using adaptive iteration limit: 160 iterations (base=160, objects=4)
+[validate_and_repair] Density check: footprint=3.12m², available=36.00m², ratio=0.09
+[gradient_resolve] Converged successfully at iteration 0
+[validate_and_repair] SUCCESS: All collisions resolved after gradient resolution
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+[gradient_resolve] Converged successfully at iteration 0
+Engine refinement: rejected (hard 0 -> 0, total 0 -> 0).
+[vlm_validator] Preview saved → /home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest_preview.png
+[pipeline] Preview saved → /home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest_preview.png
+[pipeline] Done. Scene saved to: /home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest.xml
+
+================================================================================
+✓ Scene generated: /home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest.xml
+================================================================================
+
+================================================================================
+LOG ANALYSIS
+================================================================================
+
+[Stage1] lines: 4
+  [Stage1] 'dining table' → table (uuid=0033f5a7)
+  [Stage1] 'chair' → computer chair (uuid=aeea9a5e)
+  [Stage1] 'chair' → computer chair (uuid=2efc8403)
+  [Stage1] 'chair' → computer chair (uuid=3c8316d2)
+
+[pipeline] ✓ Generated semantic plan with 4 objects
+[pipeline] ✓ Placed 4 objects
+
+✓ Bodies in XML: 4
+  - wall_north
+  - wall_south
+  - wall_east
+  - wall_west
+WARNING: OpenGL error 0x502 in or before mjr_makeContext
+

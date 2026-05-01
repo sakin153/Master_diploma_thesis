@@ -10,11 +10,31 @@ import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from creator.placement.geometry import (
-    Vec2,
     gradient_resolve_overlaps,
     model_to_obb,
     obb_overlap,
 )
+
+
+def _z_intervals_overlap(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    """Check if two models overlap in Z (they're at the same height level).
+
+    Objects at different Z levels (one stacked on another) should not be
+    separated in XY — only objects at the same floor level should be
+    pushed apart.
+
+    Height in scene = size[1] (mesh Y, after euler="90 0 yaw").
+    """
+    size_a = a.get("size", [1.0, 1.0, 1.0])
+    size_b = b.get("size", [1.0, 1.0, 1.0])
+    pose_a = a.get("Pose") or {}
+    pose_b = b.get("Pose") or {}
+    za = float(pose_a.get("z", 0.0))
+    zb = float(pose_b.get("z", 0.0))
+    # size[1] = mesh Y = scene Z height (not size[2] which is scene Y depth)
+    ha = max(0.01, float(size_a[1]) if len(size_a) > 1 else 1.0) / 2.0
+    hb = max(0.01, float(size_b[1]) if len(size_b) > 1 else 1.0) / 2.0
+    return not ((za + ha < zb - hb) or (zb + hb < za - ha))
 
 
 def _size_xyz(item: Dict[str, Any]) -> Tuple[float, float, float]:
@@ -38,6 +58,7 @@ def validate_and_repair_layout(
     Two-phase approach:
     1. Fix Z positions (ensure objects rest on floor or support)
     2. Resolve XY overlaps using gradient descent (ImperativeScene approach)
+    3. Check convergence and log collision details
     """
     print(f"[validate_and_repair] Starting with {len(placed_models)} models...")
     repaired: List[Dict[str, Any]] = []
@@ -51,15 +72,183 @@ def validate_and_repair_layout(
         item["Pose"] = pose
         repaired.append(item)
 
-    # Phase 2: Gradient-based overlap resolution
-    repaired = gradient_resolve_overlaps(
+    # Phase 2: Gradient-based overlap resolution with adaptive iteration limits
+    # Calculate adaptive iteration limit based on scene complexity
+    num_objects = len(repaired)
+    base_iterations = repair_iters * 20
+    
+    # Add bonus iterations for complex scenes (more than 5 objects)
+    if num_objects > 5:
+        bonus_iterations = (num_objects - 5) * 50
+        adaptive_iterations = base_iterations + bonus_iterations
+    else:
+        adaptive_iterations = base_iterations
+    
+    # Cap at 500 iterations to prevent infinite loops
+    adaptive_iterations = min(adaptive_iterations, 500)
+    
+    print(
+        f"[validate_and_repair] Using adaptive iteration limit: "
+        f"{adaptive_iterations} iterations "
+        f"(base={base_iterations}, objects={num_objects})"
+    )
+    
+    # Phase 2.5: Early infeasibility detection
+    # Calculate total object footprint area vs available surface area
+    total_footprint_area = 0.0
+    for m in repaired:
+        size = m.get("size", [1.0, 1.0, 1.0])
+        # size[0] = width (X), size[2] = depth (Y) for footprint
+        width = max(0.01, float(size[0]) if len(size) > 0 else 1.0)
+        depth = max(0.01, float(size[2]) if len(size) > 2 else 1.0)
+        total_footprint_area += width * depth
+    
+    # Available room area (square room)
+    available_area = (2.0 * room_half_size) ** 2
+    density_ratio = total_footprint_area / max(0.01, available_area)
+    
+    print(
+        f"[validate_and_repair] Density check: "
+        f"footprint={total_footprint_area:.2f}m², "
+        f"available={available_area:.2f}m², ratio={density_ratio:.2f}"
+    )
+    
+    # If density ratio > 0.8, invoke LLM fallback immediately
+    if density_ratio > 0.8:
+        print(
+            f"[validate_and_repair] INFEASIBILITY DETECTED: "
+            f"density ratio {density_ratio:.2f} > 0.8 threshold"
+        )
+        print("[validate_and_repair] Skipping gradient resolution, invoking LLM fallback...")
+        
+        # Import llm_replan_layout from universal_system
+        from creator.placement.universal_system import llm_replan_layout
+        
+        # Call LLM fallback with context
+        replanned_models, llm_success = llm_replan_layout(
+            placed_models=repaired,
+            semantic_plan=semantic_plan or {},
+            room_half_size=room_half_size,
+            collision_details=[],  # No collision details yet
+            max_retries=3,
+        )
+        
+        if llm_success:
+            print(
+                "[validate_and_repair] LLM fallback succeeded - "
+                "using replanned layout"
+            )
+            repaired = replanned_models
+            
+            # Verify final collision status
+            final_collisions = check_collisions(
+                repaired, collision_margin=0.02
+            )
+            if final_collisions:
+                print(
+                    f"[validate_and_repair] WARNING: "
+                    f"{len(final_collisions)} collision(s) remain "
+                    f"after LLM fallback (best effort)"
+                )
+            else:
+                print(
+                    "[validate_and_repair] SUCCESS: "
+                    "All collisions eliminated by LLM fallback"
+                )
+        else:
+            print(
+                "[validate_and_repair] LLM fallback failed - "
+                "proceeding with gradient resolution"
+            )
+        
+        # Return early if LLM succeeded
+        if llm_success:
+            return repaired
+    
+    repaired, converged = gradient_resolve_overlaps(
         repaired,
         room_half_size=room_half_size,
-        iterations=repair_iters * 20,
+        iterations=adaptive_iterations,
         step_size=push_step,
-        collision_margin=0.01,
+        collision_margin=0.02,
         semantic_plan=semantic_plan,
     )
+    
+    if not converged:
+        print("[validate_and_repair] Gradient resolution did not converge")
+
+    # Phase 3: Convergence detection
+    collisions = check_collisions(repaired, collision_margin=0.02)
+
+    if collisions:
+        # Convergence failure - collisions remain after gradient resolution
+        print(
+            f"[validate_and_repair] CONVERGENCE FAILURE: "
+            f"{len(collisions)} collision(s) remain after {adaptive_iterations} iterations"
+        )
+        print("[validate_and_repair] Collision details:")
+        for i, collision in enumerate(collisions):
+            obj_a = collision['object_a']
+            obj_b = collision['object_b']
+            depth = collision['overlap_depth']
+            pos_a = collision['position_a']
+            pos_b = collision['position_b']
+            print(
+                f"  [{i+1}] {obj_a} <-> {obj_b}: "
+                f"overlap_depth={depth:.4f}m, "
+                f"pos_a=({pos_a['x']:.2f}, {pos_a['y']:.2f}, "
+                f"{pos_a['z']:.2f}), "
+                f"pos_b=({pos_b['x']:.2f}, {pos_b['y']:.2f}, "
+                f"{pos_b['z']:.2f})"
+            )
+        
+        # Task 3.2: Invoke LLM fallback when convergence fails
+        print("[validate_and_repair] Invoking LLM fallback for layout replanning...")
+        
+        # Import llm_replan_layout from universal_system
+        from creator.placement.universal_system import llm_replan_layout
+        
+        # Call LLM fallback with context
+        replanned_models, llm_success = llm_replan_layout(
+            placed_models=repaired,
+            semantic_plan=semantic_plan or {},
+            room_half_size=room_half_size,
+            collision_details=collisions,
+            max_retries=3,
+        )
+        
+        if llm_success:
+            print(
+                "[validate_and_repair] LLM fallback succeeded - "
+                "using replanned layout"
+            )
+            repaired = replanned_models
+            
+            # Verify final collision status
+            final_collisions = check_collisions(
+                repaired, collision_margin=0.02
+            )
+            if final_collisions:
+                print(
+                    f"[validate_and_repair] WARNING: "
+                    f"{len(final_collisions)} collision(s) remain "
+                    f"after LLM fallback (best effort)"
+                )
+            else:
+                print(
+                    "[validate_and_repair] SUCCESS: "
+                    "All collisions eliminated by LLM fallback"
+                )
+        else:
+            print(
+                "[validate_and_repair] LLM fallback failed - "
+                "keeping gradient resolution result"
+            )
+    else:
+        print(
+            "[validate_and_repair] SUCCESS: "
+            "All collisions resolved after gradient resolution"
+        )
 
     return repaired
 
@@ -182,7 +371,9 @@ def repair_semantic_constraints(
                 dist = math.sqrt(dx * dx + dy * dy)
 
                 if ctype == "near":
-                    d = c.get("distance") if isinstance(c.get("distance"), list) else [0.3, 1.2]
+                    d = (c.get("distance")
+                         if isinstance(c.get("distance"), list)
+                         else [0.3, 1.2])
                     low, high = float(d[0]), float(d[1])
                     if dist > high and dist > 1e-6:
                         x += current_step * dx / dist
@@ -213,10 +404,12 @@ def repair_semantic_constraints(
                     if target_item:
                         tp = target_item.get("Pose") or {}
                         # size[1] = height; size[0]/size[2] = footprint
-                        s_hh = max(0.01, float((item.get("size") or [0, 0.1, 0])[1])) / 2.0
-                        t_hh = max(0.01, float((target_item.get("size") or [0, 0.1, 0])[1])) / 2.0
-                        t_hx = max(0.01, float((target_item.get("size") or [0.1, 0, 0])[0])) / 2.0
-                        t_hy = max(0.01, float((target_item.get("size") or [0, 0, 0.1])[2])) / 2.0
+                        item_size = item.get("size") or [0, 0.1, 0]
+                        target_size = target_item.get("size") or [0, 0.1, 0]
+                        s_hh = max(0.01, float(item_size[1])) / 2.0
+                        t_hh = max(0.01, float(target_size[1])) / 2.0
+                        t_hx = max(0.01, float(target_size[0])) / 2.0
+                        t_hy = max(0.01, float(target_size[2])) / 2.0
                         tx_c = float(tp.get("x", 0.0))
                         ty_c = float(tp.get("y", 0.0))
                         pose["z"] = float(tp.get("z", 0.0)) + t_hh + s_hh + 0.01
@@ -271,7 +464,9 @@ def validate_semantic_constraints(
                     dx, dy = x - tx, y - ty
                     dist = math.sqrt(dx * dx + dy * dy)
                     if ctype == "near":
-                        d = c.get("distance") if isinstance(c.get("distance"), list) else [0.3, 1.2]
+                        d = (c.get("distance")
+                             if isinstance(c.get("distance"), list)
+                             else [0.3, 1.2])
                         sat = float(d[0]) <= dist <= float(d[1])
                     elif ctype == "left_of":
                         sat = x < tx - 0.1
@@ -320,4 +515,298 @@ def validate_semantic_constraints(
         "constraints_satisfied": ok,
         "satisfaction_ratio": ratio,
         "violations": details,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Scene Graph support: collision detection, stacking validation, support capacity
+# ---------------------------------------------------------------------------
+
+def check_collisions(
+    placed_models: Sequence[Dict[str, Any]],
+    *,
+    collision_margin: float = 0.01,
+) -> List[Dict[str, Any]]:
+    """Check for collisions between objects using OBB + SAT.
+
+    Args:
+        placed_models: List of placed model dictionaries with Pose and size
+        collision_margin: Minimum clearance between objects (meters)
+
+    Returns:
+        List of collision dictionaries with keys:
+        - object_a: Name of first colliding object
+        - object_b: Name of second colliding object
+        - overlap_depth: Penetration depth (meters)
+        - position_a: Position of first object
+        - position_b: Position of second object
+    """
+    collisions: List[Dict[str, Any]] = []
+    n = len(placed_models)
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            # Skip objects at different Z levels (stacked objects)
+            if not _z_intervals_overlap(placed_models[i], placed_models[j]):
+                continue
+
+            obb_i = model_to_obb(placed_models[i], inflation=collision_margin)
+            obb_j = model_to_obb(placed_models[j], inflation=collision_margin)
+
+            if obb_overlap(obb_i, obb_j, margin=0.0):
+                from creator.placement.geometry import obb_overlap_depth
+                depth = obb_overlap_depth(obb_i, obb_j)
+
+                name_i = str(
+                    placed_models[i].get("Model")
+                    or placed_models[i].get("name")
+                    or f"object_{i}"
+                )
+                name_j = str(
+                    placed_models[j].get("Model")
+                    or placed_models[j].get("name")
+                    or f"object_{j}"
+                )
+
+                pose_i = placed_models[i].get("Pose") or {}
+                pose_j = placed_models[j].get("Pose") or {}
+
+                collisions.append({
+                    "object_a": name_i,
+                    "object_b": name_j,
+                    "overlap_depth": depth,
+                    "position_a": {
+                        "x": float(pose_i.get("x", 0.0)),
+                        "y": float(pose_i.get("y", 0.0)),
+                        "z": float(pose_i.get("z", 0.0)),
+                    },
+                    "position_b": {
+                        "x": float(pose_j.get("x", 0.0)),
+                        "y": float(pose_j.get("y", 0.0)),
+                        "z": float(pose_j.get("z", 0.0)),
+                    },
+                })
+
+    return collisions
+
+
+def validate_stacking(
+    placed_models: Sequence[Dict[str, Any]],
+    *,
+    stability_threshold: float = 0.7,
+) -> Dict[str, Any]:
+    """Validate stacking stability for all objects.
+
+    Checks:
+    1. Objects on surfaces have sufficient overlap with support surface
+    2. Center of mass is within support polygon
+    3. No unstable configurations (top-heavy stacks)
+
+    Args:
+        placed_models: List of placed model dictionaries
+        stability_threshold: Minimum overlap ratio for stable stacking (0.0-1.0)
+
+    Returns:
+        Dictionary with keys:
+        - is_stable: Overall stability (bool)
+        - unstable_objects: List of unstable object names
+        - stability_issues: List of detailed stability issue dictionaries
+    """
+    unstable_objects: List[str] = []
+    stability_issues: List[Dict[str, Any]] = []
+
+    # Build support relationships
+    support_map: Dict[int, int] = {}  # supported_index -> supporter_index
+    for i, obj in enumerate(placed_models):
+        pose = obj.get("Pose") or {}
+        z = float(pose.get("z", 0.0))
+        sx, sy, sz = _size_xyz(obj)
+        bottom_z = z - sz / 2.0
+
+        # Skip floor objects
+        if bottom_z < 0.05:
+            continue
+
+        # Find supporting object
+        best_supporter = -1
+        best_overlap = 0.0
+
+        for j, supporter in enumerate(placed_models):
+            if i == j:
+                continue
+
+            sup_pose = supporter.get("Pose") or {}
+            sup_z = float(sup_pose.get("z", 0.0))
+            tsx, tsy, tsz = _size_xyz(supporter)
+            top_z = sup_z + tsz / 2.0
+
+            # Check if supporter is below object
+            if abs(bottom_z - top_z) > 0.1:
+                continue
+
+            # Check XY overlap
+            obb_obj = model_to_obb(obj)
+            obb_sup = model_to_obb(supporter)
+
+            if obb_overlap(obb_obj, obb_sup, margin=-0.01):
+                # Calculate overlap area (approximate)
+                from creator.placement.geometry import obb_overlap_depth
+                overlap = obb_overlap_depth(obb_obj, obb_sup)
+                if overlap > best_overlap:
+                    best_overlap = overlap
+                    best_supporter = j
+
+        if best_supporter == -1:
+            # No supporter found - object is floating
+            name = str(obj.get("Model") or obj.get("name") or f"object_{i}")
+            unstable_objects.append(name)
+            stability_issues.append({
+                "object": name,
+                "issue": "floating",
+                "description": "Object has no supporting surface",
+                "position": {
+                    "x": float(pose.get("x", 0.0)),
+                    "y": float(pose.get("y", 0.0)),
+                    "z": z,
+                },
+            })
+        else:
+            support_map[i] = best_supporter
+
+            # Check overlap ratio
+            obj_area = sx * sy
+            overlap_ratio = min(1.0, best_overlap / max(0.01, obj_area))
+
+            if overlap_ratio < stability_threshold:
+                name = str(
+                    obj.get("Model") or obj.get("name") or f"object_{i}"
+                )
+                unstable_objects.append(name)
+                supporter_name = str(
+                    placed_models[best_supporter].get("Model")
+                    or placed_models[best_supporter].get("name")
+                    or f"object_{best_supporter}"
+                )
+                description = (
+                    f"Object overlap ratio {overlap_ratio:.2f} "
+                    f"below threshold {stability_threshold}"
+                )
+                stability_issues.append({
+                    "object": name,
+                    "issue": "insufficient_overlap",
+                    "description": description,
+                    "overlap_ratio": overlap_ratio,
+                    "supporter": supporter_name,
+                })
+
+    return {
+        "is_stable": len(unstable_objects) == 0,
+        "unstable_objects": unstable_objects,
+        "stability_issues": stability_issues,
+    }
+
+
+def check_support_capacity(
+    placed_models: Sequence[Dict[str, Any]],
+    *,
+    default_capacity: float = 50.0,
+) -> Dict[str, Any]:
+    """Check if supporting surfaces can bear the weight of objects on them.
+
+    Args:
+        placed_models: List of placed model dictionaries
+        default_capacity: Default weight capacity in kg (used when not specified)
+
+    Returns:
+        Dictionary with keys:
+        - capacity_ok: Whether all supports have sufficient capacity (bool)
+        - overloaded_objects: List of overloaded supporter names
+        - capacity_issues: List of detailed capacity issue dictionaries
+    """
+    overloaded_objects: List[str] = []
+    capacity_issues: List[Dict[str, Any]] = []
+
+    # Build support relationships and calculate loads
+    supporter_loads: Dict[int, float] = {}  # supporter_index -> total_load_kg
+
+    for i, obj in enumerate(placed_models):
+        pose = obj.get("Pose") or {}
+        z = float(pose.get("z", 0.0))
+        sx, sy, sz = _size_xyz(obj)
+        bottom_z = z - sz / 2.0
+
+        # Skip floor objects
+        if bottom_z < 0.05:
+            continue
+
+        # Estimate object weight (rough approximation based on volume)
+        # Assume average density of ~200 kg/m³ for typical household objects
+        volume = sx * sy * sz
+        weight = volume * 200.0
+
+        # Find supporting object
+        for j, supporter in enumerate(placed_models):
+            if i == j:
+                continue
+
+            sup_pose = supporter.get("Pose") or {}
+            sup_z = float(sup_pose.get("z", 0.0))
+            tsx, tsy, tsz = _size_xyz(supporter)
+            top_z = sup_z + tsz / 2.0
+
+            # Check if supporter is below object
+            if abs(bottom_z - top_z) > 0.1:
+                continue
+
+            # Check XY overlap
+            obb_obj = model_to_obb(obj)
+            obb_sup = model_to_obb(supporter)
+
+            if obb_overlap(obb_obj, obb_sup, margin=-0.01):
+                # Add weight to supporter's load
+                supporter_loads[j] = supporter_loads.get(j, 0.0) + weight
+                break
+
+    # Check capacity for each supporter
+    for supporter_idx, total_load in supporter_loads.items():
+        supporter = placed_models[supporter_idx]
+
+        # Get capacity from metadata or use default
+        capacity = supporter.get("weight_capacity", default_capacity)
+        if isinstance(capacity, (int, float)):
+            capacity = float(capacity)
+        else:
+            capacity = default_capacity
+
+        if total_load > capacity:
+            name = str(
+                supporter.get("Model")
+                or supporter.get("name")
+                or f"object_{supporter_idx}"
+            )
+            overloaded_objects.append(name)
+
+            sup_pose = supporter.get("Pose") or {}
+            description = (
+                f"Total load {total_load:.1f}kg "
+                f"exceeds capacity {capacity:.1f}kg"
+            )
+            capacity_issues.append({
+                "supporter": name,
+                "issue": "overloaded",
+                "description": description,
+                "total_load_kg": total_load,
+                "capacity_kg": capacity,
+                "overload_ratio": total_load / max(0.1, capacity),
+                "position": {
+                    "x": float(sup_pose.get("x", 0.0)),
+                    "y": float(sup_pose.get("y", 0.0)),
+                    "z": float(sup_pose.get("z", 0.0)),
+                },
+            })
+
+    return {
+        "capacity_ok": len(overloaded_objects) == 0,
+        "overloaded_objects": overloaded_objects,
+        "capacity_issues": capacity_issues,
     }

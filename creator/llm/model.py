@@ -8,8 +8,8 @@ import requests
 from creator.utils.json import parse_output_to_json
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "qwen3-coder-next:cloud"
-OLLAMA_TIMEOUT_S = 120
+OLLAMA_MODEL = "deepseek-v3.1:671b-cloud"  # Changed from qwen3-coder-next:cloud
+OLLAMA_TIMEOUT_S = 180  # Increased for cloud models
 
 _DEFAULT_CACHE_DB_PATH = "/var/tmp/ciare/.ollama_cache.sqlite3"
 
@@ -80,6 +80,7 @@ def _ollama_chat(
         "options": {
             "temperature": 0,
             "seed": 42,
+            "num_predict": 2000,  # Increased to allow full JSON responses
         },
     }
 
@@ -96,19 +97,53 @@ def _ollama_chat(
         raise RuntimeError(f"Ollama error {resp.status_code}: {resp.text}")
 
     chunks: list = []
+    token_count = 0
+    max_tokens = 2500  # Safety limit to prevent infinite loops
+    
     print("[llm] ", end="", flush=True)
     for line in resp.iter_lines():
         if not line:
             continue
-        data = _json.loads(line)
+        
+        try:
+            data = _json.loads(line)
+        except _json.JSONDecodeError:
+            print(f"\n[llm] WARNING: Failed to parse JSON: {line[:100]}")
+            continue
+            
         token = (data.get("message") or {}).get("content", "")
         if token:
+            # Check if token looks like a prompt template (indicates model issue)
+            if "<|im_start|>" in token or "<|im_end|>" in token:
+                print("\n[llm] ERROR: Model is outputting prompt template!")
+                print(f"[llm] Model '{model}' is not properly loaded.")
+                print(f"[llm] Try: ollama pull {model}")
+                raise RuntimeError(
+                    f"Model '{model}' outputting prompt template"
+                )
+            
             print(token, end="", flush=True)
             chunks.append(token)
+            token_count += 1
+            
+            # Safety check: stop if too many tokens
+            if token_count > max_tokens:
+                print("\n[llm] WARNING: Token limit reached, stopping generation")
+                break
+                
         if data.get("done"):
             break
     print()
-    return "".join(chunks)
+    
+    result = "".join(chunks)
+    
+    # Final check: if result contains prompt markers, it's invalid
+    if "<|im_start|>" in result or "<|im_end|>" in result:
+        raise RuntimeError(
+            f"Model '{model}' returned invalid response with markers"
+        )
+    
+    return result
 
 
 def prompt_model(context: str, prompt: str, model: str = "gpt-3.5-turbo-16k"):
@@ -126,7 +161,11 @@ def prompt_model(context: str, prompt: str, model: str = "gpt-3.5-turbo-16k"):
             print("Using cached query result.")
             return parse_output_to_json(cached_text)
 
-        print(f"[llm] calling {OLLAMA_MODEL} (timeout={OLLAMA_TIMEOUT_S}s, prompt_len={len(context)+len(prompt)})")
+        print(
+            f"[llm] calling {OLLAMA_MODEL} "
+            f"(timeout={OLLAMA_TIMEOUT_S}s, "
+            f"prompt_len={len(context)+len(prompt)})"
+        )
         ans_text = _ollama_chat(
             system_prompt=context,
             user_prompt=prompt,
@@ -185,10 +224,18 @@ def ask_object_height_m(object_name: str) -> Optional[float]:
     Used as fallback when the object category is not in the hardcoded table.
     Results are persisted in the SQLite cache (key prefixed with __height__).
     Returns None on failure so the caller can use its own fallback.
+    
+    Can be disabled via environment variable:
+    CIARE_DISABLE_LLM_HEIGHT=1
     """
     name_clean = (object_name or "").strip().lower()
     if not name_clean:
         return None
+
+    # Check if LLM height queries are disabled
+    disable_llm = os.getenv("CIARE_DISABLE_LLM_HEIGHT", "0")
+    if disable_llm.strip().lower() in {"1", "true", "yes", "on"}:
+        return None  # Return None to use fallback value
 
     cache_key = f"__height__{name_clean}"
     cached = _cache_get(cache_key, OLLAMA_MODEL)
@@ -210,19 +257,25 @@ def ask_object_height_m(object_name: str) -> Optional[float]:
         f"Example answers: 0.75, 1.80, 0.12"
     )
     try:
+        print(f"[llm] Querying height for '{object_name}'...")
         ans = _ollama_chat(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             model=OLLAMA_MODEL,
-            timeout_s=30,
+            timeout_s=180,  # Increased for cloud models
             base_url=OLLAMA_BASE_URL,
         )
+        
+        # Extract only the first number from response
         nums = re.findall(r"\d+(?:\.\d+)?", ans.strip())
         if nums:
             val = float(nums[0])
             if 0.01 < val < 10.0:
                 _cache_set(cache_key, OLLAMA_MODEL, str(val))
+                print(f"[llm] Height for '{object_name}': {val}m (cached)")
                 return val
+        
+        print(f"[llm] WARNING: Invalid response for '{object_name}': {ans[:100]}")
     except Exception as exc:
         print(f"[llm] height inference failed for '{object_name}': {exc}")
 

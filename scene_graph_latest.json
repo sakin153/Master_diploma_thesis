@@ -1,76 +1,36 @@
 {
-  "query": "A minimalist wooden desk with four matching chairs arranged around it, placed in a cozy home office setting. On the desk surface lie a book, a small vase, and an open laptop.",
+  "query": "A simple scene featuring a wooden table in the center of a room with two cardboard boxes placed on its surface. The room is otherwise empty, creating a minimalist and uncluttered environment.",
   "nodes": [
     {
       "id": "obj_0",
-      "name": "desk",
+      "name": "table",
       "constraints_count": 1
     },
     {
       "id": "obj_1",
-      "name": "chair",
-      "constraints_count": 2
+      "name": "cardboard_box",
+      "constraints_count": 1
     },
     {
       "id": "obj_2",
-      "name": "chair",
-      "constraints_count": 2
+      "name": "cardboard_box",
+      "constraints_count": 1
     },
     {
       "id": "obj_3",
-      "name": "chair",
-      "constraints_count": 2
-    },
-    {
-      "id": "obj_4",
-      "name": "chair",
-      "constraints_count": 2
-    },
-    {
-      "id": "obj_5",
-      "name": "book",
-      "constraints_count": 1
-    },
-    {
-      "id": "obj_6",
-      "name": "vase",
-      "constraints_count": 1
-    },
-    {
-      "id": "obj_7",
-      "name": "laptop",
-      "constraints_count": 1
-    },
-    {
-      "id": "obj_8",
       "name": "box",
       "constraints_count": 2
     },
     {
-      "id": "obj_9",
-      "name": "computer chair",
-      "constraints_count": 2
-    },
-    {
-      "id": "obj_10",
-      "name": "computer chair",
-      "constraints_count": 2
-    },
-    {
-      "id": "obj_11",
-      "name": "computer chair",
-      "constraints_count": 2
-    },
-    {
-      "id": "obj_12",
-      "name": "computer chair",
+      "id": "obj_4",
+      "name": "box",
       "constraints_count": 2
     }
   ],
   "edges": [
     {
       "from": "obj_0",
-      "from_name": "desk",
+      "from_name": "table",
       "type": "region",
       "hard": false,
       "weight": 5.0,
@@ -80,132 +40,26 @@
     },
     {
       "from": "obj_1",
-      "from_name": "chair",
-      "type": "beside",
+      "from_name": "cardboard_box",
+      "type": "on_top_of",
       "hard": false,
-      "weight": 3.0,
+      "weight": 1.0,
       "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_1",
-      "from_name": "chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
+      "to": "",
+      "to_name": "table_1"
     },
     {
       "from": "obj_2",
-      "from_name": "chair",
-      "type": "beside",
+      "from_name": "cardboard_box",
+      "type": "on_top_of",
       "hard": false,
-      "weight": 3.0,
+      "weight": 1.0,
       "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_2",
-      "from_name": "chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
+      "to": "",
+      "to_name": "table_1"
     },
     {
       "from": "obj_3",
-      "from_name": "chair",
-      "type": "beside",
-      "hard": false,
-      "weight": 3.0,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_3",
-      "from_name": "chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_4",
-      "from_name": "chair",
-      "type": "beside",
-      "hard": false,
-      "weight": 3.0,
-      "value": "None",
-      "distance": [
-        0.8,
-        1.2
-      ],
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_4",
-      "from_name": "chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_5",
-      "from_name": "book",
-      "type": "on_top_of",
-      "hard": false,
-      "weight": 1.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_6",
-      "from_name": "vase",
-      "type": "on_top_of",
-      "hard": false,
-      "weight": 1.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_7",
-      "from_name": "laptop",
-      "type": "on_top_of",
-      "hard": false,
-      "weight": 1.0,
-      "value": "None",
-      "to": "obj_0",
-      "to_name": "desk"
-    },
-    {
-      "from": "obj_8",
       "from_name": "box",
       "type": "beside",
       "hard": false,
@@ -215,106 +69,44 @@
         1.2
       ],
       "to": "obj_0",
-      "to_name": "desk"
+      "to_name": "table"
     },
     {
-      "from": "obj_8",
+      "from": "obj_3",
       "from_name": "box",
       "type": "face_to",
       "hard": false,
       "weight": 2.0,
       "to": "obj_0",
-      "to_name": "desk"
+      "to_name": "table"
     },
     {
-      "from": "obj_9",
-      "from_name": "computer chair",
+      "from": "obj_4",
+      "from_name": "box",
       "type": "beside",
       "hard": false,
       "weight": 3.0,
-      "value": "None",
-      "distance": 0.5,
-      "to": "",
-      "to_name": "desk_1"
+      "distance": [
+        0.8,
+        1.2
+      ],
+      "to": "obj_0",
+      "to_name": "table"
     },
     {
-      "from": "obj_9",
-      "from_name": "computer chair",
+      "from": "obj_4",
+      "from_name": "box",
       "type": "face_to",
       "hard": false,
       "weight": 2.0,
-      "value": "None",
-      "to": "",
-      "to_name": "desk_1"
-    },
-    {
-      "from": "obj_10",
-      "from_name": "computer chair",
-      "type": "beside",
-      "hard": false,
-      "weight": 3.0,
-      "value": "None",
-      "distance": 0.5,
-      "to": "",
-      "to_name": "desk_1"
-    },
-    {
-      "from": "obj_10",
-      "from_name": "computer chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "",
-      "to_name": "desk_1"
-    },
-    {
-      "from": "obj_11",
-      "from_name": "computer chair",
-      "type": "beside",
-      "hard": false,
-      "weight": 3.0,
-      "value": "None",
-      "distance": 0.5,
-      "to": "",
-      "to_name": "desk_1"
-    },
-    {
-      "from": "obj_11",
-      "from_name": "computer chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "",
-      "to_name": "desk_1"
-    },
-    {
-      "from": "obj_12",
-      "from_name": "computer chair",
-      "type": "beside",
-      "hard": false,
-      "weight": 3.0,
-      "value": "None",
-      "distance": 0.5,
-      "to": "",
-      "to_name": "desk_1"
-    },
-    {
-      "from": "obj_12",
-      "from_name": "computer chair",
-      "type": "face_to",
-      "hard": false,
-      "weight": 2.0,
-      "value": "None",
-      "to": "",
-      "to_name": "desk_1"
+      "to": "obj_0",
+      "to_name": "table"
     }
   ],
   "raw_plan": {
     "objects": [
       {
-        "Model": "desk",
+        "Model": "table",
         "constraints": [
           {
             "type": "region",
@@ -324,153 +116,43 @@
             "weight": 5.0
           }
         ],
-        "is_static": true
+        "is_static": true,
+        "id": "table_0"
       },
       {
-        "Model": "chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": [
-              0.8,
-              1.2
-            ],
-            "side": "front"
-          },
-          {
-            "type": "face_to",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 2.0
-          }
-        ],
-        "is_static": true
-      },
-      {
-        "Model": "chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": [
-              0.8,
-              1.2
-            ],
-            "side": "back"
-          },
-          {
-            "type": "face_to",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 2.0
-          }
-        ],
-        "is_static": true
-      },
-      {
-        "Model": "chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": [
-              0.8,
-              1.2
-            ],
-            "side": "left"
-          },
-          {
-            "type": "face_to",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 2.0
-          }
-        ],
-        "is_static": true
-      },
-      {
-        "Model": "chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": [
-              0.8,
-              1.2
-            ],
-            "side": "right"
-          },
-          {
-            "type": "face_to",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 2.0
-          }
-        ],
-        "is_static": true
-      },
-      {
-        "Model": "book",
+        "Model": "cardboard_box",
         "constraints": [
           {
             "type": "on_top_of",
-            "target": "desk",
+            "target": "table_1",
             "value": null,
             "hard": false,
             "weight": 1.0
           }
         ],
-        "is_static": false
+        "is_static": true,
+        "id": "cardboard_box_1"
       },
       {
-        "Model": "vase",
+        "Model": "cardboard_box",
         "constraints": [
           {
             "type": "on_top_of",
-            "target": "desk",
+            "target": "table_1",
             "value": null,
             "hard": false,
             "weight": 1.0
           }
         ],
-        "is_static": false
-      },
-      {
-        "Model": "laptop",
-        "constraints": [
-          {
-            "type": "on_top_of",
-            "target": "desk",
-            "value": null,
-            "hard": false,
-            "weight": 1.0
-          }
-        ],
-        "is_static": false
+        "is_static": true,
+        "id": "cardboard_box_2"
       },
       {
         "Model": "box",
         "constraints": [
           {
             "type": "beside",
-            "target": "desk",
+            "target": "table",
             "side": "front",
             "distance": [
               0.8,
@@ -481,108 +163,40 @@
           },
           {
             "type": "face_to",
-            "target": "desk",
-            "hard": false,
-            "weight": 2.0
-          }
-        ]
-      },
-      {
-        "Model": "computer chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk_1",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": 0.5,
-            "side": "front",
-            "offset": -0.4
-          },
-          {
-            "type": "face_to",
-            "target": "desk_1",
-            "value": null,
+            "target": "table",
             "hard": false,
             "weight": 2.0
           }
         ],
-        "is_static": true
+        "id": "box_3"
       },
       {
-        "Model": "computer chair",
+        "Model": "box",
         "constraints": [
           {
             "type": "beside",
-            "target": "desk_1",
-            "value": null,
+            "target": "table",
+            "side": "back",
+            "distance": [
+              0.8,
+              1.2
+            ],
             "hard": false,
-            "weight": 3.0,
-            "distance": 0.5,
-            "side": "front",
-            "offset": 0.4
+            "weight": 3.0
           },
           {
             "type": "face_to",
-            "target": "desk_1",
-            "value": null,
+            "target": "table",
             "hard": false,
             "weight": 2.0
           }
         ],
-        "is_static": true
-      },
-      {
-        "Model": "computer chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk_1",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": 0.5,
-            "side": "left",
-            "offset": 0.0
-          },
-          {
-            "type": "face_to",
-            "target": "desk_1",
-            "value": null,
-            "hard": false,
-            "weight": 2.0
-          }
-        ],
-        "is_static": true
-      },
-      {
-        "Model": "computer chair",
-        "constraints": [
-          {
-            "type": "beside",
-            "target": "desk_1",
-            "value": null,
-            "hard": false,
-            "weight": 3.0,
-            "distance": 0.5,
-            "side": "right",
-            "offset": 0.0
-          },
-          {
-            "type": "face_to",
-            "target": "desk_1",
-            "value": null,
-            "hard": false,
-            "weight": 2.0
-          }
-        ],
-        "is_static": true
+        "id": "box_4"
       }
     ],
     "room": {
-      "half_size": 2.5,
-      "type": "office"
+      "half_size": 3.0,
+      "type": "other"
     }
   }
 }

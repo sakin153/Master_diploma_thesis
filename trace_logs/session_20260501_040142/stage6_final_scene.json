@@ -1,0 +1,17 @@
+{
+  "world_path": "/home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest.xml",
+  "bodies": [
+    "table_1",
+    "chair_1",
+    "chair_2",
+    "chair_3"
+  ],
+  "bodies_count": 4,
+  "meshes": [
+    "mesh_table_1",
+    "mesh_chair_1",
+    "mesh_chair_2",
+    "mesh_chair_3"
+  ],
+  "meshes_count": 4
+}

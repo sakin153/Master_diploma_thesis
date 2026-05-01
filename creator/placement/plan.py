@@ -1,4 +1,7 @@
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+from creator.placement.command_interpreter import CommandInterpreter
+from creator.placement.scene_graph import SceneGraph
 
 
 def _safe_str(v: Any) -> str:
@@ -47,7 +50,10 @@ def _fallback_plan(chosen_models: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
                     "weight": 0.8,
                 }
             )
-        objects.append({"Model": name, "constraints": constraints})
+        # CRITICAL FIX: Add unique 'id' field
+        clean_name = name.replace(" ", "_").replace("-", "_")
+        obj_id = f"{clean_name}_{i}"
+        objects.append({"id": obj_id, "Model": name, "constraints": constraints})
     return {"objects": objects}
 
 
@@ -319,7 +325,7 @@ def _build_models_str(chosen_models: Sequence[Dict[str, Any]]) -> str:
     Example output:
       Objects (20 total):
         table x4  → table_1, table_2, table_3, table_4
-        computer chair x16  → computer chair_1 ... computer chair_16
+        computer chair x16  → computer chair_1, computer chair_2, ..., computer chair_15, computer chair_16
     """
     from collections import Counter
     counts: Counter = Counter()
@@ -329,14 +335,17 @@ def _build_models_str(chosen_models: Sequence[Dict[str, Any]]) -> str:
             counts[name] += 1
 
     lines = [f"Objects ({len(chosen_models)} total):"]
-    instance_idx: Dict[str, int] = {}
     for name, count in counts.items():
-        start = 1
-        end = count
         if count == 1:
             lines.append(f"  {name} x1  → {name}_1")
+        elif count <= 3:
+            # Small count: show all explicitly
+            instances = ", ".join(f"{name}_{i}" for i in range(1, count + 1))
+            lines.append(f"  {name} x{count}  → {instances}")
         else:
-            lines.append(f"  {name} x{count}  → {name}_1 ... {name}_{count}")
+            # Large count: show first 2, last 2, and total with critical reminder
+            lines.append(f"  {name} x{count}  → {name}_1, {name}_2, ..., {name}_{count-1}, {name}_{count}")
+            lines.append(f"    (CRITICAL: ALL {count} instances must be included)")
 
     return "\n".join(lines)
 
@@ -350,9 +359,18 @@ def build_semantic_plan(
     chosen_models: Sequence[Dict[str, Any]],
     context_models: Sequence[Dict[str, Any]],
     scene_spec: Any = None,
+    use_scene_graph: bool = False,
+    command_interpreter: Optional[CommandInterpreter] = None,
 ) -> Dict[str, Any]:
     from creator.contexts_prompts.constraints import fmt_seating_plan_tmpl
 
+    # Initialize command interpreter if not provided
+    if command_interpreter is None:
+        command_interpreter = CommandInterpreter()
+
+    # Parse the query for precise spatial constraints
+    spatial_command = command_interpreter.parse_spatial_command(query)
+    
     # ---------------------------------------------------------------
     # Stage A: Floor plan — anchors + large furniture only
     # ---------------------------------------------------------------
@@ -368,7 +386,7 @@ def build_semantic_plan(
 
     # If nothing to split, fall back to single call
     if not child_models:
-        return _build_plan_single(
+        plan = _build_plan_single(
             prompt_model=prompt_model,
             prompt_template=prompt_template,
             query=query,
@@ -376,6 +394,16 @@ def build_semantic_plan(
             chosen_models=chosen_models,
             scene_spec=scene_spec,
         )
+        
+        # Apply precise constraints from command interpreter
+        if spatial_command.precise_constraints:
+            plan = command_interpreter.validate_llm_plan(query, plan)
+        
+        # Build scene graph if requested
+        if use_scene_graph:
+            plan = _build_scene_graph_from_plan(plan, spatial_command)
+        
+        return plan
 
     # Call 1: place anchors + large furniture
     anchor_plan = _build_plan_single(
@@ -400,31 +428,86 @@ def build_semantic_plan(
         anchor_counts[name] += 1
         anchors_list.append(f"{name}_{anchor_counts[name]}")
 
+    # CRITICAL: Verify all anchors are present before proceeding to seating
+    import re
+    import logging
+    def _normalize_name_local(name: str) -> str:
+        return re.sub(r'_\d+$', '', name)
+    
+    expected_anchor_counts = Counter(_normalize_name_local(_safe_str(m.get("Model") or m.get("name"))) 
+                                     for m in anchor_models if _safe_str(m.get("Model") or m.get("name")))
+    actual_anchor_counts = Counter(_normalize_name_local(a.split('_')[0] if '_' in a else a) 
+                                   for a in anchors_list)
+    
+    # Log anchor placement results
+    logging.info(f"Stage 1 (anchors): Expected {dict(expected_anchor_counts)}, Got {dict(actual_anchor_counts)}")
+    logging.info(f"Stage 1 (anchors): Placed anchors: {anchors_list}")
+    
+    # Log if anchors are missing
+    for anchor_type, expected_count in expected_anchor_counts.items():
+        actual_count = actual_anchor_counts.get(anchor_type, 0)
+        if actual_count < expected_count:
+            logging.warning(
+                f"Stage 1 (anchors): Expected {expected_count} {anchor_type}(s), "
+                f"but only {actual_count} were placed. Fallback will add missing anchors."
+            )
+
     anchors_str = "\n".join(f"  - {a}" for a in anchors_list)
     children_str = _build_models_str(child_models)
+    
+    # Calculate expected distribution for the seating prompt
+    num_anchors = len(anchors_list)
+    num_children = len(child_models)
+    children_per_anchor = num_children // num_anchors if num_anchors > 0 else 0
+    
+    distribution_hint = ""
+    if num_anchors > 0 and children_per_anchor > 0:
+        distribution_hint = f"\n\nDISTRIBUTION: {num_children} children across {num_anchors} anchors = {children_per_anchor} children per anchor"
 
-    # Call 2: assign seating around the placed anchors
+    # Call 2: assign seating around the placed anchors (with retry logic)
     seating_content = fmt_seating_plan_tmpl.format(
         anchors_str=anchors_str,
-        children_str=children_str,
+        children_str=children_str + distribution_hint,
     )
-    try:
+    
+    raw2 = None
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            raw2 = prompt_model(seating_content, query)
-        except TypeError:
-            raw2 = prompt_model(seating_content, query, chosen_model)
-    except Exception:
-        raw2 = None
+            try:
+                raw2 = prompt_model(seating_content, query)
+            except TypeError:
+                raw2 = prompt_model(seating_content, query, chosen_model)
+            
+            # If we got a valid response, break
+            if isinstance(raw2, dict) and "objects" in raw2:
+                logging.info(f"Stage 2 (seating): LLM returned valid response on attempt {attempt + 1}")
+                break
+            else:
+                logging.warning(f"Stage 2 (seating): LLM returned invalid response type on attempt {attempt + 1}: {type(raw2)}")
+                raw2 = None
+                
+        except Exception as e:
+            logging.error(f"Stage 2 (seating): LLM call failed on attempt {attempt + 1}: {e}")
+            raw2 = None
+            
+        if attempt < max_retries - 1:
+            logging.info(f"Stage 2 (seating): Retrying... (attempt {attempt + 2}/{max_retries})")
+    
+    if raw2 is None:
+        logging.error("Stage 2 (seating): All retry attempts failed, proceeding with fallback")
 
     child_objects: List[Dict[str, Any]] = []
     child_names = {_safe_str(m.get("Model") or m.get("name")).lower() for m in child_models}
     if isinstance(raw2, dict):
+        logging.info(f"Stage 2 (seating): LLM returned {len(raw2.get('objects', []))} objects")
         for item in (raw2.get("objects") or []):
             if not isinstance(item, dict):
                 continue
             model_name = _safe_str(item.get("Model") or item.get("name"))
             # Only accept objects that are actually children — ignore tables/anchors LLM may have included
             if model_name.lower() not in child_names:
+                logging.debug(f"Stage 2 (seating): Skipping non-child object: {model_name}")
                 continue
             cons = [_normalize_constraint(c) for c in (item.get("constraints") or [])
                     if isinstance(c, dict)]
@@ -444,6 +527,9 @@ def build_semantic_plan(
             if "is_static" in item:
                 entry["is_static"] = bool(item["is_static"])
             child_objects.append(entry)
+        logging.info(f"Stage 2 (seating): Accepted {len(child_objects)} child objects")
+    else:
+        logging.warning(f"Stage 2 (seating): LLM returned invalid response type: {type(raw2)}")
 
     # Merge: anchor plan objects + child objects
     all_objects = list(anchor_plan.get("objects", [])) + child_objects
@@ -455,7 +541,34 @@ def build_semantic_plan(
             if isinstance(c, dict) and c.get("type") in ("wall_mount", "wall_mounted"):
                 obj["is_static"] = True
 
-    return {"objects": all_objects}
+    # CRITICAL FIX: Add unique 'id' field to each object
+    # Universal Placement System requires 'id' and 'type' fields for each object
+    for i, obj in enumerate(all_objects):
+        if "id" not in obj:
+            model_name = _safe_str(obj.get("Model", f"object_{i}"))
+            # Create unique ID from model name + index
+            clean_name = model_name.replace(" ", "_").replace("-", "_")
+            obj["id"] = f"{clean_name}_{i}"
+        
+        # Add 'type' field if missing
+        if "type" not in obj:
+            # Infer type from is_static or model name
+            if obj.get("is_static", True):
+                obj["type"] = "furniture"
+            else:
+                obj["type"] = "small_object"
+
+    plan = {"objects": all_objects}
+    
+    # Apply precise constraints from command interpreter
+    if spatial_command.precise_constraints:
+        plan = command_interpreter.validate_llm_plan(query, plan)
+    
+    # Build scene graph if requested
+    if use_scene_graph:
+        plan = _build_scene_graph_from_plan(plan, spatial_command)
+    
+    return plan
 
 
 def _build_plan_single(
@@ -535,10 +648,40 @@ def _build_plan_single(
     objects = _ensure_plan_covers_chosen_models(objects, chosen_models)
     objects = _stabilize_dense_group_constraints(objects)
 
+    # Validate that all chosen_models are present (post-validation)
+    from collections import Counter
+    import re
+    def _normalize_name_local(name: str) -> str:
+        return re.sub(r'_\d+$', '', name)
+    
+    expected_counts = Counter(_normalize_name_local(_safe_str(m.get("Model") or m.get("name"))) 
+                              for m in chosen_models if _safe_str(m.get("Model") or m.get("name")))
+    actual_counts = Counter(_normalize_name_local(_safe_str(obj.get("Model"))) 
+                           for obj in objects if _safe_str(obj.get("Model")))
+    
+    for obj_type, expected_count in expected_counts.items():
+        actual_count = actual_counts.get(obj_type, 0)
+        if actual_count < expected_count:
+            # Log warning - _ensure_plan_covers_chosen_models should have fixed this
+            import logging
+            logging.warning(
+                f"Post-validation: Expected {expected_count} {obj_type}(s), "
+                f"but plan contains {actual_count}. This should have been fixed by fallback."
+            )
+
     for obj in objects:
         for c in (obj.get("constraints") or []):
             if isinstance(c, dict) and c.get("type") in ("wall_mount", "wall_mounted"):
                 obj["is_static"] = True
+
+    # CRITICAL FIX: Add unique 'id' field to each object
+    # Universal Placement System requires 'id' field for each object
+    for i, obj in enumerate(objects):
+        if "id" not in obj:
+            model_name = _safe_str(obj.get("Model", f"object_{i}"))
+            # Create unique ID from model name + index
+            clean_name = model_name.replace(" ", "_").replace("-", "_")
+            obj["id"] = f"{clean_name}_{i}"
 
     return {"objects": objects}
 
@@ -597,6 +740,27 @@ def _build_plan_single(
     objects = _ensure_plan_covers_chosen_models(objects, chosen_models)
     objects = _stabilize_dense_group_constraints(objects)
     
+    # Validate that all chosen_models are present (post-validation)
+    from collections import Counter
+    import re
+    def _normalize_name_local(name: str) -> str:
+        return re.sub(r'_\d+$', '', name)
+    
+    expected_counts = Counter(_normalize_name_local(_safe_str(m.get("Model") or m.get("name"))) 
+                              for m in chosen_models if _safe_str(m.get("Model") or m.get("name")))
+    actual_counts = Counter(_normalize_name_local(_safe_str(obj.get("Model"))) 
+                           for obj in objects if _safe_str(obj.get("Model")))
+    
+    for obj_type, expected_count in expected_counts.items():
+        actual_count = actual_counts.get(obj_type, 0)
+        if actual_count < expected_count:
+            # Log warning - _ensure_plan_covers_chosen_models should have fixed this
+            import logging
+            logging.warning(
+                f"Post-validation: Expected {expected_count} {obj_type}(s), "
+                f"but plan contains {actual_count}. This should have been fixed by fallback."
+            )
+    
     # Auto-set is_static=True for wall-mounted objects
     for obj in objects:
         constraints = obj.get("constraints", [])
@@ -607,3 +771,248 @@ def _build_plan_single(
                     break
 
     return {"objects": objects}
+
+
+
+def _build_scene_graph_from_plan(
+    plan: Dict[str, Any],
+    spatial_command: Any,
+) -> Dict[str, Any]:
+    """Build a hierarchical scene graph from a flat semantic plan.
+
+    This function analyzes the constraints in the plan to determine
+    parent-child relationships and builds a SceneGraph structure.
+    Objects with 'on_top_of' or 'beside' constraints become children
+    of their target objects.
+
+    Args:
+        plan: Flat semantic plan with objects and constraints
+        spatial_command: Parsed spatial command with positioning info
+
+    Returns:
+        Plan with added 'scene_graph' key containing SceneGraph structure
+    """
+    scene_graph = SceneGraph()
+    objects = plan.get("objects", [])
+
+    # Track which objects have been added to the graph
+    added_objects = {}
+
+    # First pass: identify anchor objects (no parent relationships)
+    anchor_objects = []
+    child_objects = []
+
+    for obj in objects:
+        name = _safe_str(obj.get("Model"))
+        if not name:
+            continue
+
+        constraints = obj.get("constraints", [])
+        has_parent_constraint = False
+
+        for c in constraints:
+            if not isinstance(c, dict):
+                continue
+            ctype = _safe_str(c.get("type")).lower()
+
+            # These constraint types indicate a parent-child relationship
+            if ctype in ("on_top_of", "beside", "inside"):
+                has_parent_constraint = True
+                break
+
+        if has_parent_constraint:
+            child_objects.append(obj)
+        else:
+            anchor_objects.append(obj)
+
+    # Second pass: add anchor objects to scene graph (children of root)
+    for obj in anchor_objects:
+        name = _safe_str(obj.get("Model"))
+        object_type = name.split("_")[0] if "_" in name else name
+
+        # Extract anchor points based on object type
+        anchor_points = _generate_anchor_points_for_object(
+            name, object_type
+        )
+
+        node = scene_graph.add_object(
+            object_id=name,
+            object_type=object_type,
+            parent=None,  # Will be added to root
+            constraints=obj.get("constraints", []),
+            anchor_points=anchor_points,
+            metadata={
+                "is_static": obj.get("is_static", False),
+                "original_model": obj.get("Model"),
+            }
+        )
+        added_objects[name] = node
+
+    # Third pass: add child objects with parent relationships
+    for obj in child_objects:
+        name = _safe_str(obj.get("Model"))
+        object_type = name.split("_")[0] if "_" in name else name
+
+        # Find parent from constraints
+        parent_node = None
+        for c in obj.get("constraints", []):
+            if not isinstance(c, dict):
+                continue
+            ctype = _safe_str(c.get("type")).lower()
+
+            if ctype in ("on_top_of", "beside", "inside"):
+                target = _safe_str(c.get("target"))
+                if target in added_objects:
+                    parent_node = added_objects[target]
+                    break
+
+        # If no parent found, add to root
+        anchor_points = _generate_anchor_points_for_object(
+            name, object_type
+        )
+
+        node = scene_graph.add_object(
+            object_id=name,
+            object_type=object_type,
+            parent=parent_node,
+            constraints=obj.get("constraints", []),
+            anchor_points=anchor_points,
+            metadata={
+                "is_static": obj.get("is_static", False),
+                "original_model": obj.get("Model"),
+            }
+        )
+        added_objects[name] = node
+
+    # Add semantic relationships based on spatial command
+    semantic_relationships = _extract_semantic_relationships(
+        objects, spatial_command
+    )
+
+    # Add scene graph to plan
+    plan_with_graph = dict(plan)
+    plan_with_graph["scene_graph"] = scene_graph
+    plan_with_graph["semantic_relationships"] = semantic_relationships
+
+    return plan_with_graph
+
+
+def _generate_anchor_points_for_object(
+    object_id: str,
+    object_type: str,
+) -> List[Dict[str, Any]]:
+    """Generate anchor points for an object based on its type.
+
+    Args:
+        object_id: Unique identifier for the object
+        object_type: Type/category of the object
+
+    Returns:
+        List of anchor point dictionaries
+    """
+    anchor_points = []
+
+    # Surface objects (tables, shelves, etc.) provide top surface anchors
+    surface_types = {"table", "desk", "shelf", "counter", "cabinet"}
+    if any(t in object_type.lower() for t in surface_types):
+        anchor_points.extend([
+            {
+                "id": f"{object_id}_top_center",
+                "anchor_type": "surface",
+                "position": "top_center",
+                "available": True,
+            },
+            {
+                "id": f"{object_id}_top_front",
+                "anchor_type": "surface",
+                "position": "top_front",
+                "available": True,
+            },
+            {
+                "id": f"{object_id}_top_back",
+                "anchor_type": "surface",
+                "position": "top_back",
+                "available": True,
+            },
+        ])
+
+    # All objects provide edge anchors for beside positioning
+    for side in ["front", "back", "left", "right"]:
+        anchor_points.append({
+            "id": f"{object_id}_edge_{side}",
+            "anchor_type": "edge",
+            "position": f"edge_{side}",
+            "available": True,
+        })
+
+    return anchor_points
+
+
+def _extract_semantic_relationships(
+    objects: List[Dict[str, Any]],
+    spatial_command: Any,
+) -> List[Dict[str, Any]]:
+    """Extract semantic relationships between objects from constraints.
+
+    Args:
+        objects: List of objects with constraints
+        spatial_command: Parsed spatial command
+
+    Returns:
+        List of semantic relationship dictionaries
+    """
+    relationships = []
+
+    for obj in objects:
+        source = _safe_str(obj.get("Model"))
+        if not source:
+            continue
+
+        for c in obj.get("constraints", []):
+            if not isinstance(c, dict):
+                continue
+
+            ctype = _safe_str(c.get("type")).lower()
+            target = _safe_str(c.get("target"))
+
+            if not target:
+                continue
+
+            # Map constraint types to semantic relationships
+            relationship_type = None
+            if ctype == "on_top_of":
+                relationship_type = "supported_by"
+            elif ctype == "beside":
+                relationship_type = "adjacent_to"
+            elif ctype == "inside":
+                relationship_type = "contained_by"
+            elif ctype == "near":
+                relationship_type = "near"
+            elif ctype == "face_to":
+                relationship_type = "facing"
+
+            if relationship_type:
+                relationships.append({
+                    "source": source,
+                    "target": target,
+                    "type": relationship_type,
+                    "constraint": c,
+                })
+
+    # Add relationships from spatial command precise constraints
+    for precise in getattr(spatial_command, "precise_constraints", []):
+        if precise.source_object and precise.target_object:
+            rel_type = (
+                "precise_distance"
+                if precise.constraint_type == "distance"
+                else "precise_angle"
+            )
+            relationships.append({
+                "source": precise.source_object,
+                "target": precise.target_object,
+                "type": rel_type,
+                "value": precise.value,
+                "unit": precise.unit,
+            })
+
+    return relationships

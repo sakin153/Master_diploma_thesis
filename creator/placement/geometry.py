@@ -324,7 +324,7 @@ def gradient_resolve_overlaps(
     step_size: float = 0.05,
     collision_margin: float = 0.01,
     semantic_plan: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], bool]:
     """Move objects apart using gradient-based overlap resolution.
 
     For each pair of overlapping objects at the same Z level, compute a
@@ -336,9 +336,17 @@ def gradient_resolve_overlaps(
     
     Objects with on_top_of constraints are marked as anchored and excluded
     from gradient updates to preserve LLM-based surface positioning.
+    
+    Returns:
+        Tuple of (resolved_models, converged: bool)
+        converged is True if all overlaps were resolved, False if stuck
     """
     resolved = [dict(m) for m in models]
     n = len(resolved)
+    
+    # Convergence tracking: track overlap count per iteration
+    overlap_history: List[int] = []
+    stagnation_threshold = 20  # iterations without improvement
     
     # Identify anchored objects (on surfaces) from semantic plan
     anchored = [False] * n
@@ -384,15 +392,43 @@ def gradient_resolve_overlaps(
                             print(f"[anchor] {m.get('Model')} anchored (region:middle)")
                         break
 
-    for _ in range(iterations):
+    for iteration_idx in range(iterations):
         grads = [Vec2(0.0, 0.0) for _ in range(n)]
         any_overlap = False
+        overlap_count = 0
+        unresolvable_collisions = 0
 
         # Pairwise overlap gradients (only for objects at same Z level)
         for i in range(n):
             for j in range(i + 1, n):
-                # Skip if both objects are anchored (on surfaces)
+                # Check if both objects are anchored (on surfaces)
                 if anchored[i] and anchored[j]:
+                    # Both anchored - check if they overlap (unresolvable)
+                    if not _z_intervals_overlap(resolved[i], resolved[j]):
+                        continue
+                    
+                    obb_i = model_to_obb(resolved[i], inflation=collision_margin)
+                    obb_j = model_to_obb(resolved[j], inflation=collision_margin)
+                    sep_dir, depth = obb_separation_vector(obb_i, obb_j)
+                    
+                    if depth > 0:
+                        # Unresolvable collision between anchored objects
+                        unresolvable_collisions += 1
+                        name_i = str(
+                            resolved[i].get("Model")
+                            or resolved[i].get("name")
+                            or f"object_{i}"
+                        )
+                        name_j = str(
+                            resolved[j].get("Model")
+                            or resolved[j].get("name")
+                            or f"object_{j}"
+                        )
+                        print(
+                            f"[gradient_resolve] Unresolvable collision: "
+                            f"{name_i} <-> {name_j} "
+                            f"(both anchored, depth={depth:.4f}m)"
+                        )
                     continue
                 
                 # Skip objects at different Z levels (stacked objects)
@@ -414,11 +450,51 @@ def gradient_resolve_overlaps(
                 if depth <= 0:
                     continue
                 any_overlap = True
+                overlap_count += 1
                 dist = (obb_i.center - obb_j.center).length()
-                scale = 4.0 * depth / max(0.01, dist)
+                
+                # Adaptive gradient scaling based on overlap depth
+                # Deep overlaps (> 0.1m): use larger step multiplier (6.0)
+                # Shallow overlaps (< 0.02m): use smaller step multiplier (2.0)
+                # Medium overlaps: use default (4.0)
+                if depth > 0.1:
+                    step_multiplier = 6.0
+                elif depth < 0.02:
+                    step_multiplier = 2.0
+                else:
+                    step_multiplier = 4.0
+                
+                scale = step_multiplier * depth / max(0.01, dist)
                 grad = sep_dir * (scale * 0.625)
                 grads[i] = grads[i] + grad
                 grads[j] = grads[j] - grad
+        
+        # Track overlap count for convergence detection
+        overlap_history.append(overlap_count)
+        
+        # Check for unresolvable collisions (both objects anchored)
+        if unresolvable_collisions > 0:
+            print(
+                f"[gradient_resolve] Convergence failure: "
+                f"{unresolvable_collisions} unresolvable collision(s) "
+                f"between anchored objects"
+            )
+            return resolved, False  # Return with convergence failure flag
+        
+        # Check for stagnation: if overlap count hasn't decreased for N iterations
+        if len(overlap_history) >= stagnation_threshold:
+            recent_counts = overlap_history[-stagnation_threshold:]
+            min_recent = min(recent_counts)
+            # If current overlap count is not better than the best in recent history
+            if overlap_count > 0 and overlap_count >= min_recent:
+                # Check if we've been stuck at this level
+                if all(c >= min_recent for c in recent_counts):
+                    print(
+                        f"[gradient_resolve] Convergence failure detected at iteration "
+                        f"{iteration_idx}: overlap count stuck at {overlap_count} "
+                        f"for {stagnation_threshold} iterations"
+                    )
+                    return resolved, False  # Return with convergence failure flag
 
         # Out-of-bounds gradients
         all_in_bounds = True
@@ -441,6 +517,7 @@ def gradient_resolve_overlaps(
                 all_in_bounds = False
 
         if not any_overlap and all_in_bounds:
+            print(f"[gradient_resolve] Converged successfully at iteration {iteration_idx}")
             break
 
         # Apply gradients (skip anchored objects on surfaces)
@@ -523,7 +600,7 @@ def gradient_resolve_overlaps(
 
         resolved[i]["Pose"] = pose
 
-    return resolved
+    return resolved, True  # Return with success flag
 
 
 # ---------------------------------------------------------------------------

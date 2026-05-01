@@ -1,0 +1,12 @@
+{
+  "world_path": "/home/sakin153/Рабочий стол/world-creator/.cache/ciare/worlds/scene_latest.xml",
+  "bodies": [
+    "wall_north",
+    "wall_south",
+    "wall_east",
+    "wall_west"
+  ],
+  "bodies_count": 4,
+  "meshes": [],
+  "meshes_count": 0
+}

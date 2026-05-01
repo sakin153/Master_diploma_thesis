@@ -129,19 +129,21 @@ def _instance_constraints(
     Plan objects with the same name are matched round-robin to placed
     instances — handles duplicates like four crates that each declared
     `on_top_of(table)` separately in the plan.
+    
+    ALSO copies is_static and size from semantic_plan to placed_models.
     """
     objects = (
         semantic_plan.get("objects", []) if isinstance(semantic_plan, dict) else []
     )
-    by_name: Dict[str, List[List[Dict[str, Any]]]] = {}
+    by_name: Dict[str, List[Dict[str, Any]]] = {}
     for obj in objects:
         if not isinstance(obj, dict):
             continue
         name = str(obj.get("Model") or obj.get("name") or "")
         if not name:
             continue
-        cs = obj.get("constraints") if isinstance(obj.get("constraints"), list) else []
-        by_name.setdefault(name, []).append([c for c in cs if isinstance(c, dict)])
+        # Store full object (not just constraints) for later copying
+        by_name.setdefault(name, []).append(obj)
 
     rr: Dict[str, int] = {}
     rows: List[List[Dict[str, Any]]] = []
@@ -153,7 +155,23 @@ def _instance_constraints(
             continue
         i = rr.get(name, 0) % len(variants)
         rr[name] = rr.get(name, 0) + 1
-        rows.append(variants[i])
+        
+        # Get the plan object for this instance
+        plan_obj = variants[i]
+        
+        # CRITICAL FIX: Copy is_static and size from semantic_plan to placed model
+        if "is_static" in plan_obj:
+            m["is_static"] = plan_obj["is_static"]
+            print(f"[small_objects] ✓ Copied is_static={plan_obj['is_static']} for {name}")
+        
+        if "size" in plan_obj:
+            m["size"] = plan_obj["size"]
+            print(f"[small_objects] ✓ Copied size={plan_obj['size']} for {name}")
+        
+        # Extract constraints
+        cs = plan_obj.get("constraints") if isinstance(plan_obj.get("constraints"), list) else []
+        rows.append([c for c in cs if isinstance(c, dict)])
+    
     return rows
 
 

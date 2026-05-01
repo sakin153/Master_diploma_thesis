@@ -4,7 +4,11 @@ from creator.xml.empty_world import empty_world
 
 class Cache:
     def __init__(self, cache: str = None):
-        self.cache_path = cache or "/var/tmp/ciare"
+        # Use project directory instead of /var/tmp to avoid tmpfs quota issues
+        if cache is None:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            cache = os.path.join(project_root, ".cache", "ciare")
+        self.cache_path = cache
         self.worlds_path = os.path.join(self.cache_path, "worlds")
         self.world_db_file = os.path.join(self.cache_path, "gz_worlds.json")
         self.model_db_file = os.path.join(self.cache_path, "gz_models.json")

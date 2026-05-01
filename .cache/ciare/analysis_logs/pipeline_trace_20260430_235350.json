@@ -1,0 +1,838 @@
+{
+  "pipeline_trace": {
+    "pipeline_start_time": "2026-04-30T23:53:50.775513",
+    "total_stages": 5,
+    "stages": [
+      {
+        "name": "semantic_plan",
+        "timestamp": "2026-04-30T23:53:50.775556",
+        "object_count": 4,
+        "objects": [
+          {
+            "id": "table_1",
+            "Model": "table",
+            "type": "furniture",
+            "size": {
+              "width": 1.1,
+              "length": 0.78,
+              "height": 1.41
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            },
+            "orientation": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/0033f5a78e7f5843a139ea446f8b8bbd/mesh/wooden_patterned_table.glb",
+            "uuid": "0033f5a78e7f5843a139ea446f8b8bbd"
+          },
+          {
+            "id": "chair_1",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "relative": {
+                "relative_to": "table_1",
+                "direction": "front",
+                "distance": 0.6,
+                "reference_point": "center"
+              }
+            },
+            "orientation": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          },
+          {
+            "id": "chair_2",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "relative": {
+                "relative_to": "table_1",
+                "direction": "back_left",
+                "distance": 0.6,
+                "reference_point": "center"
+              }
+            },
+            "orientation": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          },
+          {
+            "id": "chair_3",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "relative": {
+                "relative_to": "table_1",
+                "direction": "back_right",
+                "distance": 0.6,
+                "reference_point": "center"
+              }
+            },
+            "orientation": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          }
+        ]
+      },
+      {
+        "name": "distance_resolver",
+        "timestamp": "2026-04-30T23:53:50.775633",
+        "object_count": 4,
+        "objects": [
+          {
+            "id": "table_1",
+            "Model": "table",
+            "type": "furniture",
+            "size": {
+              "width": 1.1,
+              "length": 0.78,
+              "height": 1.41
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            },
+            "orientation": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/0033f5a78e7f5843a139ea446f8b8bbd/mesh/wooden_patterned_table.glb",
+            "uuid": "0033f5a78e7f5843a139ea446f8b8bbd"
+          },
+          {
+            "id": "chair_1",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.6,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "orientation": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          },
+          {
+            "id": "chair_2",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": -0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "orientation": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          },
+          {
+            "id": "chair_3",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "orientation": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          }
+        ]
+      },
+      {
+        "name": "orientation_resolver",
+        "timestamp": "2026-04-30T23:53:50.775683",
+        "object_count": 4,
+        "objects": [
+          {
+            "id": "table_1",
+            "Model": "table",
+            "type": "furniture",
+            "size": {
+              "width": 1.1,
+              "length": 0.78,
+              "height": 1.41
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            },
+            "orientation": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              }
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/0033f5a78e7f5843a139ea446f8b8bbd/mesh/wooden_patterned_table.glb",
+            "uuid": "0033f5a78e7f5843a139ea446f8b8bbd"
+          },
+          {
+            "id": "chair_1",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.6,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "orientation": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          },
+          {
+            "id": "chair_2",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": -0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "orientation": {
+              "absolute": {
+                "yaw_deg": 16.586237867109496,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          },
+          {
+            "id": "chair_3",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "position": {
+              "absolute": {
+                "x": 0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "orientation": {
+              "absolute": {
+                "yaw_deg": 343.4137621328905,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            },
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "uuid": "aeea9a5e33665bb3b31544206cb2a929"
+          }
+        ]
+      },
+      {
+        "name": "placement_executor",
+        "timestamp": "2026-04-30T23:53:50.775971",
+        "object_count": 4,
+        "objects": [
+          {
+            "id": "table_1",
+            "Model": "table",
+            "type": "furniture",
+            "size": {
+              "width": 1.1,
+              "length": 0.78,
+              "height": 1.41
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/0033f5a78e7f5843a139ea446f8b8bbd/mesh/wooden_patterned_table.glb",
+            "position": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "orientation": {
+              "yaw_deg": 0.0,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          },
+          {
+            "id": "chair_1",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "position": {
+              "x": 0.0,
+              "y": 0.6,
+              "z": 0.34
+            },
+            "orientation": {
+              "yaw_deg": 0.0,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          },
+          {
+            "id": "chair_2",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "position": {
+              "x": -0.42419999999999997,
+              "y": -0.42419999999999997,
+              "z": 0.34
+            },
+            "orientation": {
+              "yaw_deg": 16.586237867109496,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          },
+          {
+            "id": "chair_3",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "position": {
+              "x": 0.42419999999999997,
+              "y": -0.42419999999999997,
+              "z": 0.34
+            },
+            "orientation": {
+              "yaw_deg": 343.4137621328905,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          }
+        ]
+      },
+      {
+        "name": "scene_assembly",
+        "timestamp": "2026-04-30T23:53:50.778289",
+        "object_count": 4,
+        "objects": [
+          {
+            "id": "table_1",
+            "Model": "table",
+            "type": "furniture",
+            "size": {
+              "width": 1.1,
+              "length": 0.78,
+              "height": 1.41
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/0033f5a78e7f5843a139ea446f8b8bbd/mesh/wooden_patterned_table.glb",
+            "position": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            },
+            "orientation": {
+              "yaw_deg": 0.0,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          },
+          {
+            "id": "chair_1",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "position": {
+              "x": 0.0,
+              "y": 0.6,
+              "z": 0.34
+            },
+            "orientation": {
+              "yaw_deg": 0.0,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          },
+          {
+            "id": "chair_2",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "position": {
+              "x": -0.42419999999999997,
+              "y": -0.42419999999999997,
+              "z": 0.34
+            },
+            "orientation": {
+              "yaw_deg": 16.586237867109496,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          },
+          {
+            "id": "chair_3",
+            "Model": "computer chair",
+            "type": "furniture",
+            "size": {
+              "width": 0.66,
+              "length": 1.2,
+              "height": 0.68
+            },
+            "is_static": true,
+            "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+            "position": {
+              "x": 0.42419999999999997,
+              "y": -0.42419999999999997,
+              "z": 0.34
+            },
+            "orientation": {
+              "yaw_deg": 343.4137621328905,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            },
+            "metadata": {}
+          }
+        ]
+      }
+    ],
+    "changes": [
+      {
+        "from_stage": "semantic_plan",
+        "to_stage": "distance_resolver",
+        "added": [],
+        "removed": [],
+        "modified": [
+          {
+            "id": "chair_1",
+            "field": "position",
+            "old": {
+              "relative": {
+                "relative_to": "table_1",
+                "direction": "front",
+                "distance": 0.6,
+                "reference_point": "center"
+              }
+            },
+            "new": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.6,
+                "z": 0.34
+              },
+              "relative": null
+            }
+          },
+          {
+            "id": "chair_3",
+            "field": "position",
+            "old": {
+              "relative": {
+                "relative_to": "table_1",
+                "direction": "back_right",
+                "distance": 0.6,
+                "reference_point": "center"
+              }
+            },
+            "new": {
+              "absolute": {
+                "x": 0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            }
+          },
+          {
+            "id": "chair_2",
+            "field": "position",
+            "old": {
+              "relative": {
+                "relative_to": "table_1",
+                "direction": "back_left",
+                "distance": 0.6,
+                "reference_point": "center"
+              }
+            },
+            "new": {
+              "absolute": {
+                "x": -0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            }
+          }
+        ]
+      },
+      {
+        "from_stage": "distance_resolver",
+        "to_stage": "orientation_resolver",
+        "added": [],
+        "removed": [],
+        "modified": [
+          {
+            "id": "chair_1",
+            "field": "orientation",
+            "old": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "new": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            }
+          },
+          {
+            "id": "chair_3",
+            "field": "orientation",
+            "old": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "new": {
+              "absolute": {
+                "yaw_deg": 343.4137621328905,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            }
+          },
+          {
+            "id": "chair_2",
+            "field": "orientation",
+            "old": {
+              "relative": {
+                "facing": "table_1",
+                "facing_direction": "front"
+              }
+            },
+            "new": {
+              "absolute": {
+                "yaw_deg": 16.586237867109496,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            }
+          }
+        ]
+      },
+      {
+        "from_stage": "orientation_resolver",
+        "to_stage": "placement_executor",
+        "added": [],
+        "removed": [],
+        "modified": [
+          {
+            "id": "chair_1",
+            "field": "position",
+            "old": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.6,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "new": {
+              "x": 0.0,
+              "y": 0.6,
+              "z": 0.34
+            }
+          },
+          {
+            "id": "chair_1",
+            "field": "orientation",
+            "old": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            },
+            "new": {
+              "yaw_deg": 0.0,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            }
+          },
+          {
+            "id": "table_1",
+            "field": "position",
+            "old": {
+              "absolute": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+              }
+            },
+            "new": {
+              "x": 0.0,
+              "y": 0.0,
+              "z": 0.0
+            }
+          },
+          {
+            "id": "table_1",
+            "field": "orientation",
+            "old": {
+              "absolute": {
+                "yaw_deg": 0.0,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              }
+            },
+            "new": {
+              "yaw_deg": 0.0,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            }
+          },
+          {
+            "id": "chair_3",
+            "field": "position",
+            "old": {
+              "absolute": {
+                "x": 0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "new": {
+              "x": 0.42419999999999997,
+              "y": -0.42419999999999997,
+              "z": 0.34
+            }
+          },
+          {
+            "id": "chair_3",
+            "field": "orientation",
+            "old": {
+              "absolute": {
+                "yaw_deg": 343.4137621328905,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            },
+            "new": {
+              "yaw_deg": 343.4137621328905,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            }
+          },
+          {
+            "id": "chair_2",
+            "field": "position",
+            "old": {
+              "absolute": {
+                "x": -0.42419999999999997,
+                "y": -0.42419999999999997,
+                "z": 0.34
+              },
+              "relative": null
+            },
+            "new": {
+              "x": -0.42419999999999997,
+              "y": -0.42419999999999997,
+              "z": 0.34
+            }
+          },
+          {
+            "id": "chair_2",
+            "field": "orientation",
+            "old": {
+              "absolute": {
+                "yaw_deg": 16.586237867109496,
+                "pitch_deg": 0.0,
+                "roll_deg": 0.0
+              },
+              "relative": null
+            },
+            "new": {
+              "yaw_deg": 16.586237867109496,
+              "pitch_deg": 0.0,
+              "roll_deg": 0.0
+            }
+          }
+        ]
+      },
+      {
+        "from_stage": "placement_executor",
+        "to_stage": "scene_assembly",
+        "added": [],
+        "removed": [],
+        "modified": []
+      }
+    ]
+  }
+}

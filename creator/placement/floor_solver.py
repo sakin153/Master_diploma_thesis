@@ -114,6 +114,67 @@ def _edge_wall_proximity_score(
     return max(0.0, 1.0 - min_dist / room_half_size)
 
 
+def _compute_face_center_yaw(x: float, y: float) -> float:
+    """Compute yaw angle to face the center of the room (0, 0).
+    
+    For objects placed at edges/walls, this makes them face inward.
+    
+    Args:
+        x: Object x position
+        y: Object y position
+    
+    Returns:
+        Yaw angle in degrees that makes the object face toward (0, 0)
+    """
+    # Angle from object position toward center
+    angle_to_center = math.atan2(-y, -x)  # Negative because we want to face center
+    yaw_deg = math.degrees(angle_to_center)
+    return yaw_deg % 360.0
+
+
+def _get_yaw_candidates_for_position(
+    x: float,
+    y: float,
+    room_half_size: float,
+    constraints: List[Dict[str, Any]],
+    default_yaw_candidates: Sequence[float],
+) -> List[float]:
+    """Get yaw candidates for a position, with special handling for edge objects.
+    
+    Objects near walls (within 20% of room size) automatically get face-center yaw
+    candidates to make them face toward the room interior, regardless of constraints.
+    
+    Args:
+        x: Position x
+        y: Position y
+        room_half_size: Room half size
+        constraints: Object constraints (not used in current implementation)
+        default_yaw_candidates: Default yaw values to try
+    
+    Returns:
+        List of yaw angles to try for this position
+    """
+    # Check if position is near a wall (within 20% of room size)
+    dx = room_half_size - abs(x)
+    dy = room_half_size - abs(y)
+    min_dist_to_wall = min(dx, dy)
+    
+    # If close to wall, add face-center yaw to make object face inward
+    if min_dist_to_wall < room_half_size * 0.2:
+        face_center_yaw = _compute_face_center_yaw(x, y)
+        # Add face-center yaw plus small variations as primary candidates
+        yaw_candidates = [
+            face_center_yaw,
+            (face_center_yaw + 15) % 360.0,
+            (face_center_yaw - 15) % 360.0,
+        ]
+        # Also include default candidates as fallback
+        yaw_candidates.extend(default_yaw_candidates)
+        return yaw_candidates
+    
+    return list(default_yaw_candidates)
+
+
 def _relative_score(
     x: float,
     y: float,
@@ -546,7 +607,12 @@ def solve_floor_placements(
             best_for_state: List[Tuple[float, Dict[str, Any]]] = []
 
             for x, y in candidates:
-                for yaw in yaw_candidates_deg:
+                # Get yaw candidates for this position (special handling for edge objects)
+                position_yaw_candidates = _get_yaw_candidates_for_position(
+                    x, y, room_half_size, constraints, yaw_candidates_deg
+                )
+                
+                for yaw in position_yaw_candidates:
                     obb = model_to_obb(
                         m,
                         inflation=collision_inflation,
@@ -746,7 +812,7 @@ def solve_floor_placements(
     out = _reconstruct_output(full_placed_models, best["placed"])
 
     # Gradient-based post-pass to resolve any residual overlaps
-    out = gradient_resolve_overlaps(
+    out, _ = gradient_resolve_overlaps(
         out,
         room_half_size=room_half_size,
         iterations=100,
@@ -911,13 +977,21 @@ def _orientation_search_postpass(
         placed_lookup.setdefault(n, []).append(m)
 
     result = list(out)
-    yaw_candidates = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]
+    # More yaw candidates for finer orientation control
+    yaw_candidates = [0.0, 22.5, 45.0, 67.5, 90.0, 112.5, 135.0, 157.5, 
+                     180.0, 202.5, 225.0, 247.5, 270.0, 292.5, 315.0, 337.5]
 
     for i, m in enumerate(result):
         name = str(m.get("Model") or m.get("name") or "")
         constraints = plan_constraints.get(name, [])
         if not constraints:
             continue
+        
+        # Check if this object has face_to constraints
+        has_face_to = any(str(c.get("type", "")).lower() == "face_to" for c in constraints)
+        if has_face_to:
+            import logging
+            logging.info(f"[orientation] Processing {name} with face_to constraint")
 
         current_yaw = float(m.get("yaw_deg", 0.0))
         pose = m.get("Pose") or {"x": 0.0, "y": 0.0, "z": 0.0}
@@ -1008,11 +1082,19 @@ def _score_orientation(
                     tx, ty = float(pp.get("x", 0)), float(pp.get("y", 0))
                     dist = math.sqrt((x - tx) ** 2 + (y - ty) ** 2)
                     if dist > 1e-6:
+                        # Calculate angle from object to target
                         target_yaw = math.degrees(math.atan2(ty - y, tx - x))
+                        # Normalize to [0, 360)
+                        target_yaw = target_yaw % 360.0
+                        # Calculate angular difference (shortest path)
                         diff = abs((yaw - target_yaw + 180.0) % 360.0 - 180.0)
+                        # Score: 1.0 when perfectly aligned, 0.0 when 180° off
                         face_score = max(0.0, 1.0 - diff / 180.0)
                         weight = float(c.get("weight", 1.0))
-                        constraint_score += weight * face_score * 10.0  # Scale up for importance
+                        constraint_score += weight * face_score * 20.0  # Increased weight for importance
+                        # Debug logging
+                        import logging
+                        logging.debug(f"[face_to] {name} @ ({x:.2f},{y:.2f}) yaw={yaw:.0f}° -> {target_name} @ ({tx:.2f},{ty:.2f}): target_yaw={target_yaw:.0f}°, diff={diff:.0f}°, score={face_score:.2f}")
 
     return constraint_score - 250.0 * inbound - 100.0 * overlap
 
@@ -1033,7 +1115,7 @@ def _prepare_indexed_models(
         mm["Model"] = name
         mm["_index"] = i
 
-        # Assign constraints from plan
+        # Assign constraints from plan AND copy is_static, size from semantic_plan
         if isinstance(objects, list):
             per_model_rows = [
                 o for o in objects
@@ -1041,9 +1123,22 @@ def _prepare_indexed_models(
             ]
             if per_model_rows:
                 row_idx = rr_instance_idx.get(name, 0) % len(per_model_rows)
-                row_constraints = per_model_rows[row_idx].get("constraints")
+                plan_obj = per_model_rows[row_idx]
+                
+                # Copy constraints
+                row_constraints = plan_obj.get("constraints")
                 if isinstance(row_constraints, list):
                     mm["_constraints"] = row_constraints
+                
+                # CRITICAL FIX: Copy is_static and size from semantic_plan
+                if "is_static" in plan_obj:
+                    mm["is_static"] = plan_obj["is_static"]
+                    print(f"[floor_solver] ✓ Copied is_static={plan_obj['is_static']} for {name}")
+                
+                if "size" in plan_obj:
+                    mm["size"] = plan_obj["size"]
+                    print(f"[floor_solver] ✓ Copied size={plan_obj['size']} for {name}")
+                
                 rr_instance_idx[name] = rr_instance_idx.get(name, 0) + 1
 
         if "_constraints" not in mm:

@@ -6,7 +6,14 @@ User query: {query}
 Chosen models for this scene:
 {models_str}
 
-RULE: Output EXACTLY the objects listed above — no more, no less. Each object appears exactly once.
+CRITICAL RULE: You MUST include ALL N instances of each object type shown above.
+- If the list shows "table x4 → table_1, table_2, table_3, table_4", your output MUST contain all 4 tables
+- If the list shows "chair x16 → chair_1 ... chair_16", your output MUST contain all 16 chairs
+- Missing even one instance is a critical error
+
+Before generating JSON, verify:
+✓ Count of each object type in your output matches the count shown in "Objects (N total)" above
+✓ All instances are numbered sequentially: object_1, object_2, ..., object_N
 
 ---
 
@@ -158,6 +165,12 @@ The scene already has these anchor objects placed:
 Now assign constraints for these remaining objects:
 {children_str}
 
+CRITICAL DISTRIBUTION RULE:
+- You MUST distribute children EVENLY across ALL anchors listed above
+- Count the anchors above and divide children equally
+- Example: 4 anchors (table_1, table_2, table_3, table_4) and 16 children → assign EXACTLY 4 children to EACH anchor
+- Assign children sequentially: first N to anchor_1, next N to anchor_2, etc.
+
 Rules:
 - Each object gets EXACTLY ONE `beside` constraint pointing to one anchor, and ONE `face_to` the same anchor.
 - Distribute objects across anchors as the scene requires.
@@ -166,6 +179,7 @@ Rules:
   * 1 chair per side → offset: 0.0
   * 2 chairs per side → offsets: -0.3, +0.3
   * 3 chairs per side → offsets: -0.5, 0.0, +0.5
+  * 4 chairs per side → use all 4 sides (front, back, left, right) with offset 0.0
 - `distance`: gap from anchor edge to object center, in meters. Chairs: 0.4–0.6.
 - `is_static`: true for chairs/stools, false for small objects.
 
@@ -173,6 +187,8 @@ Output JSON only:
 ```json
 {{
   "objects": [
+    // Example: 2 tables, 8 chairs (4 per table)
+    // Chairs for table_1 (chair_1 through chair_4)
     {{
       "Model": "computer chair",
       "is_static": true,
@@ -185,7 +201,7 @@ Output JSON only:
       "Model": "computer chair",
       "is_static": true,
       "constraints": [
-        {{"type": "beside", "target": "table_1", "side": "front", "offset": -0.4, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "beside", "target": "table_1", "side": "back", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
         {{"type": "face_to", "target": "table_1", "hard": false, "weight": 2.0}}
       ]
     }},
@@ -193,8 +209,49 @@ Output JSON only:
       "Model": "computer chair",
       "is_static": true,
       "constraints": [
-        {{"type": "beside", "target": "table_1", "side": "front", "offset": 0.4, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "beside", "target": "table_1", "side": "left", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
         {{"type": "face_to", "target": "table_1", "hard": false, "weight": 2.0}}
+      ]
+    }},
+    {{
+      "Model": "computer chair",
+      "is_static": true,
+      "constraints": [
+        {{"type": "beside", "target": "table_1", "side": "right", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "face_to", "target": "table_1", "hard": false, "weight": 2.0}}
+      ]
+    }},
+    // Chairs for table_2 (chair_5 through chair_8)
+    {{
+      "Model": "computer chair",
+      "is_static": true,
+      "constraints": [
+        {{"type": "beside", "target": "table_2", "side": "front", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "face_to", "target": "table_2", "hard": false, "weight": 2.0}}
+      ]
+    }},
+    {{
+      "Model": "computer chair",
+      "is_static": true,
+      "constraints": [
+        {{"type": "beside", "target": "table_2", "side": "back", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "face_to", "target": "table_2", "hard": false, "weight": 2.0}}
+      ]
+    }},
+    {{
+      "Model": "computer chair",
+      "is_static": true,
+      "constraints": [
+        {{"type": "beside", "target": "table_2", "side": "left", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "face_to", "target": "table_2", "hard": false, "weight": 2.0}}
+      ]
+    }},
+    {{
+      "Model": "computer chair",
+      "is_static": true,
+      "constraints": [
+        {{"type": "beside", "target": "table_2", "side": "right", "offset": 0.0, "distance": 0.5, "hard": false, "weight": 3.0}},
+        {{"type": "face_to", "target": "table_2", "hard": false, "weight": 2.0}}
       ]
     }}
   ]

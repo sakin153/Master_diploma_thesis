@@ -438,7 +438,7 @@ def repair_layout_by_constraints(
 
         # After constraint repair, resolve any newly introduced overlaps using OBB/SAT.
         # Pass semantic_plan so on_top_of items stay anchored to their support.
-        repaired = gradient_resolve_overlaps(
+        repaired, _ = gradient_resolve_overlaps(
             repaired,
             room_half_size=room_half_size,
             iterations=60,
