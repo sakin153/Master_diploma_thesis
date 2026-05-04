@@ -1,0 +1,228 @@
+{
+  "stage": "4_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "table",
+      "size": [
+        1.2337291240692139,
+        0.7500001490116119,
+        1.7365700006484985
+      ],
+      "scale": 1.0,
+      "_height_m": 0.7500001490116119,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_0",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.37500007450580597
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.4982310359500948,
+        0.9,
+        0.5127315721187152
+      ],
+      "scale": 0.7500000074505807,
+      "_height_m": 0.9,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_1",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.0,
+        "y": 0.756,
+        "z": 0.45
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.4982310359500948,
+        0.9,
+        0.5127315721187152
+      ],
+      "scale": 0.7500000074505807,
+      "_height_m": 0.9,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_2",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.756,
+        "y": 0.0,
+        "z": 0.45
+      },
+      "yaw_deg": 90.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.4982310359500948,
+        0.9,
+        0.5127315721187152
+      ],
+      "scale": 0.7500000074505807,
+      "_height_m": 0.9,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_3",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.0,
+        "y": -0.756,
+        "z": 0.45
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.4982310359500948,
+        0.9,
+        0.5127315721187152
+      ],
+      "scale": 0.7500000074505807,
+      "_height_m": 0.9,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_4",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -0.756,
+        "y": 0.0,
+        "z": 0.45
+      },
+      "yaw_deg": 270.0
+    },
+    {
+      "Model": "plate",
+      "uuid": "b229e08a577257708ad239a5283dfa81",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/tableware/b229e08a577257708ad239a5283dfa81/mesh/plate.glb",
+      "_query_name": "plate",
+      "size": [
+        0.32000000000000006,
+        0.022225728567190395,
+        0.3196116316149179
+      ],
+      "scale": 1.1112847455071284,
+      "_height_m": 0.022225728567190395,
+      "save_fn": "b229e08a577257708ad239a5283dfa81_5",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.0,
+        "y": 0.688,
+        "z": 0.7611130132952071
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "plate",
+      "uuid": "b229e08a577257708ad239a5283dfa81",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/tableware/b229e08a577257708ad239a5283dfa81/mesh/plate.glb",
+      "_query_name": "plate",
+      "size": [
+        0.32000000000000006,
+        0.022225728567190395,
+        0.3196116316149179
+      ],
+      "scale": 1.1112847455071284,
+      "_height_m": 0.022225728567190395,
+      "save_fn": "b229e08a577257708ad239a5283dfa81_6",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.0,
+        "y": -0.688,
+        "z": 0.7611130132952071
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "plate",
+      "uuid": "b229e08a577257708ad239a5283dfa81",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/tableware/b229e08a577257708ad239a5283dfa81/mesh/plate.glb",
+      "_query_name": "plate",
+      "size": [
+        0.32000000000000006,
+        0.022225728567190395,
+        0.3196116316149179
+      ],
+      "scale": 1.1112847455071284,
+      "_height_m": 0.022225728567190395,
+      "save_fn": "b229e08a577257708ad239a5283dfa81_7",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.8,
+        "y": 0.0,
+        "z": 0.7611130132952071
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "plate",
+      "uuid": "b229e08a577257708ad239a5283dfa81",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/tableware/b229e08a577257708ad239a5283dfa81/mesh/plate.glb",
+      "_query_name": "plate",
+      "size": [
+        0.32000000000000006,
+        0.022225728567190395,
+        0.3196116316149179
+      ],
+      "scale": 1.1112847455071284,
+      "_height_m": 0.022225728567190395,
+      "save_fn": "b229e08a577257708ad239a5283dfa81_8",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.8,
+        "y": 0.0,
+        "z": 0.7611130132952071
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "vase",
+      "uuid": "3aea0141837058b093e8e945a9d029ae",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/livingroom_supplies/ornaments/3aea0141837058b093e8e945a9d029ae/mesh/vase_6.glb",
+      "_query_name": "vase",
+      "size": [
+        0.214706152677536,
+        0.29999999701976776,
+        0.21481116861104965
+      ],
+      "scale": 1.0,
+      "_height_m": 0.29999999701976776,
+      "save_fn": "3aea0141837058b093e8e945a9d029ae_9",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.9000001475214958
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 3.0,
+  "query": "A minimalist dining setup featuring a single wooden table with four chairs arranged around it, each chair having a plate placed on the table directly in front of it, and a decorative vase positioned at the center of the table.",
+  "room_type": "other"
+}

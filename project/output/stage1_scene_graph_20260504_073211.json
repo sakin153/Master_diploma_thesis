@@ -1,0 +1,74 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A minimalist dining setup featuring a single wooden table with four chairs arranged around it, each chair having a plate placed on the table directly in front of it, and a decorative vase positioned at the center of the table.",
+  "room_half_size": 3.0,
+  "room_type": "other",
+  "graph": {
+    "nodes": [
+      {
+        "id": "table_1",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "anchor_hint": {
+          "region": "center"
+        },
+        "relationship": null,
+        "place_order": 1,
+        "depends_on": null,
+        "level": 0
+      },
+      {
+        "id": "chair_group_1",
+        "model_name": "computer chair",
+        "instances": 4,
+        "parent_id": "table_1",
+        "anchor_hint": null,
+        "relationship": {
+          "type": "around",
+          "reference": "table_1",
+          "distance": 0.5,
+          "facing": "inward"
+        },
+        "place_order": 2,
+        "depends_on": "table_1",
+        "level": 1
+      },
+      {
+        "id": "plate_group_1",
+        "model_name": "plate",
+        "instances": 4,
+        "parent_id": "table_1",
+        "anchor_hint": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": "chair_group_1",
+          "side": "above",
+          "distance": 0.1
+        },
+        "place_order": 3,
+        "depends_on": "chair_group_1",
+        "level": 1
+      },
+      {
+        "id": "vase_1",
+        "model_name": "vase",
+        "instances": 1,
+        "parent_id": "table_1",
+        "anchor_hint": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null
+        },
+        "place_order": 4,
+        "depends_on": null,
+        "level": 1
+      }
+    ],
+    "anchor_relations": [],
+    "metadata": {
+      "total_objects": 10,
+      "max_level": 1
+    }
+  }
+}

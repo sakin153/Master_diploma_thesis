@@ -35,6 +35,15 @@ Z / SUPPORT NOTE:
         * "on_surface" / "stacked_on" → object sits ON TOP of parent_id.
         * "around" → object sits on the FLOOR around the reference/parent.
 
+AROUND RULE (CRITICAL):
+    Use relationship.type="around" ONLY for floor objects arranged around a LARGE anchor
+    (e.g. chairs around a table).
+    - For "around": relationship.reference MUST equal parent_id (the anchor id).
+      Example: chairs around table_1 → parent_id="table_1", reference="table_1".
+    - Do NOT use "around" for objects that are supposed to be on top of a surface.
+      If the intent is "apples around a vase on a table", you MUST use:
+        parent_id="table_1", relationship.type="on_surface", relationship.reference="vase_1".
+
 RELATIONSHIP.REFERENCE = "what other object my X/Y is computed relative to"
                         (horizontal/spatial, optional, may differ from parent_id).
   - The glass goes between two books: book_1.relationship.reference = "glass_1",
@@ -321,6 +330,12 @@ SURFACE BOUNDS (CRITICAL WHEN PLACING ON TOP OF PARENT)
     x ∈ [{parent_x:.2f} - {parent_w:.2f}/2 + half_x, {parent_x:.2f} + {parent_w:.2f}/2 - half_x]
     y ∈ [{parent_y:.2f} - {parent_d:.2f}/2 + half_y, {parent_y:.2f} + {parent_d:.2f}/2 - half_y]
   Do NOT place instances off the surface.
+
+For clarity, the allowed numeric center ranges for this batch are:
+  x ∈ [{surface_xmin:.6f}, {surface_xmax:.6f}]
+  y ∈ [{surface_ymin:.6f}, {surface_ymax:.6f}]
+
+To avoid rounding issues, keep at least 0.005m INSIDE these bounds (not exactly on the edge).
 
 IMPORTANT: All coordinates are ABSOLUTE world coordinates, origin at room center.
 Place objects near parent at ({parent_x:.2f}, {parent_y:.2f}).

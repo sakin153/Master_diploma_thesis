@@ -1527,13 +1527,14 @@ def _world_xy_half_sizes(obj_or_node):
     return sx / 2.0, sy / 2.0
 
 
-def _clamp_xy_to_parent_footprint(x, y, node, parent_obj, margin=0.02):
-    """Clamp (x,y) so that the node's footprint stays inside parent's XY footprint.
+def _validate_xy_within_parent_footprint(x, y, node, parent_obj, margin=0.02):
+    """Validate (x,y) is inside parent's footprint, accounting for child half-extents.
 
-    Uses axis-aligned parent bounds in world coordinates (consistent with prompt rules).
+    Unlike clamping, this does NOT modify the coordinates. It is used to enforce
+    LLM output correctness without deterministic post-processing.
     """
     if parent_obj is None:
-        return x, y
+        return True, ""
 
     parent_pose = parent_obj.get("Pose") or {}
     px = float(parent_pose.get("x", 0.0))
@@ -1547,173 +1548,50 @@ def _clamp_xy_to_parent_footprint(x, y, node, parent_obj, margin=0.02):
     limit_x = max(0.0, pw / 2.0 - self_hx - margin)
     limit_y = max(0.0, pd / 2.0 - self_hy - margin)
 
-    cx = max(px - limit_x, min(px + limit_x, float(x)))
-    cy = max(py - limit_y, min(py + limit_y, float(y)))
-    return cx, cy
+    # Numerical tolerance: prevents false negatives from rounding and float noise.
+    # NOTE: Prompts often show bounds rounded to 3 decimals, so the LLM may return
+    # a value that's within the printed bounds but slightly outside the true
+    # computed limit by up to ~5e-4. Keep epsilon comfortably above that.
+    eps = 1e-3
+
+    fx = float(x)
+    fy = float(y)
+    if not (px - limit_x - eps <= fx <= px + limit_x + eps):
+        return False, f"x={fx:.6f} outside parent footprint [{px - limit_x:.6f}..{px + limit_x:.6f}]"
+    if not (py - limit_y - eps <= fy <= py + limit_y + eps):
+        return False, f"y={fy:.6f} outside parent footprint [{py - limit_y:.6f}..{py + limit_y:.6f}]"
+    return True, ""
 
 
-def _deterministic_on_surface_pairing(node, world_state, parent_placed):
-    """Handle a common grouped intent deterministically.
-
-    If node is an on-surface group that references another placed group with the
-    same instance count, place each instance "in front of" its corresponding
-    reference instance, but clamped to the parent surface.
-
-    This fixes cases like: 4 plates on table, each in front of 4 chairs.
-    """
-    rel = node.get("relationship") or {}
-    if not isinstance(rel, dict):
-        return None
-    if rel.get("type") not in (REL_ON_SURFACE, "stacked_on"):
-        return None
-    if not parent_placed:
-        return None
-
-    ref_id = rel.get("reference")
-    if not ref_id or not isinstance(ref_id, str):
-        return None
-    if ref_id == node.get("parent_id"):
-        return None
-
-    instances = int(node.get("instances", 1))
-    if instances <= 1:
-        return None
-
-    ref_objs = _ws_find_all_by_node(world_state, ref_id)
-    if len(ref_objs) != instances:
-        return None
-
-    parent_pose = parent_placed.get("Pose") or {}
-    px = float(parent_pose.get("x", 0.0))
-    py = float(parent_pose.get("y", 0.0))
-
-    def angle_key(obj):
-        pose = obj.get("Pose") or {}
-        dx = float(pose.get("x", 0.0)) - px
-        dy = float(pose.get("y", 0.0)) - py
-        a = math.atan2(dy, dx)
-        return a if a >= 0 else (a + 2.0 * math.pi)
-
-    ordered_refs = sorted(ref_objs, key=angle_key)
-
-    psz = parent_placed.get("size") or [1.0, 1.0, 1.0]
-    pw = float(psz[0]) if len(psz) > 0 else 1.0
-    pd = float(psz[2]) if len(psz) > 2 else pw
-    self_hx, self_hy = _world_xy_half_sizes(node)
-    margin = 0.02
-    lim_x = max(0.0, pw / 2.0 - self_hx - margin)
-    lim_y = max(0.0, pd / 2.0 - self_hy - margin)
-
-    # Place fairly near the edge in the direction of each reference.
-    edge_fraction = 0.85
-
-    results = []
-    for i, ref in enumerate(ordered_refs, start=1):
-        rp = ref.get("Pose") or {}
-        dx = float(rp.get("x", 0.0)) - px
-        dy = float(rp.get("y", 0.0)) - py
-        v = Vec2(dx, dy).normalized()
-
-        tx = lim_x / abs(v.x) if abs(v.x) > 1e-9 else float("inf")
-        ty = lim_y / abs(v.y) if abs(v.y) > 1e-9 else float("inf")
-        t = min(tx, ty)
-        t = max(0.0, t * edge_fraction)
-        x = px + v.x * t
-        y = py + v.y * t
-        x, y = _clamp_xy_to_parent_footprint(x, y, node, parent_placed, margin=margin)
-
-        results.append({
-            "instance": i,
-            "x": float(x),
-            "y": float(y),
-            "z": float(parent_pose.get("z", 0.0)),
-            "yaw_deg": float(ref.get("yaw_deg", 0.0)),
-        })
-
-    return results
-
-
-def _deterministic_center_cluster_on_surface(node, parent_placed, query_text=None):
-    """Deterministically place a small group as a compact cluster near parent center.
-
-    Intended for prompts like: "4 apples in the center of the table".
-    Returns a list of placement dicts or None.
-    """
-    if parent_placed is None:
-        return None
-
-    rel = node.get("relationship") or {}
-    if not isinstance(rel, dict):
-        return None
-    if rel.get("type") != REL_ON_SURFACE:
-        return None
-
-    instances = int(node.get("instances", 1))
-    if instances <= 1:
-        return None
-
-    # Heuristic trigger: no explicit reference (or reference == parent) and user asked for center.
-    ref_id = rel.get("reference")
-    if ref_id and ref_id != node.get("parent_id"):
-        return None
-
-    q = (query_text or "").lower()
-    if q and not any(tok in q for tok in ("центр", "center", "middle")):
-        return None
-
-    parent_pose = parent_placed.get("Pose") or {}
-    px = float(parent_pose.get("x", 0.0))
-    py = float(parent_pose.get("y", 0.0))
-
-    psz = parent_placed.get("size") or [1.0, 1.0, 1.0]
-    pw = float(psz[0]) if len(psz) > 0 else 1.0
-    pd = float(psz[2]) if len(psz) > 2 else pw
-
+def _min_clearance_for_group(node):
     sz = node.get("size_hint") or [0.1, 0.1, 0.1]
     sw = float(sz[0]) if len(sz) > 0 else 0.1
     sd = float(sz[2]) if len(sz) > 2 else sw
-    self_hx, self_hy = sw / 2.0, sd / 2.0
-    margin = 0.02
-    lim_x = max(0.0, pw / 2.0 - self_hx - margin)
-    lim_y = max(0.0, pd / 2.0 - self_hy - margin)
+    # Conservative: keep at least ~one footprint apart.
+    return max(0.05, 0.6 * max(sw, sd))
 
-    # Grid near center: cols ≈ sqrt(n)
-    cols = max(1, int(math.ceil(math.sqrt(instances))))
-    rows = max(1, int(math.ceil(instances / cols)))
 
-    # Spacing based on object footprint, but shrink if parent is small.
-    base_spacing_x = max(0.03, sw * 1.35)
-    base_spacing_y = max(0.03, sd * 1.35)
-    if cols > 1:
-        max_span_x = 2.0 * lim_x
-        base_spacing_x = min(base_spacing_x, max_span_x / (cols - 1) if max_span_x > 1e-6 else 0.0)
-    if rows > 1:
-        max_span_y = 2.0 * lim_y
-        base_spacing_y = min(base_spacing_y, max_span_y / (rows - 1) if max_span_y > 1e-6 else 0.0)
+def _validate_min_clearance_xy(positions, min_clearance, already=None):
+    """Check that XY distance between any pair is >= min_clearance."""
+    pts = []
+    for p in (already or []):
+        pts.append((float(p.get("x", 0.0)), float(p.get("y", 0.0)), str(p.get("instance", "?"))))
+    base_n = len(pts)
+    for p in positions:
+        pts.append((float(p.get("x", 0.0)), float(p.get("y", 0.0)), str(p.get("instance", "?"))))
 
-    results = []
-    k = 0
-    for r in range(rows):
-        for c in range(cols):
-            if k >= instances:
-                break
-            ox = (c - (cols - 1) / 2.0) * base_spacing_x
-            oy = (r - (rows - 1) / 2.0) * base_spacing_y
-            x = px + ox
-            y = py + oy
-            x, y = _clamp_xy_to_parent_footprint(x, y, node, parent_placed, margin=margin)
-            results.append({
-                "instance": k + 1,
-                "x": float(x),
-                "y": float(y),
-                "z": float(parent_pose.get("z", 0.0)),
-                "yaw_deg": 0.0,
-            })
-            k += 1
-        if k >= instances:
-            break
-
-    return results
+    for i in range(len(pts)):
+        xi, yi, li = pts[i]
+        for j in range(i + 1, len(pts)):
+            xj, yj, lj = pts[j]
+            dx = xi - xj
+            dy = yi - yj
+            if (dx * dx + dy * dy) ** 0.5 < float(min_clearance):
+                # Report the first collision found.
+                left = "existing" if i < base_n else "new"
+                right = "existing" if j < base_n else "new"
+                return False, f"too close in XY: {left} instance {li} vs {right} instance {lj} (< {min_clearance:.3f}m)"
+    return True, ""
 
 
 def _compute_suggested_xy(node, ref_obj, parent_obj):
@@ -1834,6 +1712,14 @@ def _place_single_node(node, world_state, room_half_size, query, llm_fn):
             placement_instruction += "\nReference object(s) for spatial positioning:"
             for r in ref_objs:
                 placement_instruction += "\n  " + _ws_describe_object(r)
+            # Common case: placing something on a surface relative to objects that are NOT on that surface.
+            # E.g. apples/plates on a table "in front of" chairs around the table.
+            if parent_placed and rel.get("type") in (REL_ON_SURFACE, "stacked_on") and ref_id != node.get("parent_id"):
+                placement_instruction += (
+                    "\nIMPORTANT: If the reference objects are outside the parent surface footprint (e.g. chairs around a table), "
+                    "DO NOT copy the reference x/y directly. Instead, use the DIRECTION from the parent center to the reference, "
+                    "and choose a point ON THE PARENT SURFACE near the corresponding edge, staying within the numeric surface bounds."
+                )
         else:
             placement_instruction += f"\nReference '{ref_id}' is not yet placed (skip reference, use parent surface only)."
 
@@ -1850,31 +1736,38 @@ def _place_single_node(node, world_state, room_half_size, query, llm_fn):
         world_state=_ws_summary(world_state),
     )
 
-    for attempt in range(3):
+    for attempt in range(6):
         try:
             raw = llm_fn(prompt, query)
             if isinstance(raw, str):
                 raw = json.loads(raw)
-            # Enforce surface bounds deterministically (LLM can violate it).
-            rel = node.get("relationship") or {}
-            rel_type = rel.get("type") if isinstance(rel, dict) else None
-            if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
-                cx, cy = _clamp_xy_to_parent_footprint(raw.get("x", 0.0), raw.get("y", 0.0), node, parent_placed)
-                raw = dict(raw)
-                raw["x"] = float(cx)
-                raw["y"] = float(cy)
             valid, err = _validate_pos(raw, room_half_size)
             if valid:
-                print(f"[placer] {node['id']} ({node['model_name']}): pos=({raw['x']:.2f}, {raw['y']:.2f}, {raw['z']:.2f}), yaw={raw.get('yaw_deg', 0):.0f}°")
-                return [raw]
+                rel = node.get("relationship") or {}
+                rel_type = rel.get("type") if isinstance(rel, dict) else None
+                if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
+                    ok_fp, err_fp = _validate_xy_within_parent_footprint(raw.get("x", 0.0), raw.get("y", 0.0), node, parent_placed)
+                    if not ok_fp:
+                        valid = False
+                        err = f"Surface bounds violation: {err_fp}"
+                if valid:
+                    print(f"[placer] {node['id']} ({node['model_name']}): pos=({raw['x']:.2f}, {raw['y']:.2f}, {raw['z']:.2f}), yaw={raw.get('yaw_deg', 0):.0f}°")
+                    return [raw]
             print(f"[placer] Invalid position: {err}")
             prompt += f"\nPrevious attempt invalid: {err}. Try again."
+            if attempt == 2:
+                prompt += (
+                    "\nRELAXED FALLBACK (still LLM-only): If you cannot satisfy the spatial relationship, "
+                    "prioritize producing ANY valid non-overlapping position that satisfies ALL numeric constraints "
+                    "(room bounds and surface bounds if applicable)."
+                )
         except Exception as e:
             print(f"[placer] Error on attempt {attempt+1}: {e}")
             prompt += f"\nPrevious attempt error: {e}. Return valid JSON."
 
-    print(f"[placer] Fallback position for {node['id']}")
-    return [_fallback_pos(node, parent_placed, room_half_size)]
+    raise RuntimeError(
+        f"LLM placement failed for single node {node.get('id')} ({node.get('model_name')}) after retries"
+    )
 
 
 def _place_batch_node(node, world_state, room_half_size, query, llm_fn):
@@ -1892,17 +1785,18 @@ def _place_batch_node(node, world_state, room_half_size, query, llm_fn):
 
     rel_desc = _rel_description(node)
 
-    # Special deterministic case: on-surface group paired to a reference group of same count.
-    deterministic = _deterministic_on_surface_pairing(node, world_state, parent_placed)
-    if deterministic is not None:
-        print(f"[placer] {node['id']} ({node['model_name']}×{instances}): deterministic pairing to '{(node.get('relationship') or {}).get('reference')}'")
-        return deterministic
+    rel = node.get("relationship") or {}
+    rel_type = rel.get("type") if isinstance(rel, dict) else None
+    ref_id = rel.get("reference") if isinstance(rel, dict) else None
 
-    # Deterministic compact center cluster for on-surface groups like "4 apples in the center of the table".
-    deterministic_center = _deterministic_center_cluster_on_surface(node, parent_placed, query_text=query)
-    if deterministic_center is not None:
-        print(f"[placer] {node['id']} ({node['model_name']}×{instances}): deterministic center cluster on '{node.get('parent_id')}'")
-        return deterministic_center
+    # Precompute explicit parent surface bounds for on-surface placements.
+    margin = 0.02
+    self_hx, self_hy = _world_xy_half_sizes(node)
+    surface_xmin = float(parent_pose.get("x", 0.0)) - max(0.0, parent_sz[0] / 2.0 - self_hx - margin)
+    surface_xmax = float(parent_pose.get("x", 0.0)) + max(0.0, parent_sz[0] / 2.0 - self_hx - margin)
+    pd = parent_sz[2] if len(parent_sz) > 2 else parent_sz[0]
+    surface_ymin = float(parent_pose.get("y", 0.0)) - max(0.0, pd / 2.0 - self_hy - margin)
+    surface_ymax = float(parent_pose.get("y", 0.0)) + max(0.0, pd / 2.0 - self_hy - margin)
 
     # Если зависит от другого узла — собрать их позиции для контекста
     depends_context = ""
@@ -1932,6 +1826,24 @@ def _place_batch_node(node, world_state, room_half_size, query, llm_fn):
 
     all_results = []
     placed_in_batch = []
+
+    reference_instances_section = ""
+    if ref_id and isinstance(ref_id, str):
+        ref_objs = _ws_find_all_by_node(world_state, ref_id)
+        if ref_objs:
+            lines = [f"Reference instances for '{ref_id}' (use these for alignment):"]
+            for idx, robj in enumerate(ref_objs, start=1):
+                rp = robj.get("Pose") or {}
+                lines.append(f"  - ref_instance_{idx}: id={robj['id']}, pos=({rp.get('x', 0.0):.2f}, {rp.get('y', 0.0):.2f}, {rp.get('z', 0.0):.2f}), yaw={robj.get('yaw_deg', 0.0):.0f}°")
+            if len(ref_objs) == instances:
+                lines.append("  - IMPORTANT: Match your placed instance i to ref_instance_i.")
+            if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on") and ref_id != node.get("parent_id"):
+                lines.append(
+                    "  - CRITICAL: If the reference instances are OFF the parent surface (e.g. chairs around the table), "
+                    "do NOT reuse ref x/y for the on-surface objects. Use the direction from parent center to ref_instance_i and "
+                    "place the on-surface object near the corresponding edge ON the parent surface, within the numeric bounds."
+                )
+            reference_instances_section = "\n".join(lines)
 
     batches = [list(range(i, min(i + batch_size, instances))) for i in range(0, instances, batch_size)]
     for batch_idxs in batches:
@@ -1963,16 +1875,23 @@ def _place_batch_node(node, world_state, room_half_size, query, llm_fn):
             model_name=node["model_name"],
             from_idx=from_idx, to_idx=to_idx, total=instances,
             size_w=sz[0], size_d=sz[2] if len(sz) > 2 else sz[0], size_h=obj_h,
+            size_w_half=(float(sz[0]) / 2.0 if len(sz) > 0 else 0.05),
+            size_d_half=(float(sz[2]) / 2.0 if len(sz) > 2 else float(sz[0]) / 2.0 if len(sz) > 0 else 0.05),
             relationship_desc=rel_desc + ("\n" + depends_context if depends_context else ""),
             parent_model=parent_model,
             parent_x=px, parent_y=py, parent_z=pz,
             parent_w=pw, parent_d=pd, parent_h=ph,
             parent_top_z=parent_top_z,
+            surface_xmin=surface_xmin,
+            surface_xmax=surface_xmax,
+            surface_ymin=surface_ymin,
+            surface_ymax=surface_ymax,
             placement_dist=placement_dist,
             parent_xpd=px + placement_dist, parent_xmd=px - placement_dist,
             parent_ypd=py + placement_dist, parent_ymd=py - placement_dist,
             already_in_group_section=already_section,
             parent_instances_section=parent_instances_section,
+            reference_instances_section=reference_instances_section,
             world_state=_ws_summary(world_state),
             room_w=room_w, room_l=room_w, room_half=room_half_size,
         )
@@ -1992,47 +1911,168 @@ def _place_batch_node(node, world_state, room_half_size, query, llm_fn):
                     ok, err = _validate_pos(item, room_half_size)
                     if not ok:
                         raise ValueError(f"Invalid position: {err}")
-
-                    # Enforce surface bounds deterministically for on-surface items.
-                    rel = node.get("relationship") or {}
-                    rel_type = rel.get("type") if isinstance(rel, dict) else None
-                    if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
-                        cx, cy = _clamp_xy_to_parent_footprint(item.get("x", 0.0), item.get("y", 0.0), node, parent_placed)
-                        item = dict(item)
-                        item["x"] = float(cx)
-                        item["y"] = float(cy)
-
                     valid_results.append(item)
 
-                # If the LLM stacked all on-surface instances at identical XY, spread them as a center cluster.
-                rel = node.get("relationship") or {}
-                rel_type = rel.get("type") if isinstance(rel, dict) else None
-                if parent_placed and rel_type == REL_ON_SURFACE and len(valid_results) > 1:
-                    xs = [round(float(v.get("x", 0.0)), 4) for v in valid_results]
-                    ys = [round(float(v.get("y", 0.0)), 4) for v in valid_results]
-                    if len(set(zip(xs, ys))) == 1:
-                        spread = _deterministic_center_cluster_on_surface(node, parent_placed, query_text="center")
-                        if spread is not None and len(spread) == len(valid_results):
-                            valid_results = spread
+                if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
+                    for item in valid_results:
+                        ok_fp, err_fp = _validate_xy_within_parent_footprint(item.get("x", 0.0), item.get("y", 0.0), node, parent_placed)
+                        if not ok_fp:
+                            raise ValueError(f"Surface bounds violation: {err_fp}")
+
+                min_clearance = _min_clearance_for_group(node)
+                ok_clear, err_clear = _validate_min_clearance_xy(valid_results, min_clearance=min_clearance, already=placed_in_batch)
+                if not ok_clear:
+                    raise ValueError(err_clear)
 
                 placed_in_batch.extend(valid_results)
                 all_results.extend(valid_results)
                 break
             except Exception as e:
                 print(f"[placer] Batch attempt {attempt+1} failed: {e}")
-                if attempt == 2:
-                    print(f"[placer] Using fallback positions for batch {from_idx}-{to_idx}")
-                    for idx in batch_idxs:
-                        fb = _fallback_pos(node, parent_placed, room_half_size)
-                        fb["instance"] = idx + 1
-                        # spread fallbacks to avoid stacking
-                        fb["x"] += idx * 0.6
-                        placed_in_batch.append(fb)
-                        all_results.append(fb)
                 prompt += f"\nPrevious attempt error: {e}. Return exactly {batch_count} items."
+
+        if len(all_results) < to_idx:
+            # Hybrid fallback: if the batch couldn't be placed reliably via batch calls, do sequential LLM.
+            print(f"[placer] Batch {from_idx}-{to_idx} failed after retries; falling back to sequential LLM placement")
+            seq = _place_group_sequential_via_llm(
+                node,
+                world_state=world_state,
+                room_half_size=room_half_size,
+                query=query,
+                llm_fn=llm_fn,
+                from_instance=from_idx,
+                to_instance=to_idx,
+                already_placed_in_group=placed_in_batch,
+            )
+            placed_in_batch.extend(seq)
+            all_results.extend(seq)
 
     print(f"[placer] {node['id']} ({node['model_name']}×{instances}): placed {len(all_results)} instances")
     return all_results
+
+
+def _place_group_sequential_via_llm(
+    node,
+    world_state,
+    room_half_size,
+    query,
+    llm_fn,
+    from_instance,
+    to_instance,
+    already_placed_in_group=None,
+):
+    """LLM-only sequential fallback for a subset of instances in a grouped node."""
+    parent_placed = (_ws_find_all_by_node(world_state, node.get("parent_id")) or [None])[0] if node.get("parent_id") else None
+    sz = node.get("size_hint", [1.0, 1.0, 1.0])
+    room_w = room_half_size * 2
+    results = []
+    placed = list(already_placed_in_group or [])
+
+    rel = node.get("relationship") or {}
+    rel_type = rel.get("type") if isinstance(rel, dict) else None
+
+    # Numeric parent footprint ranges (center coordinates), for explicit constraint prompting.
+    surface_range = None
+    if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
+        margin = 0.02
+        ppose = parent_placed["Pose"]
+        psz = parent_placed["size"]
+        pw = float(psz[0]) if len(psz) > 0 else 1.0
+        pd = float(psz[2]) if len(psz) > 2 else pw
+        self_hx, self_hy = _world_xy_half_sizes(node)
+        lim_x = max(0.0, pw / 2.0 - self_hx - margin)
+        lim_y = max(0.0, pd / 2.0 - self_hy - margin)
+        surface_range = (
+            float(ppose.get("x", 0.0)) - lim_x,
+            float(ppose.get("x", 0.0)) + lim_x,
+            float(ppose.get("y", 0.0)) - lim_y,
+            float(ppose.get("y", 0.0)) + lim_y,
+        )
+
+    for inst in range(int(from_instance), int(to_instance) + 1):
+        # Build an instruction that makes instance numbering explicit and avoids overlap.
+        placement_instruction = _rel_description(node)
+        placement_instruction += f"\nYou are placing instance {inst} of {int(node.get('instances', 1))} for node '{node.get('id')}'."
+
+        if placed:
+            lines = ["Already placed in this group (avoid overlap and stacking):"]
+            for p in placed:
+                lines.append(f"  - instance {p.get('instance')}: pos=({float(p.get('x', 0.0)):.3f}, {float(p.get('y', 0.0)):.3f}, {float(p.get('z', 0.0)):.3f}), yaw={float(p.get('yaw_deg', 0.0)):.0f}°")
+            placement_instruction += "\n" + "\n".join(lines)
+
+        if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
+            pose = parent_placed["Pose"]
+            psz = parent_placed["size"]
+            parent_top_z = pose["z"] + (psz[1] / 2.0 if len(psz) > 1 else psz[0] / 2.0)
+            placement_instruction += (
+                f"\nSurface parent '{node.get('parent_id')}' ({parent_placed['Model']}): "
+                f"pos=({pose['x']:.2f}, {pose['y']:.2f}, {pose['z']:.2f}), "
+                f"size_xyz=({psz[0]:.2f}, {psz[2] if len(psz) > 2 else psz[0]:.2f}, {psz[1] if len(psz) > 1 else psz[0]:.2f})m, "
+                f"top_surface_z={parent_top_z:.2f}m. "
+                f"Your (x,y) MUST be inside parent's XY footprint."
+            )
+            if surface_range is not None:
+                xmin, xmax, ymin, ymax = surface_range
+                placement_instruction += (
+                    f"\nCRITICAL numeric bounds: x in [{xmin:.6f}, {xmax:.6f}], y in [{ymin:.6f}, {ymax:.6f}]."
+                    "\nTo avoid rounding issues, stay at least 0.005m INSIDE these bounds (not exactly on the edge)."
+                )
+
+        sw = float(sz[0]) if len(sz) > 0 else 1.0
+        sd = float(sz[2]) if len(sz) > 2 else sw
+        sh = float(sz[1]) if len(sz) > 1 else sw
+        prompt = _SINGLE_PLACEMENT_PROMPT.format(
+            model_name=node["model_name"],
+            size_w=sw, size_d=sd, size_h=sh,
+            size_w_half=sw / 2.0, size_d_half=sd / 2.0, size_h_half=sh / 2.0,
+            placement_instruction=placement_instruction,
+            room_w=room_w, room_l=room_w, room_half=room_half_size,
+            remaining=_ws_remaining_summary(world_state),
+            world_state=_ws_summary(world_state),
+        )
+
+        min_clearance = _min_clearance_for_group(node)
+        last_error = None
+        for attempt in range(8):
+            try:
+                raw = llm_fn(prompt, query)
+                if isinstance(raw, str):
+                    raw = json.loads(raw)
+                ok, err = _validate_pos(raw, room_half_size)
+                if not ok:
+                    last_error = f"Invalid position: {err}"
+                    raise ValueError(last_error)
+                if parent_placed and rel_type in (REL_ON_SURFACE, "stacked_on"):
+                    ok_fp, err_fp = _validate_xy_within_parent_footprint(raw.get("x", 0.0), raw.get("y", 0.0), node, parent_placed)
+                    if not ok_fp:
+                        last_error = f"Surface bounds violation: {err_fp}"
+                        raise ValueError(last_error)
+
+                candidate = dict(raw)
+                candidate["instance"] = inst
+                ok_clear, err_clear = _validate_min_clearance_xy([candidate], min_clearance=min_clearance, already=placed)
+                if not ok_clear:
+                    last_error = err_clear
+                    raise ValueError(last_error)
+
+                results.append(candidate)
+                placed.append(candidate)
+                break
+            except Exception as e:
+                msg = str(e)
+                prompt += f"\nPrevious attempt invalid: {msg}. Try again."
+                if attempt == 2:
+                    prompt += (
+                        "\nRELAXED FALLBACK (still LLM-only): If the reference alignment keeps failing, "
+                        "ignore the reference and choose ANY valid (x,y) within the numeric surface bounds "
+                        "that avoids overlap with already placed instances."
+                    )
+        else:
+            raise RuntimeError(
+                f"LLM sequential placement failed for node {node.get('id')} instance {inst}: {last_error}"
+            )
+
+    return results
 
 
 def _place_anchor_batch_node(node, world_state, room_half_size, query, llm_fn):

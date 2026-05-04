@@ -23,7 +23,7 @@ catalog = load_catalog()
 # Two sleek black pens are lying parallel to each other next to the notebooks. 
 # One sleek black ergonomic computer mouse is positioned to the right of the pens.
 # 2 стола у каждого стола по 4 стуля. На каждом столе лежит две коробки, в каждой коробке по 3 яблока 
-spec = expand_prompt("""Только стол и 4 стула. и 4 яблока по  столе напротив каждого стула и ваза""")
+spec = expand_prompt("""Только стол и 4 стула. и 4 тарелки на столе напротив каждого стула и ваза""")
 models = pick_models(spec, catalog)
 models = load_and_scale_models(models)
 room_half = compute_room_half_size(models, spec.room_type)
