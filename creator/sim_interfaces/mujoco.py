@@ -15,14 +15,17 @@ from obj2mjcf.cli import Args, CoacdArgs, process_obj
 
 from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
 from creator.placement import (
-    build_semantic_plan,
-    evaluate_constraint_violations,
-    repair_layout_by_constraints,
-    solve_floor_placements,
-    solve_small_object_placements,
-    solve_wall_placements,
     validate_and_repair_layout,
 )
+# Legacy placement functions - only used when pre_placed_models is None (standalone mode)
+# from creator.placement import (
+#     build_semantic_plan,
+#     evaluate_constraint_violations,
+#     repair_layout_by_constraints,
+#     solve_floor_placements,
+#     solve_small_object_placements,
+#     solve_wall_placements,
+# )
 from creator.sim_interfaces.base import BaseSimInterface
 from creator.utils.cache import Cache
 
@@ -110,111 +113,23 @@ class MujocoSimInterface(BaseSimInterface):
                 if m.get("uuid") and m.get("model_loc")
             }
         else:
-            # Legacy / standalone path: run the full internal pipeline.
-            full_placed_models = self.get_full_placed_models(chosen_models, models)
-            objects = self.load_objects(full_placed_models)
-            for i, _ in enumerate(full_placed_models):
-                full_placed_models[i]["model_loc"] = objects[full_placed_models[i]["uuid"]]
-                full_placed_models[i]["save_fn"] = full_placed_models[i]["uuid"] + f"_{i}"
-            full_placed_models = self.update_model_sizes(full_placed_models)
-            full_placed_models = self.normalize_models_to_realistic_scale(
-                full_placed_models,
-                query=query,
+            # Legacy / standalone path: DISABLED - old placement system removed
+            raise NotImplementedError(
+                "Standalone mode (without pre_placed_models) is disabled. "
+                "Old placement system has been removed. "
+                "Use semantic enforcement pipeline in runner.py instead."
             )
-
-            if semantic_plan is None:
-                semantic_plan = build_semantic_plan(
-                    prompt_model=self.prompt_model_for_constraints,
-                    prompt_template=fmt_constraints_plan_tmpl,
-                    query=query,
-                    chosen_model=self.chosen_model,
-                    chosen_models=chosen_models,
-                    context_models=models,
-                )
-                self.save_constraint_graph(
-                    semantic_plan=semantic_plan,
-                    query=query,
-                    output_filename="scene_graph_latest.json",
-                )
-
-            # Deterministic geometry: floor -> wall -> surface objects
-            full_placed_models = solve_floor_placements(
-                full_placed_models=full_placed_models,
-                semantic_plan=semantic_plan,
-                room_half_size=room_half_size,
-                grid_step=0.8,
-                yaw_candidates_deg=(0.0, 90.0, 180.0, 270.0),
-                beam_width=12,
-            )
-            full_placed_models = solve_wall_placements(
-                placed_models=full_placed_models,
-                semantic_plan=semantic_plan,
-                room_half_size=room_half_size,
-            )
-            full_placed_models = solve_small_object_placements(
-                placed_models=full_placed_models,
-                semantic_plan=semantic_plan,
-                small_threshold_volume=0.06,
-            )
-
-            full_placed_models = validate_and_repair_layout(
-                full_placed_models,
-                semantic_plan=semantic_plan,
-                room_half_size=room_half_size,
-            )
-
-            violations_before = evaluate_constraint_violations(
-                full_placed_models,
-                semantic_plan,
-                room_half_size=room_half_size,
-            )
-            violations_after = list(violations_before)
-            accepted_repair = False
-            if violations_before:
-                repaired_candidate = repair_layout_by_constraints(
-                    full_placed_models,
-                    semantic_plan,
-                    room_half_size=room_half_size,
-                    iterations=2,
-                )
-                candidate_after = evaluate_constraint_violations(
-                    repaired_candidate,
-                    semantic_plan,
-                    room_half_size=room_half_size,
-                )
-                if len(candidate_after) <= len(violations_before):
-                    full_placed_models = repaired_candidate
-                    violations_after = candidate_after
-                    accepted_repair = True
-
-            print(
-                "Constraint validation:"
-                f" before={len(violations_before)} after={len(violations_after)}"
-            )
-            report_path = Path(__file__).resolve().parents[2] / "scene_constraint_report_latest.json"
-            with open(report_path, "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "query": query,
-                        "violations_before": violations_before,
-                        "violations_after": violations_after,
-                        "accepted_repair": accepted_repair,
-                    },
-                    f,
-                    ensure_ascii=False,
-                    indent=2,
-                )
 
         main_root = self.create_main_root(full_placed_models, objects)
         tree = self.create_tree(main_root, room_half_size=room_half_size)
         self.write_tree_to_file(tree, path_to_save)
         self.try_compile_in_mujoco(path_to_save)
 
-        # Post-assembly validation
-        from creator.scene.validator import validate_placements, validate_mjcf, validate_scales
-        validate_scales(full_placed_models, verbose=True)
-        validate_placements(full_placed_models, verbose=True)
-        validate_mjcf(path_to_save, verbose=True)
+        # Post-assembly validation - DISABLED (validator module removed)
+        # from creator.scene.validator import validate_placements, validate_mjcf, validate_scales
+        # validate_scales(full_placed_models, verbose=True)
+        # validate_placements(full_placed_models, verbose=True)
+        # validate_mjcf(path_to_save, verbose=True)
 
         return full_placed_models
 
@@ -1431,27 +1346,28 @@ class MujocoSimInterface(BaseSimInterface):
         elements.append(floor)
 
         # Room walls as bodies (allow wall-mounted objects to be children)
-        wall_defs = [
-            # (body_name, body_pos, geom_size, inward_facing_normal)
-            ("wall_north", f"0 {rhs} {wall_h/2}",  f"{rhs} {wall_t} {wall_h/2}"),
-            ("wall_south", f"0 {-rhs} {wall_h/2}", f"{rhs} {wall_t} {wall_h/2}"),
-            ("wall_east",  f"{rhs} 0 {wall_h/2}",  f"{wall_t} {rhs} {wall_h/2}"),
-            ("wall_west",  f"{-rhs} 0 {wall_h/2}", f"{wall_t} {rhs} {wall_h/2}"),
-        ]
-        for body_name, body_pos, geom_size in wall_defs:
-            wall_body = ET.SubElement(worldbody, "body",
-                name=body_name, pos=body_pos)
-            wall_body.tail = "\n"
-            # No joint on wall body → welded to worldbody
-            wg = ET.SubElement(wall_body, "geom",
-                type="box", size=geom_size,
-                rgba="0.85 0.82 0.78 1.0",
-                condim="1",
-                contype="1", conaffinity="1",
-                friction="0.7 0.005 0.0001",
-            )
-            wg.tail = "\n"
-            elements.append(wall_body)
+        # TEMPORARILY DISABLED - walls are not used as anchors and cause issues
+        # wall_defs = [
+        #     # (body_name, body_pos, geom_size, inward_facing_normal)
+        #     ("wall_north", f"0 {rhs} {wall_h/2}",  f"{rhs} {wall_t} {wall_h/2}"),
+        #     ("wall_south", f"0 {-rhs} {wall_h/2}", f"{rhs} {wall_t} {wall_h/2}"),
+        #     ("wall_east",  f"{rhs} 0 {wall_h/2}",  f"{wall_t} {rhs} {wall_h/2}"),
+        #     ("wall_west",  f"{-rhs} 0 {wall_h/2}", f"{wall_t} {rhs} {wall_h/2}"),
+        # ]
+        # for body_name, body_pos, geom_size in wall_defs:
+        #     wall_body = ET.SubElement(worldbody, "body",
+        #         name=body_name, pos=body_pos)
+        #     wall_body.tail = "\n"
+        #     # No joint on wall body → welded to worldbody
+        #     wg = ET.SubElement(wall_body, "geom",
+        #         type="box", size=geom_size,
+        #         rgba="0.85 0.82 0.78 1.0",
+        #         condim="1",
+        #         contype="1", conaffinity="1",
+        #         friction="0.7 0.005 0.0001",
+        #     )
+        #     wg.tail = "\n"
+        #     elements.append(wall_body)
 
         # Ceiling (optional — blocks objects from flying upward)
         ceiling = ET.SubElement(worldbody, "geom",
@@ -1512,6 +1428,7 @@ class MujocoSimInterface(BaseSimInterface):
             width=width,
             height=height,
         )
+
 
     def write_tree_to_file(self, tree: ET.ElementTree, path: str) -> None:
         tree.write(path, encoding="utf-8", xml_declaration=True)

@@ -1,0 +1,211 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "table_1_inst_0",
+        "Model": "table",
+        "size": [
+          1.2337291240692139,
+          0.7500001490116119,
+          1.7365700006484985
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.37500007450580597
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chair_group_1_inst_0",
+        "Model": "computer chair",
+        "size": [
+          0.4982310359500948,
+          0.9,
+          0.5127315721187152
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 1.12,
+          "z": 0.45
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chair_group_1_inst_1",
+        "Model": "computer chair",
+        "size": [
+          0.4982310359500948,
+          0.9,
+          0.5127315721187152
+        ],
+        "Pose": {
+          "x": 1.12,
+          "y": 0.0,
+          "z": 0.45
+        },
+        "yaw_deg": 90.0
+      },
+      {
+        "id": "chair_group_1_inst_2",
+        "Model": "computer chair",
+        "size": [
+          0.4982310359500948,
+          0.9,
+          0.5127315721187152
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": -1.12,
+          "z": 0.45
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "chair_group_1_inst_3",
+        "Model": "computer chair",
+        "size": [
+          0.4982310359500948,
+          0.9,
+          0.5127315721187152
+        ],
+        "Pose": {
+          "x": -1.12,
+          "y": 0.0,
+          "z": 0.45
+        },
+        "yaw_deg": 270.0
+      },
+      {
+        "id": "apple_group_1_inst_0",
+        "Model": "apple",
+        "size": [
+          0.07718145847320557,
+          0.08999999985098839,
+          0.07636618986725807
+        ],
+        "Pose": {
+          "x": -0.05209748446941376,
+          "y": -0.0515471781603992,
+          "z": 0.7950001489371061
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apple_group_1_inst_1",
+        "Model": "apple",
+        "size": [
+          0.07718145847320557,
+          0.08999999985098839,
+          0.07636618986725807
+        ],
+        "Pose": {
+          "x": 0.05209748446941376,
+          "y": -0.0515471781603992,
+          "z": 0.7950001489371061
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apple_group_1_inst_2",
+        "Model": "apple",
+        "size": [
+          0.07718145847320557,
+          0.08999999985098839,
+          0.07636618986725807
+        ],
+        "Pose": {
+          "x": -0.05209748446941376,
+          "y": 0.0515471781603992,
+          "z": 0.7950001489371061
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apple_group_1_inst_3",
+        "Model": "apple",
+        "size": [
+          0.07718145847320557,
+          0.08999999985098839,
+          0.07636618986725807
+        ],
+        "Pose": {
+          "x": 0.05209748446941376,
+          "y": 0.0515471781603992,
+          "z": 0.7950001489371061
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 3.0
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "table_1",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "anchor_hint": {
+          "region": "center"
+        },
+        "relationship": null,
+        "place_order": 1,
+        "depends_on": null,
+        "level": 0,
+        "size_hint": [
+          1.2337291240692139,
+          0.7500001490116119,
+          1.7365700006484985
+        ]
+      },
+      {
+        "id": "chair_group_1",
+        "model_name": "computer chair",
+        "instances": 4,
+        "parent_id": "table_1",
+        "anchor_hint": null,
+        "relationship": {
+          "type": "around",
+          "reference": "table_1",
+          "distance": 0.5,
+          "facing": "inward"
+        },
+        "place_order": 2,
+        "depends_on": "table_1",
+        "level": 1,
+        "size_hint": [
+          0.4982310359500948,
+          0.9,
+          0.5127315721187152
+        ]
+      },
+      {
+        "id": "apple_group_1",
+        "model_name": "apple",
+        "instances": 4,
+        "parent_id": "table_1",
+        "anchor_hint": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null
+        },
+        "place_order": 3,
+        "depends_on": null,
+        "level": 1,
+        "size_hint": [
+          0.07718145847320557,
+          0.08999999985098839,
+          0.07636618986725807
+        ]
+      }
+    ],
+    "anchor_relations": [],
+    "metadata": {
+      "total_objects": 9,
+      "max_level": 1
+    }
+  }
+}

@@ -1,3 +1,4 @@
+<?xml version='1.0' encoding='utf-8'?>
 <mujoco model="0033f5a78e7f5843a139ea446f8b8bbd_0">
   <default>
     <default class="visual0">
@@ -13,7 +14,7 @@
     <mesh file="0033f5a78e7f5843a139ea446f8b8bbd_0.obj" />
   </asset>
   <worldbody>
-    <body name="0033f5a78e7f5843a139ea446f8b8bbd_0" pos="-0.1460259182326792 -1.8105680411877254 0.5" euler="90 0.0 0">
+    <body name="0033f5a78e7f5843a139ea446f8b8bbd_0" pos="0.7712221184452153 -0.9834435285816474 0.3875000774860382" euler="90 0.0 0">
       <geom material="material_0" mesh="0033f5a78e7f5843a139ea446f8b8bbd_0" class="visual0" />
       <geom mesh="0033f5a78e7f5843a139ea446f8b8bbd_0" class="collision0" friction="0.8 0.005 0.0001" condim="3" density="600.0" solref="0.01 1.0" solimp="0.95 0.99 0.001 0.5 2" />
     </body>

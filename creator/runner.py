@@ -9,18 +9,16 @@ from tinydb import TinyDB
 from creator.contexts_prompts.constraints import fmt_constraints_plan_tmpl
 from creator.contexts_prompts.disambiguation import fmt_disambiguation_tmpl
 from creator.contexts_prompts.semantic_plan import fmt_semantic_plan_tmpl
+from creator.contexts_prompts.placement_priority import fmt_placement_priority_tmpl
 from creator.model_databases.embodied_gen import EmbodiedGenLoader
 from creator.placement import (
-    build_semantic_plan,
-    repair_layout_by_constraints,
     validate_and_repair_layout,
 )
-from creator.placement.plan import _stabilize_dense_group_constraints
 from creator.placement.semantic_enforcement.pipeline import (
     SemanticEnforcementPipeline,
     SchemaValidationError,
 )
-from creator.postprocess import refine_scene_with_engine
+# from creator.postprocess import refine_scene_with_engine  # Disabled - uses removed modules
 from creator.sim_interfaces.mujoco import MujocoSimInterface
 from creator.utils.cache import Cache
 from creator.utils.json import NumpyEncoder
@@ -218,6 +216,97 @@ def _llm_pick_candidate(
     return by_uuid.get(chosen_uuid)
 
 
+def _determine_placement_priorities(
+    *,
+    prompt_model_fn,
+    llm_model: str,
+    query: str,
+    full_placed_models: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Ask LLM to determine which objects are anchors and which are dependent.
+    
+    Args:
+        prompt_model_fn: LLM prompt function
+        llm_model: LLM model name
+        query: User query
+        full_placed_models: List of models with sizes and metadata
+        
+    Returns:
+        Tuple of (anchor_models, dependent_models)
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Build objects string for prompt
+    objects_str_lines = []
+    for i, model in enumerate(full_placed_models):
+        model_name = model.get("Model", f"object_{i}")
+        size = model.get("size", [1.0, 1.0, 1.0])
+        objects_str_lines.append(
+            f"  {i}. {model_name} "
+            f"(size: {size[0]:.2f}m × {size[1]:.2f}m × {size[2]:.2f}m)"
+        )
+    
+    objects_str = "\n".join(objects_str_lines)
+    
+    # Format prompt
+    prompt = fmt_placement_priority_tmpl.format(
+        query=query,
+        objects_str=objects_str,
+    )
+    
+    logger.info(f"[PlacementPriority] Asking LLM to determine placement priorities...")
+    
+    try:
+        # Call LLM
+        raw_response = prompt_model_fn(prompt, query, llm_model)
+        
+        # Parse response
+        if isinstance(raw_response, dict):
+            priority_plan = raw_response
+        elif isinstance(raw_response, str):
+            priority_plan = json.loads(raw_response)
+        else:
+            raise ValueError(f"Unexpected LLM response type: {type(raw_response)}")
+        
+        # Extract indices
+        anchor_indices = [item["index"] for item in priority_plan.get("anchor_objects", [])]
+        dependent_indices = [item["index"] for item in priority_plan.get("dependent_objects", [])]
+        
+        # Build model lists
+        anchor_models = [full_placed_models[i] for i in anchor_indices if i < len(full_placed_models)]
+        dependent_models = [full_placed_models[i] for i in dependent_indices if i < len(full_placed_models)]
+        
+        logger.info(f"[PlacementPriority] ✓ Determined: {len(anchor_models)} anchors, {len(dependent_models)} dependent")
+        
+        # Log reasons
+        for item in priority_plan.get("anchor_objects", []):
+            idx = item.get("index", -1)
+            reason = item.get("reason", "")
+            if idx < len(full_placed_models):
+                model_name = full_placed_models[idx].get("Model", "unknown")
+                logger.info(f"[PlacementPriority]   Anchor {idx}: {model_name} - {reason}")
+        
+        return anchor_models, dependent_models
+        
+    except Exception as e:
+        logger.warning(f"[PlacementPriority] Failed to determine priorities: {e}")
+        logger.warning(f"[PlacementPriority] Falling back to heuristic split")
+        
+        # Fallback: use heuristic split
+        anchor_models = []
+        dependent_models = []
+        
+        for model in full_placed_models:
+            model_name = model.get("Model", "").lower()
+            if "table" in model_name or "sofa" in model_name or "bed" in model_name:
+                anchor_models.append(model)
+            else:
+                dependent_models.append(model)
+        
+        return anchor_models, dependent_models
+
+
 def _generate_semantic_plan_with_validation(
     *,
     prompt_model_fn,
@@ -226,12 +315,13 @@ def _generate_semantic_plan_with_validation(
     room_half_size: float,
     full_placed_models: List[Dict[str, Any]],
     max_retries: int = 3,
+    skip_validation: bool = False,
 ) -> Dict[str, Any]:
     """Generate semantic plan using new format with validation feedback loop.
     
     This function:
     1. Generates semantic plan using the new prompt template
-    2. Validates the plan against the schema
+    2. Validates the plan against the schema (unless skip_validation=True)
     3. If validation fails, sends error back to LLM for correction
     4. Retries up to max_retries times
     
@@ -242,6 +332,7 @@ def _generate_semantic_plan_with_validation(
         room_half_size: Room half size in meters
         full_placed_models: List of models with sizes and metadata
         max_retries: Maximum number of retry attempts
+        skip_validation: If True, skip schema validation (for intermediate batches)
         
     Returns:
         Valid semantic plan dictionary
@@ -303,6 +394,11 @@ def _generate_semantic_plan_with_validation(
             else:
                 raise ValueError(f"Unexpected LLM response type: {type(raw_response)}")
             
+            # Skip validation for intermediate batches
+            if skip_validation:
+                logger.info(f"[SemanticPlan] Skipping validation (intermediate batch)")
+                return semantic_plan
+            
             # Validate schema
             from creator.placement.semantic_enforcement.schema_validator import SchemaValidator
             validator = SchemaValidator()
@@ -349,6 +445,230 @@ def _generate_semantic_plan_with_validation(
                 raise RuntimeError(f"Failed to generate semantic plan after {max_retries} attempts: {e}")
     
     raise RuntimeError(f"Failed to generate valid semantic plan after {max_retries} attempts")
+
+
+def _group_dependent_by_anchor(
+    *,
+    prompt_model_fn,
+    llm_model: str,
+    query: str,
+    anchor_models: List[Dict[str, Any]],
+    dependent_models: List[Dict[str, Any]],
+    anchor_objects: List[Dict[str, Any]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Ask LLM to group dependent objects by their anchor objects.
+    
+    Args:
+        prompt_model_fn: LLM prompt function
+        llm_model: LLM model name
+        query: User query
+        anchor_models: List of anchor models (before placement)
+        dependent_models: List of dependent models (before placement)
+        anchor_objects: List of placed anchor objects (with IDs)
+        
+    Returns:
+        Dictionary mapping anchor IDs to lists of dependent models
+        Example: {"table_1": [chair_model_1, chair_model_2], "table_2": [...]}
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Simple heuristic: distribute dependent objects evenly among anchors
+    # For "4 tables with 3 chairs each", this will create groups of 3 chairs per table
+    
+    if not anchor_objects or not dependent_models:
+        return {}
+    
+    num_anchors = len(anchor_objects)
+    num_dependent = len(dependent_models)
+    
+    # Calculate objects per anchor
+    objects_per_anchor = num_dependent // num_anchors
+    remainder = num_dependent % num_anchors
+    
+    groups = {}
+    dep_idx = 0
+    
+    for i, anchor_obj in enumerate(anchor_objects):
+        anchor_id = anchor_obj.get("id", f"anchor_{i}")
+        
+        # Distribute remainder across first few anchors
+        count = objects_per_anchor + (1 if i < remainder else 0)
+        
+        groups[anchor_id] = dependent_models[dep_idx:dep_idx + count]
+        dep_idx += count
+        
+        logger.info(f"[DependentGrouping] {anchor_id}: {len(groups[anchor_id])} dependent objects")
+    
+    return groups
+
+
+def _generate_semantic_plan_in_batches(
+    *,
+    prompt_model_fn,
+    llm_model: str,
+    query: str,
+    room_half_size: float,
+    full_placed_models: List[Dict[str, Any]],
+    max_retries: int = 3,
+    batch_size: int = 8,
+) -> Dict[str, Any]:
+    """Generate semantic plan in batches with contextual awareness.
+    
+    For large scenes (>8 objects), splits generation into batches where each
+    subsequent batch receives full context of previously placed objects:
+    1. Generate tables/anchor objects first
+    2. Generate chairs/dependent objects in batches, with full knowledge of
+       already placed objects (positions, sizes, IDs)
+    3. Merge all batches into single semantic plan
+    
+    Args:
+        prompt_model_fn: LLM prompt function
+        llm_model: LLM model name
+        query: User query
+        room_half_size: Room half size in meters
+        full_placed_models: List of models with sizes and metadata
+        max_retries: Maximum number of retry attempts per batch
+        batch_size: Maximum objects per batch (default 8)
+        
+    Returns:
+        Valid semantic plan dictionary with all objects
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # If small scene, use regular generation
+    if len(full_placed_models) <= batch_size:
+        logger.info(f"[SemanticPlan] Scene has {len(full_placed_models)} objects, using regular generation")
+        return _generate_semantic_plan_with_validation(
+            prompt_model_fn=prompt_model_fn,
+            llm_model=llm_model,
+            query=query,
+            room_half_size=room_half_size,
+            full_placed_models=full_placed_models,
+            max_retries=max_retries,
+        )
+    
+    logger.info(f"[SemanticPlan] Scene has {len(full_placed_models)} objects, using batch generation (batch_size={batch_size})")
+    
+    # Ask LLM to determine placement priorities
+    anchor_models, dependent_models = _determine_placement_priorities(
+        prompt_model_fn=prompt_model_fn,
+        llm_model=llm_model,
+        query=query,
+        full_placed_models=full_placed_models,
+    )
+    
+    logger.info(f"[SemanticPlan] LLM determined: {len(anchor_models)} anchors, {len(dependent_models)} dependent objects")
+    
+    # Step 1: Generate anchor objects (tables) - skip validation for intermediate batch
+    logger.info(f"[SemanticPlan] Batch 1: Generating {len(anchor_models)} anchor objects")
+    anchor_plan = _generate_semantic_plan_with_validation(
+        prompt_model_fn=prompt_model_fn,
+        llm_model=llm_model,
+        query=query,
+        room_half_size=room_half_size,
+        full_placed_models=anchor_models,
+        max_retries=max_retries,
+        skip_validation=True,  # Skip validation for intermediate batch
+    )
+    
+    all_objects = anchor_plan.get("objects", [])
+    logger.info(f"[SemanticPlan] Batch 1 complete: {len(all_objects)} objects generated")
+    
+    # Step 2: Group dependent objects by anchor
+    dependent_groups = _group_dependent_by_anchor(
+        prompt_model_fn=prompt_model_fn,
+        llm_model=llm_model,
+        query=query,
+        anchor_models=anchor_models,
+        dependent_models=dependent_models,
+        anchor_objects=all_objects,
+    )
+    
+    # Step 3: Generate dependent objects for each anchor WITH CONTEXT
+    batch_num = 2
+    for anchor_id, group_models in dependent_groups.items():
+        if not group_models:
+            continue
+        
+        logger.info(f"[SemanticPlan] Batch {batch_num}: Generating {len(group_models)} dependent objects for {anchor_id}")
+        
+        # Build context string with already placed objects
+        context_lines = []
+        context_lines.append(f"\n\nALREADY PLACED OBJECTS (use these IDs for relative positioning):")
+        context_lines.append(f"\nFOCUS: Place objects around '{anchor_id}'")
+        
+        for obj in all_objects:
+            obj_id = obj.get("id", "unknown")
+            obj_model = obj.get("Model", "unknown")
+            obj_size = obj.get("size", {})
+            
+            # Extract position info
+            pos_info = ""
+            if "position" in obj:
+                if "absolute" in obj["position"]:
+                    abs_pos = obj["position"]["absolute"]
+                    pos_info = f"at position x={abs_pos.get('x', 0):.1f}m, y={abs_pos.get('y', 0):.1f}m"
+                elif "relative" in obj["position"]:
+                    rel_pos = obj["position"]["relative"]
+                    pos_info = f"relative to {rel_pos.get('relative_to', 'unknown')}"
+            
+            # Highlight the target anchor
+            marker = " ← TARGET ANCHOR" if obj_id == anchor_id else ""
+            
+            context_lines.append(
+                f"  - {obj_id}: {obj_model} "
+                f"(size: {obj_size.get('width', 0):.2f}m × {obj_size.get('length', 0):.2f}m × {obj_size.get('height', 0):.2f}m) "
+                f"{pos_info}{marker}"
+            )
+        
+        context_str = "\n".join(context_lines)
+        
+        # Create modified query with context
+        batch_query = f"{query}. {context_str}\n\nNow place the following new objects using relative positioning to '{anchor_id}'."
+        
+        batch_plan = _generate_semantic_plan_with_validation(
+            prompt_model_fn=prompt_model_fn,
+            llm_model=llm_model,
+            query=batch_query,
+            room_half_size=room_half_size,
+            full_placed_models=group_models,
+            max_retries=max_retries,
+            skip_validation=True,  # Skip validation for intermediate batch
+        )
+        
+        batch_objects = batch_plan.get("objects", [])
+        all_objects.extend(batch_objects)
+        logger.info(f"[SemanticPlan] Batch {batch_num} complete: {len(batch_objects)} objects generated, total: {len(all_objects)}")
+        batch_num += 1
+    
+    # Merge into final plan
+    final_plan = {
+        "schema_version": "1.0",
+        "room_size": anchor_plan.get("room_size", {
+            "width": room_half_size * 2,
+            "length": room_half_size * 2,
+            "height": 3.0,
+        }),
+        "objects": all_objects,
+    }
+    
+    logger.info(f"[SemanticPlan] Batch generation complete: {len(all_objects)} total objects")
+    
+    # Validate final merged plan
+    logger.info(f"[SemanticPlan] Validating final merged plan...")
+    from creator.placement.semantic_enforcement.schema_validator import SchemaValidator
+    validator = SchemaValidator()
+    validation_result = validator.validate_plan(final_plan)
+    
+    if not validation_result.success:
+        error_msg = "\n".join(validation_result.errors)
+        logger.error(f"[SemanticPlan] Final plan validation failed:\n{error_msg}")
+        raise SchemaValidationError(f"Final merged plan validation failed:\n{error_msg}")
+    
+    logger.info(f"[SemanticPlan] ✓ Final plan validation passed")
+    return final_plan
 
 
 def generate_world(
@@ -563,30 +883,16 @@ def generate_world(
     print(f"[pipeline] Final room: {room_half_size*2:.0f}m × {room_half_size*2:.0f}m")
 
     # ---------------------------------------------------------------
-    # Stage 3: Semantic plan (constraints + scene graph)
+    # Stage 3: Semantic plan (OLD FORMAT - DISABLED)
     # ---------------------------------------------------------------
-    semantic_plan = build_semantic_plan(
-        prompt_model=interface.prompt_model_for_constraints,
-        prompt_template=fmt_constraints_plan_tmpl,
-        query=effective_query,
-        chosen_model=chosen_model,
-        chosen_models=chosen_models,
-        context_models=models,
-        scene_spec=scene_spec,
-    )
-    if isinstance(semantic_plan.get("objects"), list):
-        semantic_plan["objects"] = _stabilize_dense_group_constraints(
-            semantic_plan["objects"]
-        )
-    # Inject room spec into the plan for solvers
-    semantic_plan.setdefault("room", {})["half_size"] = room_half_size
-    semantic_plan["room"]["type"] = scene_spec.room_type
-
-    interface.save_constraint_graph(
-        semantic_plan=semantic_plan,
-        query=effective_query,
-        output_filename="scene_graph_latest.json",
-    )
+    # Old semantic plan format is no longer used - new format generated in Stage 4
+    semantic_plan = {"objects": [], "room": {"half_size": room_half_size, "type": scene_spec.room_type}}
+    
+    # interface.save_constraint_graph(
+    #     semantic_plan=semantic_plan,
+    #     query=effective_query,
+    #     output_filename="scene_graph_latest.json",
+    # )
 
     # ---------------------------------------------------------------
     # Stage 4: Layout solving (Semantic Enforcement Pipeline ONLY)
@@ -595,13 +901,14 @@ def generate_world(
     
     # Generate semantic plan using new format
     print("[pipeline] Generating semantic plan...")
-    semantic_plan_new_format = _generate_semantic_plan_with_validation(
+    semantic_plan_new_format = _generate_semantic_plan_in_batches(
         prompt_model_fn=prompt_model,
         llm_model=chosen_model,
         query=effective_query,
         room_half_size=room_half_size,
         full_placed_models=full_placed_models,
         max_retries=3,
+        batch_size=8,  # Generate max 8 objects per batch
     )
     
     print(f"[pipeline] ✓ Generated semantic plan with {len(semantic_plan_new_format.get('objects', []))} objects")
@@ -740,10 +1047,11 @@ def generate_world(
         room_half_size=room_half_size,
         semantic_plan=semantic_plan,
     )
-    full_placed_models = repair_layout_by_constraints(
-        full_placed_models, semantic_plan=semantic_plan,
-        room_half_size=room_half_size,
-    )
+    # repair_layout_by_constraints is disabled - semantic enforcement pipeline handles constraints
+    # full_placed_models = repair_layout_by_constraints(
+    #     full_placed_models, semantic_plan=semantic_plan,
+    #     room_half_size=room_half_size,
+    # )
 
     # ---------------------------------------------------------------
     # Stage 5: MuJoCo assembly - Convert meshes using add_models
@@ -789,14 +1097,15 @@ def generate_world(
         print("[pipeline] No robots detected in query")
 
     # ---------------------------------------------------------------
-    # Stage 6: Physics refinement
+    # Stage 6: Physics refinement (DISABLED - uses removed modules)
     # ---------------------------------------------------------------
-    saved_models = refine_scene_with_engine(
-        interface=interface,
-        world_path=world_path,
-        placed_models=saved_models,
-        room_half_size=room_half_size,
-    )
+    # saved_models = refine_scene_with_engine(
+    #     interface=interface,
+    #     world_path=world_path,
+    #     placed_models=saved_models,
+    #     room_half_size=room_half_size,
+    # )
+    print("[pipeline] Stage 6: Physics refinement skipped (disabled)")
 
     # ---------------------------------------------------------------
     # Stage 6.5: Scene preview render

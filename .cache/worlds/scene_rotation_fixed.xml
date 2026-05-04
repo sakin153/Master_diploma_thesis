@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="scene"><option timestep="0.002" gravity="0 0 -9.81" iterations="50" tolerance="1e-10" integrator="implicitfast" />
+<default><geom condim="3" friction="0.8 0.005 0.0001" solref="0.01 1" solimp="0.95 0.99 0.001 0.5 2" density="600" />
+</default>
+<asset><texture type="skybox" builtin="gradient" rgb1=".3 .5 .7" rgb2="0 0 0" width="32" height="512" />
+<texture name="body" type="cube" builtin="flat" mark="cross" width="128" height="128" rgb1="0.8 0.6 0.4" rgb2="0.8 0.6 0.4" markrgb="1 1 1" random="0.01" />
+<texture name="grid" type="2d" builtin="checker" width="512" height="512" rgb1=".1 .2 .3" rgb2=".2 .3 .4" />
+<material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2" />
+</asset><worldbody><geom name="floor" type="plane" size="0 0 0.05" material="grid" condim="3" friction="1.0 0.005 0.0001" solref="0.01 1" solimp="0.95 0.99 0.001 0.5 2" />
+<geom name="ceiling" type="plane" pos="0 0 3.0" size="0 0 0.05" rgba="0.9 0.9 0.9 0.1" condim="1" contype="1" conaffinity="1" euler="180 0 0" />
+<light name="light_main" pos="0 0 4" dir="0 0 -1" diffuse="0.8 0.8 0.8" specular="0.2 0.2 0.2" castshadow="true" />
+<light name="light_fill" pos="0 0 6" diffuse="0.4 0.4 0.4" specular="0.0 0.0 0.0" castshadow="false" />
+</worldbody><include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/1522dad65f0859758dad5636ba348bf8_0/1522dad65f0859758dad5636ba348bf8_0/1522dad65f0859758dad5636ba348bf8_0.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/1522dad65f0859758dad5636ba348bf8_1/1522dad65f0859758dad5636ba348bf8_1/1522dad65f0859758dad5636ba348bf8_1.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/1522dad65f0859758dad5636ba348bf8_2/1522dad65f0859758dad5636ba348bf8_2/1522dad65f0859758dad5636ba348bf8_2.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/1522dad65f0859758dad5636ba348bf8_3/1522dad65f0859758dad5636ba348bf8_3/1522dad65f0859758dad5636ba348bf8_3.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_4/aeea9a5e33665bb3b31544206cb2a929_4/aeea9a5e33665bb3b31544206cb2a929_4.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_5/aeea9a5e33665bb3b31544206cb2a929_5/aeea9a5e33665bb3b31544206cb2a929_5.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_6/aeea9a5e33665bb3b31544206cb2a929_6/aeea9a5e33665bb3b31544206cb2a929_6.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_7/aeea9a5e33665bb3b31544206cb2a929_7/aeea9a5e33665bb3b31544206cb2a929_7.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_8/aeea9a5e33665bb3b31544206cb2a929_8/aeea9a5e33665bb3b31544206cb2a929_8.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_9/aeea9a5e33665bb3b31544206cb2a929_9/aeea9a5e33665bb3b31544206cb2a929_9.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_10/aeea9a5e33665bb3b31544206cb2a929_10/aeea9a5e33665bb3b31544206cb2a929_10.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_11/aeea9a5e33665bb3b31544206cb2a929_11/aeea9a5e33665bb3b31544206cb2a929_11.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_12/aeea9a5e33665bb3b31544206cb2a929_12/aeea9a5e33665bb3b31544206cb2a929_12.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_13/aeea9a5e33665bb3b31544206cb2a929_13/aeea9a5e33665bb3b31544206cb2a929_13.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_14/aeea9a5e33665bb3b31544206cb2a929_14/aeea9a5e33665bb3b31544206cb2a929_14.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_15/aeea9a5e33665bb3b31544206cb2a929_15/aeea9a5e33665bb3b31544206cb2a929_15.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_16/aeea9a5e33665bb3b31544206cb2a929_16/aeea9a5e33665bb3b31544206cb2a929_16.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_17/aeea9a5e33665bb3b31544206cb2a929_17/aeea9a5e33665bb3b31544206cb2a929_17.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_18/aeea9a5e33665bb3b31544206cb2a929_18/aeea9a5e33665bb3b31544206cb2a929_18.xml" />
+<include file="/home/sakin153/Рабочий стол/world-creator/.cache/converted/aeea9a5e33665bb3b31544206cb2a929_19/aeea9a5e33665bb3b31544206cb2a929_19/aeea9a5e33665bb3b31544206cb2a929_19.xml" />
+</mujoco>

@@ -121,8 +121,8 @@ def validate_and_repair_layout(
         )
         print("[validate_and_repair] Skipping gradient resolution, invoking LLM fallback...")
         
-        # Import llm_replan_layout from universal_system
-        from creator.placement.universal_system import llm_replan_layout
+        # Import llm_replan_layout from llm_collision_resolver
+        from creator.placement.llm_collision_resolver import llm_replan_layout
         
         # Call LLM fallback with context
         replanned_models, llm_success = llm_replan_layout(
@@ -205,8 +205,8 @@ def validate_and_repair_layout(
         # Task 3.2: Invoke LLM fallback when convergence fails
         print("[validate_and_repair] Invoking LLM fallback for layout replanning...")
         
-        # Import llm_replan_layout from universal_system
-        from creator.placement.universal_system import llm_replan_layout
+        # Import llm_replan_layout from llm_collision_resolver
+        from creator.placement.llm_collision_resolver import llm_replan_layout
         
         # Call LLM fallback with context
         replanned_models, llm_success = llm_replan_layout(

@@ -2,3 +2,7 @@
 __pycache__
 build
 world_creator.egg-info
+
+# Output cache directories
+output/cache/
+project/.cache/

@@ -387,8 +387,8 @@ class DistanceResolver:
         length = size["length"]
         height = size["height"]
         
-        # Get target's orientation
-        orientation = target_obj["orientation"]["absolute"]
+        # Get target's orientation (use default if not present)
+        orientation = target_obj.get("orientation", {}).get("absolute", {})
         yaw_deg = orientation.get("yaw_deg", 0.0)
         yaw_rad = math.radians(yaw_deg)
         

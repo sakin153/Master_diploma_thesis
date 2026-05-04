@@ -100,8 +100,8 @@ class SceneAssembly:
         # Add floor
         self._add_floor(worldbody)
 
-        # Add walls based on room_size
-        self._add_walls(worldbody, placement_solution.room_size)
+        # Add walls based on room_size - DISABLED (walls not needed in pipeline)
+        # self._add_walls(worldbody, placement_solution.room_size)
 
         # Add all objects from placement solution
         objects_added = 0
