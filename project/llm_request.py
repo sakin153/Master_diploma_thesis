@@ -6,7 +6,7 @@ import sys
 import requests
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "deepseek-v3.1:671b-cloud"
+DEFAULT_MODEL = "qwen3-coder-next:cloud"
 DEFAULT_TIMEOUT_S = 180
 
 

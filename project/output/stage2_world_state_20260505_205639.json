@@ -1,0 +1,293 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "tables_inst_0",
+        "Model": "table",
+        "size": [
+          1.2337291240692139,
+          0.7500001490116119,
+          1.7365700006484985
+        ],
+        "Pose": {
+          "x": -1.5,
+          "y": -1.5,
+          "z": 0.37500007450580597
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "tables_inst_1",
+        "Model": "table",
+        "size": [
+          1.2337291240692139,
+          0.7500001490116119,
+          1.7365700006484985
+        ],
+        "Pose": {
+          "x": 1.5,
+          "y": 1.5,
+          "z": 0.37500007450580597
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "boxes_inst_0",
+        "Model": "box",
+        "size": [
+          0.6152940094470978,
+          0.3500000238418579,
+          0.6271770000457764
+        ],
+        "Pose": {
+          "x": -1.5,
+          "y": -1.5,
+          "z": 0.9250001609325409
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "boxes_inst_1",
+        "Model": "box",
+        "size": [
+          0.6152940094470978,
+          0.3500000238418579,
+          0.6271770000457764
+        ],
+        "Pose": {
+          "x": -1.5,
+          "y": -1.5,
+          "z": 0.9250001609325409
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "boxes_inst_2",
+        "Model": "box",
+        "size": [
+          0.6152940094470978,
+          0.3500000238418579,
+          0.6271770000457764
+        ],
+        "Pose": {
+          "x": 1.5,
+          "y": 1.5,
+          "z": 0.9250001609325409
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "boxes_inst_3",
+        "Model": "box",
+        "size": [
+          0.6152940094470978,
+          0.3500000238418579,
+          0.6271770000457764
+        ],
+        "Pose": {
+          "x": 1.5,
+          "y": 1.5,
+          "z": 0.9250001609325409
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "chairs_inst_0",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": -0.363,
+          "y": -1.5,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "chairs_inst_1",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": -2.637,
+          "y": -1.5,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chairs_inst_2",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": -1.5,
+          "y": -0.147,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 270.0
+      },
+      {
+        "id": "chairs_inst_3",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": -1.5,
+          "y": -2.853,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 90.0
+      },
+      {
+        "id": "chairs_inst_4",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": 2.637,
+          "y": 1.5,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "chairs_inst_5",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": 0.363,
+          "y": 1.5,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chairs_inst_6",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": -1.5,
+          "y": -2.853,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 90.0
+      },
+      {
+        "id": "chairs_inst_7",
+        "Model": "computer chair",
+        "size": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ],
+        "Pose": {
+          "x": 1.5,
+          "y": 2.853,
+          "z": 0.44999999999999996
+        },
+        "yaw_deg": 270.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 4.0
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "tables",
+        "model_name": "table",
+        "instances": 2,
+        "parent_id": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "size_hint": [
+          1.2337291240692139,
+          0.7500001490116119,
+          1.7365700006484985
+        ]
+      },
+      {
+        "id": "chairs",
+        "model_name": "computer chair",
+        "instances": 8,
+        "parent_id": "tables",
+        "relationship": {
+          "type": "around",
+          "reference": null,
+          "side": null,
+          "distance": 0.2,
+          "facing": "inward",
+          "offset": null
+        },
+        "depends_on": null,
+        "place_order": 2,
+        "level": 1,
+        "size_hint": [
+          0.6402502273375288,
+          0.8999999999999999,
+          0.5687662862915064
+        ]
+      },
+      {
+        "id": "boxes",
+        "model_name": "box",
+        "instances": 4,
+        "parent_id": "tables",
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.1,
+          "facing": null,
+          "offset": null
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "size_hint": [
+          0.6152940094470978,
+          0.3500000238418579,
+          0.6271770000457764
+        ]
+      }
+    ],
+    "metadata": {
+      "total_objects": 14,
+      "max_level": 1
+    }
+  }
+}

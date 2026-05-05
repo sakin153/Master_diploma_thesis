@@ -1,0 +1,316 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "table",
+      "size": [
+        1.2337291240692139,
+        0.7500001490116119,
+        1.7365700006484985
+      ],
+      "scale": 1.0,
+      "_height_m": 0.7500001490116119,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_0",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -1.5,
+        "y": -1.5,
+        "z": 0.37500007450580597
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "table",
+      "size": [
+        1.2337291240692139,
+        0.7500001490116119,
+        1.7365700006484985
+      ],
+      "scale": 1.0,
+      "_height_m": 0.7500001490116119,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_1",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 1.5,
+        "y": 1.5,
+        "z": 0.37500007450580597
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "box",
+      "uuid": "0626293c5f3e591b9df5fe282051c4cd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/storage/0626293c5f3e591b9df5fe282051c4cd/mesh/box.glb",
+      "_query_name": "box",
+      "size": [
+        0.6152940094470978,
+        0.3500000238418579,
+        0.6271770000457764
+      ],
+      "scale": 1.0,
+      "_height_m": 0.3500000238418579,
+      "save_fn": "0626293c5f3e591b9df5fe282051c4cd_2",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -1.5,
+        "y": -1.5,
+        "z": 0.9250001609325409
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "box",
+      "uuid": "0626293c5f3e591b9df5fe282051c4cd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/storage/0626293c5f3e591b9df5fe282051c4cd/mesh/box.glb",
+      "_query_name": "box",
+      "size": [
+        0.6152940094470978,
+        0.3500000238418579,
+        0.6271770000457764
+      ],
+      "scale": 1.0,
+      "_height_m": 0.3500000238418579,
+      "save_fn": "0626293c5f3e591b9df5fe282051c4cd_3",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -1.5,
+        "y": -1.5,
+        "z": 0.9250001609325409
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "box",
+      "uuid": "0626293c5f3e591b9df5fe282051c4cd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/storage/0626293c5f3e591b9df5fe282051c4cd/mesh/box.glb",
+      "_query_name": "box",
+      "size": [
+        0.6152940094470978,
+        0.3500000238418579,
+        0.6271770000457764
+      ],
+      "scale": 1.0,
+      "_height_m": 0.3500000238418579,
+      "save_fn": "0626293c5f3e591b9df5fe282051c4cd_4",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 1.5,
+        "y": 1.5,
+        "z": 0.9250001609325409
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "box",
+      "uuid": "0626293c5f3e591b9df5fe282051c4cd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/storage/0626293c5f3e591b9df5fe282051c4cd/mesh/box.glb",
+      "_query_name": "box",
+      "size": [
+        0.6152940094470978,
+        0.3500000238418579,
+        0.6271770000457764
+      ],
+      "scale": 1.0,
+      "_height_m": 0.3500000238418579,
+      "save_fn": "0626293c5f3e591b9df5fe282051c4cd_5",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 1.5,
+        "y": 1.5,
+        "z": 0.9250001609325409
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_6",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -0.263,
+        "y": -1.5,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_7",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -2.737,
+        "y": -1.5,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_8",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -1.5,
+        "y": -0.047,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 270.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_9",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -1.5,
+        "y": -2.953,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 90.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_10",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 2.737,
+        "y": 1.5,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_11",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": 0.263,
+        "y": 1.5,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_12",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -0.263,
+        "y": -1.5,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "abf4d4dbd52f5ccaa3611c94c5d06123",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/abf4d4dbd52f5ccaa3611c94c5d06123/mesh/computer_chair_40.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6402502273375288,
+        0.8999999999999999,
+        0.5687662862915064
+      ],
+      "scale": 0.8181818004482052,
+      "_height_m": 0.8999999999999999,
+      "save_fn": "abf4d4dbd52f5ccaa3611c94c5d06123_13",
+      "_up_axis": "y",
+      "is_static": true,
+      "Pose": {
+        "x": -2.737,
+        "y": -1.5,
+        "z": 0.44999999999999996
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 4.0,
+  "query": "A room with two identical tables, each accompanied by four chairs. Each table has two boxes lying on its surface.",
+  "room_type": "office"
+}

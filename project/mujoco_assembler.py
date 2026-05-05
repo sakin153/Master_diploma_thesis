@@ -14,6 +14,44 @@ import trimesh
 from obj2mjcf.cli import Args, CoacdArgs, process_obj
 
 
+# Опционально отключить определение «переда» модели через VLM
+# (например в офлайн-окружении). По умолчанию включено.
+_ORIENT_DISABLED = os.environ.get(
+    "WORLD_CREATOR_DISABLE_ORIENTATION", ""
+).lower() in ("1", "true", "yes")
+
+
+def _get_orientation_offset(model):
+    """Вернуть yaw-offset для конкретной GLB модели.
+
+    Полагается на ``project.model_orientation_detector.compute_yaw_offset``,
+    у которого внутри персистентный disk-cache по абсолютному пути модели.
+    На любой сбой LLM/рендера отдаёт 0 — лучше повёрнутый стул, чем
+    сорвавшаяся сборка сцены.
+    """
+    if _ORIENT_DISABLED:
+        return 0
+    up_axis = str(model.get("_up_axis", "y"))
+    if up_axis != "y":
+        # Z-up модели не проходят X-90 коррекцию, у них своя система осей.
+        return 0
+    model_loc = str(model.get("model_loc") or "").strip()
+    if not model_loc or not os.path.exists(model_loc):
+        return 0
+    try:
+        from project.model_orientation_detector import compute_yaw_offset
+        model_name = str(
+            model.get("_query_name") or model.get("Model") or "object"
+        )
+        return int(compute_yaw_offset(
+            model_loc,
+            model_name=re.sub(r"[^a-zA-Z0-9_]+", "_", model_name) or "object",
+        )) % 360
+    except Exception as e:
+        print(f"[mujoco_assembler]   orientation offset failed: {e}; using 0°")
+        return 0
+
+
 _CONCAVE_HINTS = ("crate", "container", "box", "basket", "bin", "drawer", "ящик")
 
 _MASS_TARGETS = (
@@ -190,9 +228,17 @@ def _modify_body_tag(root, model):
     pz = float(pose.get("z", 0.0))
 
     up_axis = str(model.get("_up_axis", "y"))
-    euler_str = f"0 0 {yaw_deg}" if up_axis == "z" else f"90 {yaw_deg} 0"
 
-    print(f"[mujoco_assembler]   {model_name}: is_static={profile['is_static']}, euler={euler_str}")
+    yaw_offset = _get_orientation_offset(model)
+    final_yaw = (yaw_deg + yaw_offset) % 360.0
+
+    euler_str = f"0 0 {final_yaw}" if up_axis == "z" else f"90 {final_yaw} 0"
+
+    if yaw_offset:
+        print(f"[mujoco_assembler]   {model_name}: is_static={profile['is_static']}, "
+              f"euler={euler_str} (planner_yaw={yaw_deg:.0f}° + model_offset={yaw_offset}°)")
+    else:
+        print(f"[mujoco_assembler]   {model_name}: is_static={profile['is_static']}, euler={euler_str}")
 
     for body in root.findall(".//body"):
         body.set("pos", f"{px} {py} {pz}")

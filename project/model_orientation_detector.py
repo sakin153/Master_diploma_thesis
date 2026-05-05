@@ -26,12 +26,65 @@
 """
 
 import os
-import trimesh
-import numpy as np
-from PIL import Image
+import json
+import hashlib
+import threading
+try:
+    import numpy as np
+except Exception:  # pragma: no cover
+    np = None
+
+try:
+    import trimesh
+except Exception:  # pragma: no cover
+    trimesh = None
+
+try:
+    from PIL import Image
+except Exception:  # pragma: no cover
+    Image = None
 from project.llm_request import DEFAULT_MODEL
 import base64
-import requests
+try:
+    import requests
+except Exception:  # pragma: no cover
+    requests = None
+
+
+# ---------------------------------------------------------------------------
+# Persistent disk cache for orientation results.
+# Key: sha1 of the absolute model path. Value: dict with offset, front_yaw, etc.
+# Avoids re-querying the VLM for the same GLB across runs.
+# ---------------------------------------------------------------------------
+_CACHE_LOCK = threading.Lock()
+
+
+def _cache_path(cache_dir):
+    return os.path.join(cache_dir, "cache.json")
+
+
+def _cache_key(model_path):
+    return hashlib.sha1(os.path.abspath(model_path).encode("utf-8")).hexdigest()
+
+
+def _cache_load(cache_dir):
+    path = _cache_path(cache_dir)
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _cache_save(cache_dir, data):
+    os.makedirs(cache_dir, exist_ok=True)
+    path = _cache_path(cache_dir)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
 
 
 def render_model_view_trimesh(mesh, yaw_deg=0, resolution=(256, 256)):
@@ -46,6 +99,10 @@ def render_model_view_trimesh(mesh, yaw_deg=0, resolution=(256, 256)):
     Returns:
         PIL.Image: отрендеренное изображение
     """
+    if trimesh is None or np is None or Image is None:
+        raise RuntimeError(
+            "render_model_view_trimesh requires trimesh, numpy, Pillow"
+        )
     # Применяем поворот к мешу
     yaw_rad = np.radians(yaw_deg)
     rotation_matrix = trimesh.transformations.rotation_matrix(
@@ -81,6 +138,8 @@ def render_model_view(mesh, yaw_deg=0, distance=2.0, resolution=(256, 256)):
     Returns:
         PIL.Image: отрендеренное изображение
     """
+    if trimesh is None or np is None or Image is None:
+        raise RuntimeError("render_model_view requires trimesh, numpy, Pillow")
     # Пробуем использовать pyrender с OSMesa
     try:
         os.environ['PYOPENGL_PLATFORM'] = 'osmesa'
@@ -137,7 +196,8 @@ def detect_model_front_with_llm(
     cache_dir=".cache/orientation",
     llm_model=None,
     use_remote=True,
-    remote_url="http://94.19.29.186:11434"
+    remote_url="http://94.19.29.186:11434",
+    num_views=4
 ):
     """
     Определяет "перед" модели с помощью мультимодальной LLM.
@@ -149,6 +209,7 @@ def detect_model_front_with_llm(
         llm_model: название мультимодальной модели
         use_remote: использовать удаленный сервер (по умолчанию True)
         remote_url: URL удаленного Ollama сервера
+        num_views: 2 (только 0°/180°) или 4 (0°/90°/180°/270°). По умолчанию 4.
 
     Returns:
         dict: {
@@ -157,6 +218,12 @@ def detect_model_front_with_llm(
             "reasoning": str    # объяснение от LLM
         }
     """
+    if trimesh is None or np is None or Image is None:
+        raise RuntimeError(
+            "VLM detector requires trimesh, numpy, Pillow (and optionally requests)"
+        )
+    if use_remote and requests is None:
+        raise RuntimeError("Remote VLM detector requires 'requests'")
     # Определяем модель для использования
     if llm_model is None:
         if use_remote:
@@ -165,7 +232,7 @@ def detect_model_front_with_llm(
             llm_model = DEFAULT_MODEL
         print(f"[orientation_detector] Используем модель по умолчанию: "
               f"{llm_model}")
-    
+
     server_info = f"удаленный {remote_url}" if use_remote else "локальный"
     print(f"[orientation_detector] Сервер: {server_info}")
     print(f"[orientation_detector] Модель: {llm_model}")
@@ -180,11 +247,14 @@ def detect_model_front_with_llm(
     scale = 1.0 / np.max(mesh.extents)
     mesh.vertices *= scale
 
-    # Рендерим только с 2 углов (0° и 180°) для скорости
-    angles = [0, 180]
+    if num_views == 2:
+        angles = [0, 180]
+    else:
+        angles = [0, 90, 180, 270]
     image_paths = []
 
-    print("[orientation_detector] Рендеринг с 2 углов (0° и 180°)...")
+    print(f"[orientation_detector] Рендеринг с {len(angles)} углов: "
+          f"{angles}")
     for angle in angles:
         img = render_model_view(mesh, yaw_deg=angle)
         img_path = os.path.join(
@@ -208,18 +278,22 @@ def detect_model_front_with_llm(
         "Respond ONLY with valid JSON, no markdown, no explanations."
     )
 
+    angles_lines = "\n".join(
+        f"- Image {i + 1}: rotated to {a}°" for i, a in enumerate(angles)
+    )
+    angles_choices = " or ".join(str(a) for a in angles)
     user_prompt = (
-        f"Look at these 2 images of a {model_name}:\n"
-        "- Image 1: rotated to 0°\n"
-        "- Image 2: rotated to 180°\n\n"
-        "TASK: Identify which image shows the FRONT.\n\n"
+        f"Look at these {len(angles)} images of a {model_name}:\n"
+        f"{angles_lines}\n\n"
+        "TASK: Identify which image shows the FRONT view (the camera "
+        "is looking AT the object from the front).\n\n"
         "Analyze visual features:\n"
-        "- Functional elements (controls, handles, openings)\n"
+        "- Functional elements (controls, handles, openings, screen)\n"
         "- Asymmetry and detail level\n"
-        "- User interaction side\n\n"
+        "- User interaction side (where a person sits / faces)\n\n"
         "Respond with JSON:\n"
         "{\n"
-        '  "front_yaw": <0 or 180>,\n'
+        f'  "front_yaw": <one of: {angles_choices}>,\n'
         '  "confidence": "<high, medium, or low>"\n'
         "}"
     )
@@ -345,44 +419,311 @@ def detect_model_front_with_llm(
         }
 
 
+def _load_single_mesh(model_path: str):
+    if trimesh is None:
+        raise RuntimeError("trimesh is required for mesh loading")
+    loaded = trimesh.load(model_path, force="scene")
+    if isinstance(loaded, trimesh.Scene):
+        geometries = list(loaded.geometry.values())
+        if not geometries:
+            raise ValueError("Empty scene: no geometries")
+        meshes = []
+        for geom in geometries:
+            if isinstance(geom, trimesh.Trimesh):
+                meshes.append(geom)
+        if not meshes:
+            raise ValueError("Scene contains no meshes")
+        if len(meshes) == 1:
+            mesh = meshes[0]
+        else:
+            mesh = trimesh.util.concatenate(meshes)
+    elif isinstance(loaded, trimesh.Trimesh):
+        mesh = loaded
+    else:
+        raise TypeError(f"Unsupported trimesh load result: {type(loaded)}")
+
+    if mesh.vertices is None or len(mesh.vertices) == 0:
+        raise ValueError("Mesh has no vertices")
+    return mesh
+
+
+def _extract_yaw_features(
+    model_path: str,
+    num_views: int = 4,
+    sample_vertices: int = 200_000,
+):
+    if trimesh is None or np is None:
+        raise RuntimeError("Feature extraction requires trimesh and numpy")
+
+    if num_views == 2:
+        angles = [0, 180]
+    else:
+        angles = [0, 90, 180, 270]
+
+    mesh = _load_single_mesh(model_path)
+    verts = np.asarray(mesh.vertices, dtype=np.float64)
+    if verts.shape[0] > sample_vertices:
+        rng = np.random.default_rng(42)
+        idx = rng.choice(verts.shape[0], size=sample_vertices, replace=False)
+        verts = verts[idx]
+
+    # Center + normalize scale for stable features.
+    center = verts.mean(axis=0)
+    verts = verts - center
+    extents = np.ptp(verts, axis=0)
+    scale = float(np.max(extents))
+    if not np.isfinite(scale) or scale <= 0:
+        scale = 1.0
+    verts = verts / scale
+
+    # Face normals / areas (for "which side has the main flat face").
+    face_normals = None
+    face_areas = None
+    try:
+        if mesh.faces is not None and len(mesh.faces) > 0:
+            face_normals = np.asarray(mesh.face_normals, dtype=np.float64)
+            face_areas = np.asarray(mesh.area_faces, dtype=np.float64)
+    except Exception:
+        face_normals = None
+        face_areas = None
+
+    features = []
+    for yaw_deg in angles:
+        yaw_rad = np.radians(float(yaw_deg))
+        rot = trimesh.transformations.rotation_matrix(yaw_rad, [0, 1, 0])
+        R = rot[:3, :3]
+        v = trimesh.transformations.transform_points(verts, rot)
+        x = v[:, 0]
+        y = v[:, 1]
+        z = v[:, 2]
+
+        y_hi = float(np.quantile(y, 0.80))
+        y_lo = float(np.quantile(y, 0.20))
+        hi_mask = y >= y_hi
+        lo_mask = y <= y_lo
+        top80_mean_z = float(np.mean(z[hi_mask])) if int(hi_mask.sum()) else 0.0
+        bot20_mean_z = float(np.mean(z[lo_mask])) if int(lo_mask.sum()) else 0.0
+
+        bbox_extents = [
+            float(np.ptp(x)),
+            float(np.ptp(y)),
+            float(np.ptp(z)),
+        ]
+
+        area_pos_z = 0.0
+        area_neg_z = 0.0
+        if face_normals is not None and face_areas is not None:
+            n = face_normals @ R.T
+            nz = n[:, 2]
+            area_pos_z = float(np.sum(face_areas * np.clip(nz, 0.0, 1.0)))
+            area_neg_z = float(np.sum(face_areas * np.clip(-nz, 0.0, 1.0)))
+
+        features.append(
+            {
+                "yaw": int(yaw_deg),
+                "bbox_extents": bbox_extents,
+                "top80_mean_z": top80_mean_z,
+                "bot20_mean_z": bot20_mean_z,
+                "area_pos_z": area_pos_z,
+                "area_neg_z": area_neg_z,
+            }
+        )
+
+    return features
+
+
+def detect_model_front_with_text_llm(
+    model_path,
+    model_name="object",
+    llm_model=None,
+    base_url=None,
+    timeout_s=180,
+    num_views=4,
+):
+    """Определяет "перед" модели через обычный (текстовый) LLM.
+
+    В LLM передаются вычисленные геометрические признаки для yaw-кандидатов.
+    Это НЕ VLM: изображения не используются.
+
+    Returns: {"front_yaw": int, "confidence": "high|medium|low"}
+    """
+    if llm_model is None:
+        llm_model = DEFAULT_MODEL
+
+    try:
+        feats = _extract_yaw_features(model_path, num_views=num_views)
+    except Exception as e:
+        print(f"[orientation_detector] feature extraction failed: {e}")
+        return {"front_yaw": 0, "confidence": "low"}
+
+    system_prompt = (
+        "You are a 3D model orientation assistant. "
+        "You must choose the FRONT direction among candidate yaws. "
+        "Respond ONLY with valid JSON, no markdown, no extra keys."
+    )
+
+    # Give the model a small rulebook + measured features.
+    user_prompt = (
+        f"We analyze a 3D mesh of '{model_name}'. "
+        "For each candidate yaw, the mesh was rotated around +Y by that yaw, "
+        "then features were measured assuming the camera looks from +Z.\n\n"
+        "Features per yaw:\n"
+        "- bbox_extents: [range_x, range_y, range_z] after rotation\n"
+        "- top80_mean_z: mean Z of vertices in top 20% by height (Y)\n"
+        "- bot20_mean_z: mean Z of vertices in bottom 20% by height (Y)\n"
+        "- area_pos_z: area-weighted sum of face normals pointing towards +Z\n"
+        "- area_neg_z: area-weighted sum of face normals pointing towards -Z\n\n"
+        "Heuristics (use them but don't hardcode):\n"
+        "- Chair/sofa/bed: backrest/headboard is tall; FRONT is opposite of it. "
+        "So FRONT yaw usually makes top80_mean_z negative (tall parts behind).\n"
+        "- TV/monitor/appliance: FRONT often has a large flat face; prefer yaw with larger area_pos_z.\n"
+        "- If symmetric/ambiguous: choose best guess, confidence=low.\n\n"
+        "Candidates:\n"
+        + "\n".join(
+            json.dumps(item, ensure_ascii=False) for item in feats
+        )
+        + "\n\nRespond with JSON ONLY:\n"
+        + "{\n  \"front_yaw\": <one of the candidate yaw values>,\n  \"confidence\": \"high\"|\"medium\"|\"low\"\n}"
+    )
+
+    try:
+        from project.llm_request import request as llm_request
+
+        result = llm_request(
+            system=system_prompt,
+            user=user_prompt,
+            model=llm_model,
+            base_url=base_url or os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434",
+            timeout_s=timeout_s,
+            images=None,
+        )
+        front_yaw = int(result.get("front_yaw", 0))
+        conf = str(result.get("confidence", "low")).lower()
+        if conf not in ("high", "medium", "low"):
+            conf = "low"
+        return {"front_yaw": front_yaw, "confidence": conf}
+    except Exception as e:
+        print(f"[orientation_detector] text-LLM failed: {e}")
+        return {"front_yaw": 0, "confidence": "low"}
+
+
 def compute_yaw_offset(
     model_path,
     model_name="object",
     llm_model=None,
     use_remote=True,
-    remote_url="http://94.19.29.186:11434"
+    remote_url="http://94.19.29.186:11434",
+    cache_dir=".cache/orientation",
+    num_views=4,
+    force_refresh=False,
+    method=None,
+    env_method_var="WORLD_CREATOR_ORIENTATION_METHOD",
+    env_disable_var="WORLD_CREATOR_DISABLE_ORIENTATION",
 ):
     """
     Вычисляет offset угла для модели.
 
-    Если "перед" модели находится не на 0°, возвращает offset,
-    который нужно добавить к yaw углам при размещении.
+    Offset нужно прибавлять к плановому yaw_deg при сборке MuJoCo XML
+    (см. ``mujoco_assembler``), чтобы интринсик «перёд» модели смотрел
+    в направление, заданное планировщиком (как если бы модель была
+    +Z-forward в GLB).
 
-    Args:
-        model_path: путь к модели
-        model_name: название модели
-        llm_model: название мультимодальной модели (опционально)
-        use_remote: использовать удаленный сервер (по умолчанию True)
-        remote_url: URL удаленного Ollama сервера
+    Результат кешируется на диск в ``{cache_dir}/cache.json`` —
+    повторные вызовы для того же файла не идут в LLM.
 
     Returns:
         int: offset в градусах (0, 90, 180, 270)
     """
-    result = detect_model_front_with_llm(
-        model_path, model_name,
-        llm_model=llm_model,
-        use_remote=use_remote,
-        remote_url=remote_url
-    )
-    front_yaw = result["front_yaw"]
+    # Decide method: param > env > default.
+    if str(os.environ.get(env_disable_var, "")).lower() in ("1", "true", "yes"):
+        method_effective = "off"
+    else:
+        method_effective = (method or os.environ.get(env_method_var) or "llm")
+        method_effective = str(method_effective).strip().lower()
+    if method_effective in ("none", "disable", "disabled"):
+        method_effective = "off"
+    if method_effective in ("text", "text_llm", "text-llm"):
+        method_effective = "llm"
+    if method_effective in ("vlm", "vision"):
+        method_effective = "vlm"
 
-    # Если перед на 0°, offset не нужен
-    # Если перед на 180°, нужно вычесть 180° (offset = 180)
+    if method_effective == "off":
+        return 0
 
-    offset = (360 - front_yaw) % 360
+    # Disk cache lookup.
+    key = _cache_key(f"{model_path}|{method_effective}")
+    with _CACHE_LOCK:
+        cache = _cache_load(cache_dir)
+        if not force_refresh and key in cache:
+            entry = cache[key]
+            if isinstance(entry, dict) and "offset" in entry:
+                offset = int(entry["offset"]) % 360
+                print(f"[orientation_detector] Cache hit '{model_name}': "
+                      f"offset={offset}° (front_yaw={entry.get('front_yaw')}°, "
+                      f"method={entry.get('method', method_effective)})")
+                return offset
 
-    print(f"[orientation_detector] Модель '{model_name}': "
-          f"перед на {front_yaw}°, offset={offset}°")
+    if method_effective == "vlm":
+        result = detect_model_front_with_llm(
+            model_path,
+            model_name,
+            cache_dir=cache_dir,
+            llm_model=llm_model,
+            use_remote=use_remote,
+            remote_url=remote_url,
+            num_views=num_views,
+        )
+    elif method_effective == "llm":
+        # Text-only LLM: no images.
+        # If use_remote is requested, treat remote_url as Ollama base URL.
+        base_url = remote_url if use_remote else os.environ.get("OLLAMA_BASE_URL")
+        result = detect_model_front_with_text_llm(
+            model_path,
+            model_name=model_name,
+            llm_model=llm_model,
+            base_url=base_url,
+            timeout_s=180,
+            num_views=num_views,
+        )
+    else:
+        raise ValueError(
+            f"Unknown orientation method '{method_effective}'. "
+            "Use: llm|vlm|off"
+        )
+    front_yaw = int(result["front_yaw"]) % 360
+
+    # Derivation: trimesh renders mesh rotated by R_y(front_yaw) around
+    # the GLB up-axis +Y; the camera at +Z sees the face whose original
+    # angle from +Z (CCW about +Y) is α = -front_yaw.
+    # MuJoCo applies euler="90 yaw 0" (up_axis=y), so a body-local
+    # vector (sin α, 0, cos α) maps to world facing angle
+    # β = α + yaw - 90°. Planner assumes a +Z-forward model
+    # (α = 0), so to match for an arbitrary α we need
+    # yaw_actual = yaw_planned - α = yaw_planned + front_yaw.
+    offset = front_yaw
+
+    confidence = (result.get("confidence") or "").lower()
+    if confidence == "low":
+        # LLM не смогло уверенно определить — не кешируем,
+        # чтобы при следующем запуске была попытка снова.
+        print(f"[orientation_detector] Модель '{model_name}': "
+              f"перед на {front_yaw}°, offset={offset}° "
+              f"(confidence=low, not cached)")
+    else:
+        with _CACHE_LOCK:
+            cache = _cache_load(cache_dir)
+            cache[key] = {
+                "model_path": os.path.abspath(model_path),
+                "model_name": model_name,
+                "front_yaw": front_yaw,
+                "offset": offset,
+                "confidence": result.get("confidence"),
+                "num_views": num_views,
+                "method": method_effective,
+            }
+            _cache_save(cache_dir, cache)
+        print(f"[orientation_detector] Модель '{model_name}': "
+              f"перед на {front_yaw}°, offset={offset}° (saved to cache)")
 
     return offset
 

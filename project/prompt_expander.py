@@ -20,28 +20,16 @@ class ObjectHint:
         return f"ObjectHint({self.name!r} x{self.quantity})"
 
 
-class AnchorGroup:
-    # один якорный объект и его зависимые объекты
-    def __init__(self, anchor, dependents=None):
-        self.anchor = anchor          # название якоря, например "desk"
-        self.dependents = dependents or []  # список ObjectHint
-
-    def __repr__(self):
-        return f"AnchorGroup({self.anchor!r} → {self.dependents})"
-
-
 class SceneSpec:
     def __init__(self, original_query, expanded_description, room_type="other",
                  room_style="modern", estimated_objects=None, room_half_size=2.5,
-                 anchor_objects=None, anchor_groups=None):
+                 ):
         self.original_query = original_query
         self.expanded_description = expanded_description
         self.room_type = room_type
         self.room_style = room_style
         self.estimated_objects = estimated_objects or []
         self.room_half_size = room_half_size
-        self.anchor_objects = anchor_objects or []
-        self.anchor_groups = anchor_groups or []  # список AnchorGroup
 
     def __repr__(self):
         objects_str = "\n".join(f"    - {o.name} x{o.quantity}" for o in self.estimated_objects)
@@ -50,7 +38,6 @@ class SceneSpec:
             f"  тип комнаты : {self.room_type}\n"
             f"  стиль       : {self.room_style}\n"
             f"  размер      : {self.room_half_size * 2:.0f}m x {self.room_half_size * 2:.0f}m\n"
-            f"  якоря       : {self.anchor_objects}\n"
             f"  объекты     :\n{objects_str}"
         )
 
@@ -91,19 +78,8 @@ def _parse_llm_response(data, original_query):
         for o in objects:
             o.quantity = max(1, int(o.quantity * scale))
 
-    # парсим группы якорей ес��и LLM вернул их
-    anchor_groups = []
-    for g in data.get("anchor_groups", []):
-        dependents = [
-            ObjectHint(name=str(d.get("name", "")), quantity=int(d.get("quantity", 1)))
-            for d in g.get("dependents", [])
-            if isinstance(d, dict)
-        ]
-        anchor_groups.append(AnchorGroup(anchor=str(g.get("anchor", "")), dependents=dependents))
-
     expanded_description = str(data.get("expanded_description", original_query)).strip() or original_query
     room_half = _parse_room_dim(str(data.get("room_dimensions_hint", "medium (5x5m)")))
-    anchor_objects = [str(a).strip().lower() for a in data.get("anchor_objects", []) if a]
 
     return SceneSpec(
         original_query=original_query,
@@ -112,8 +88,6 @@ def _parse_llm_response(data, original_query):
         room_style=str(data.get("room_style", "modern")),
         estimated_objects=objects,
         room_half_size=room_half,
-        anchor_objects=anchor_objects,
-        anchor_groups=anchor_groups,
     )
 
 
