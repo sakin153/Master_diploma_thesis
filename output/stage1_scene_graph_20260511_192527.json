@@ -1,0 +1,32 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A minimalist room setting featuring two wooden chairs placed side by side, suggesting a simple seating arrangement for conversation or rest. The chairs are identical, crafted from light oak with clean lines and no cushions, positioned on a smooth wooden floor.",
+  "room_half_size": 2.5,
+  "graph": {
+    "nodes": [
+      {
+        "id": "chairs",
+        "model_name": "computer chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 0
+    }
+  }
+}

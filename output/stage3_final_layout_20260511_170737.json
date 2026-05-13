@@ -1,0 +1,294 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "desk",
+      "uuid": "5d593bbc15645b7892847200bec51d36",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/5d593bbc15645b7892847200bec51d36/mesh/wooden_textured_desk.glb",
+      "_query_name": "wooden desk",
+      "size": [
+        1.2,
+        0.7370932060169337,
+        0.6163965415738252
+      ],
+      "scale": 0.9213667340568318,
+      "_height_m": 0.7370932060169337,
+      "is_static": true,
+      "save_fn": "5d593bbc15645b7892847200bec51d36_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.3885466030084669
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "box",
+      "uuid": "0626293c5f3e591b9df5fe282051c4cd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/storage/0626293c5f3e591b9df5fe282051c4cd/mesh/box.glb",
+      "_query_name": "cardboard box",
+      "size": [
+        0.3924212842002744,
+        0.22322248667684697,
+        0.4
+      ],
+      "scale": 0.6377784899172081,
+      "_height_m": 0.22322248667684697,
+      "is_static": false,
+      "save_fn": "0626293c5f3e591b9df5fe282051c4cd_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.294,
+        "y": 0.05,
+        "z": 0.8887044493553573
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "box",
+      "uuid": "0626293c5f3e591b9df5fe282051c4cd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/storage/0626293c5f3e591b9df5fe282051c4cd/mesh/box.glb",
+      "_query_name": "cardboard box",
+      "size": [
+        0.3924212842002744,
+        0.22322248667684697,
+        0.4
+      ],
+      "scale": 0.6377784899172081,
+      "_height_m": 0.22322248667684697,
+      "is_static": false,
+      "save_fn": "0626293c5f3e591b9df5fe282051c4cd_2",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.294,
+        "y": -0.05,
+        "z": 0.8887044493553573
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "apple",
+      "uuid": "50b88ffa707b53adaad3229d94bb24fa",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/50b88ffa707b53adaad3229d94bb24fa/mesh/apple2.glb",
+      "_query_name": "apple",
+      "size": [
+        0.06860574097866108,
+        0.08,
+        0.06788105777217458
+      ],
+      "scale": 0.8888888903606086,
+      "_height_m": 0.08,
+      "is_static": false,
+      "save_fn": "50b88ffa707b53adaad3229d94bb24fa_3",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.294,
+        "y": -0.211,
+        "z": 1.060315692693781
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "apple",
+      "uuid": "50b88ffa707b53adaad3229d94bb24fa",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/50b88ffa707b53adaad3229d94bb24fa/mesh/apple2.glb",
+      "_query_name": "apple",
+      "size": [
+        0.06860574097866108,
+        0.08,
+        0.06788105777217458
+      ],
+      "scale": 0.8888888903606086,
+      "_height_m": 0.08,
+      "is_static": false,
+      "save_fn": "50b88ffa707b53adaad3229d94bb24fa_4",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.294,
+        "y": -0.131,
+        "z": 1.060315692693781
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "apple",
+      "uuid": "50b88ffa707b53adaad3229d94bb24fa",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/50b88ffa707b53adaad3229d94bb24fa/mesh/apple2.glb",
+      "_query_name": "apple",
+      "size": [
+        0.06860574097866108,
+        0.08,
+        0.06788105777217458
+      ],
+      "scale": 0.8888888903606086,
+      "_height_m": 0.08,
+      "is_static": false,
+      "save_fn": "50b88ffa707b53adaad3229d94bb24fa_5",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.294,
+        "y": -0.05,
+        "z": 1.060315692693781
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "apple",
+      "uuid": "50b88ffa707b53adaad3229d94bb24fa",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/50b88ffa707b53adaad3229d94bb24fa/mesh/apple2.glb",
+      "_query_name": "apple",
+      "size": [
+        0.06860574097866108,
+        0.08,
+        0.06788105777217458
+      ],
+      "scale": 0.8888888903606086,
+      "_height_m": 0.08,
+      "is_static": false,
+      "save_fn": "50b88ffa707b53adaad3229d94bb24fa_6",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.294,
+        "y": 0.031,
+        "z": 1.060315692693781
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "apple",
+      "uuid": "50b88ffa707b53adaad3229d94bb24fa",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/50b88ffa707b53adaad3229d94bb24fa/mesh/apple2.glb",
+      "_query_name": "apple",
+      "size": [
+        0.06860574097866108,
+        0.08,
+        0.06788105777217458
+      ],
+      "scale": 0.8888888903606086,
+      "_height_m": 0.08,
+      "is_static": false,
+      "save_fn": "50b88ffa707b53adaad3229d94bb24fa_7",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.294,
+        "y": 0.111,
+        "z": 1.060315692693781
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "banana",
+      "uuid": "325c17e85cb65a20823b12aed9a739a9",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/food/325c17e85cb65a20823b12aed9a739a9/mesh/banana.glb",
+      "_query_name": "banana",
+      "size": [
+        0.1055603947844121,
+        0.054801696364931644,
+        0.18000000000000002
+      ],
+      "scale": 1.0960372182424265,
+      "_height_m": 0.054801696364931644,
+      "is_static": false,
+      "save_fn": "325c17e85cb65a20823b12aed9a739a9_8",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.432,
+        "y": 0.05,
+        "z": 1.0477165408762468
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "banana",
+      "uuid": "325c17e85cb65a20823b12aed9a739a9",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/food/325c17e85cb65a20823b12aed9a739a9/mesh/banana.glb",
+      "_query_name": "banana",
+      "size": [
+        0.1055603947844121,
+        0.054801696364931644,
+        0.18000000000000002
+      ],
+      "scale": 1.0960372182424265,
+      "_height_m": 0.054801696364931644,
+      "is_static": false,
+      "save_fn": "325c17e85cb65a20823b12aed9a739a9_9",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.363,
+        "y": 0.05,
+        "z": 1.0477165408762468
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "banana",
+      "uuid": "325c17e85cb65a20823b12aed9a739a9",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/food/325c17e85cb65a20823b12aed9a739a9/mesh/banana.glb",
+      "_query_name": "banana",
+      "size": [
+        0.1055603947844121,
+        0.054801696364931644,
+        0.18000000000000002
+      ],
+      "scale": 1.0960372182424265,
+      "_height_m": 0.054801696364931644,
+      "is_static": false,
+      "save_fn": "325c17e85cb65a20823b12aed9a739a9_10",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.294,
+        "y": 0.05,
+        "z": 1.0477165408762468
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "banana",
+      "uuid": "325c17e85cb65a20823b12aed9a739a9",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/food/325c17e85cb65a20823b12aed9a739a9/mesh/banana.glb",
+      "_query_name": "banana",
+      "size": [
+        0.1055603947844121,
+        0.054801696364931644,
+        0.18000000000000002
+      ],
+      "scale": 1.0960372182424265,
+      "_height_m": 0.054801696364931644,
+      "is_static": false,
+      "save_fn": "325c17e85cb65a20823b12aed9a739a9_11",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.225,
+        "y": 0.05,
+        "z": 1.0477165408762468
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "banana",
+      "uuid": "325c17e85cb65a20823b12aed9a739a9",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/food/325c17e85cb65a20823b12aed9a739a9/mesh/banana.glb",
+      "_query_name": "banana",
+      "size": [
+        0.1055603947844121,
+        0.054801696364931644,
+        0.18000000000000002
+      ],
+      "scale": 1.0960372182424265,
+      "_height_m": 0.054801696364931644,
+      "is_static": false,
+      "save_fn": "325c17e85cb65a20823b12aed9a739a9_12",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.156,
+        "y": 0.05,
+        "z": 1.0477165408762468
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "A wooden office-style desk with two cardboard boxes placed side by side at its center: one contains 5 bananas, the other contains 5 apples. The scene is set in a compact modern workspace with neutral lighting and minimal background clutter. Note: Franka Emika FR3 will be placed separately via robot placement system.",
+  "room_type": "office"
+}

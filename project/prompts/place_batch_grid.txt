@@ -1,0 +1,26 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Place {batch_count} identical "{model_name}" in GRID on parent {parent_id}.
+
+Item bbox (w×d): {size_w:.3f}×{size_d:.3f}m
+Parent center: ({parent_x:.3f}, {parent_y:.3f})
+
+Each item center must satisfy:
+x ∈ [{x_min:.3f}, {x_max:.3f}]
+y ∈ [{y_min:.3f}, {y_max:.3f}]
+
+Min center-to-center gap on EACH axis: {gap_m:.3f}m
+If gap < item max dimension, use item max dimension (avoid overlap)
+
+Strategy: choose grid rows×cols with rows×cols≥{batch_count}, as close to square as possible
+(4→2×2, 6→2×3, 9→3×3, 5→dice pattern: 4 corners+center)
+Distribute uniformly inside allowed rectangle
+If rows×cols>{batch_count}, omit centered remainder cells
+Never output identical (x,y) for different items
+
+Query (for style/yaw only): {query_excerpt}
+yaw_deg ∈ [0,360); 0 unless query implies otherwise
+z computed by engine (return any reasonable value, e.g. 0)
+
+Return EXACTLY {batch_count} items, row-major order (top row left-to-right, then next row):
+[{{"x": float, "y": float, "yaw_deg": float, "z": float}}, ...]

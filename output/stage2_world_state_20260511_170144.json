@@ -1,0 +1,334 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "table_inst_0",
+        "Model": "table",
+        "size": [
+          1.2787923449646659,
+          0.7773946732448229,
+          1.7999999999999998
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.4086973366224115
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "boxes_inst_0",
+        "Model": "box",
+        "size": [
+          0.593537192352915,
+          0.337624011098731,
+          0.605
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": -0.592,
+          "z": 0.9862066787941884
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "boxes_inst_1",
+        "Model": "box",
+        "size": [
+          0.593537192352915,
+          0.337624011098731,
+          0.605
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.592,
+          "z": 0.9862066787941884
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apples_inst_0",
+        "Model": "apple",
+        "size": [
+          0.07289359978982739,
+          0.08499999999999999,
+          0.07212362388293547
+        ],
+        "Pose": {
+          "x": -0.18,
+          "y": 0.4,
+          "z": 1.217518684343554
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apples_inst_1",
+        "Model": "apple",
+        "size": [
+          0.07289359978982739,
+          0.08499999999999999,
+          0.07212362388293547
+        ],
+        "Pose": {
+          "x": 0.18,
+          "y": 0.4,
+          "z": 1.217518684343554
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apples_inst_2",
+        "Model": "apple",
+        "size": [
+          0.07289359978982739,
+          0.08499999999999999,
+          0.07212362388293547
+        ],
+        "Pose": {
+          "x": -0.18,
+          "y": 0.78,
+          "z": 1.217518684343554
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apples_inst_3",
+        "Model": "apple",
+        "size": [
+          0.07289359978982739,
+          0.08499999999999999,
+          0.07212362388293547
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.59,
+          "z": 1.217518684343554
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "apples_inst_4",
+        "Model": "apple",
+        "size": [
+          0.07289359978982739,
+          0.08499999999999999,
+          0.07212362388293547
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.78,
+          "z": 1.217518684343554
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "bananas_inst_0",
+        "Model": "banana",
+        "size": [
+          0.09461339088084345,
+          0.04911855748264243,
+          0.16133333333333333
+        ],
+        "Pose": {
+          "x": -0.244,
+          "y": -0.592,
+          "z": 1.199577963084875
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "bananas_inst_1",
+        "Model": "banana",
+        "size": [
+          0.09461339088084345,
+          0.04911855748264243,
+          0.16133333333333333
+        ],
+        "Pose": {
+          "x": -0.122,
+          "y": -0.592,
+          "z": 1.199577963084875
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "bananas_inst_2",
+        "Model": "banana",
+        "size": [
+          0.09461339088084345,
+          0.04911855748264243,
+          0.16133333333333333
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": -0.592,
+          "z": 1.199577963084875
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "bananas_inst_3",
+        "Model": "banana",
+        "size": [
+          0.09461339088084345,
+          0.04911855748264243,
+          0.16133333333333333
+        ],
+        "Pose": {
+          "x": 0.122,
+          "y": -0.592,
+          "z": 1.199577963084875
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "bananas_inst_4",
+        "Model": "banana",
+        "size": [
+          0.09461339088084345,
+          0.04911855748264243,
+          0.16133333333333333
+        ],
+        "Pose": {
+          "x": 0.244,
+          "y": -0.592,
+          "z": 1.199577963084875
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 3.0
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          1.2787923449646659,
+          0.7773946732448229,
+          1.7999999999999998
+        ]
+      },
+      {
+        "id": "boxes",
+        "model_name": "box",
+        "instances": 2,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.0,
+          "facing": "any",
+          "offset": null,
+          "arrangement": "row"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.593537192352915,
+          0.337624011098731,
+          0.605
+        ]
+      },
+      {
+        "id": "bananas",
+        "model_name": "banana",
+        "instances": 5,
+        "parent_id": "boxes",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "in",
+          "reference": "boxes",
+          "side": null,
+          "distance": 0.0,
+          "facing": "any",
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "boxes",
+        "place_order": 2,
+        "level": 2,
+        "is_static": false,
+        "size_hint": [
+          0.09461339088084345,
+          0.04911855748264243,
+          0.16133333333333333
+        ],
+        "_single_parent_override": {
+          "id": "boxes_inst_0",
+          "Model": "box",
+          "size": [
+            0.593537192352915,
+            0.337624011098731,
+            0.605
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": -0.592,
+            "z": 0.9862066787941884
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "apples",
+        "model_name": "apple",
+        "instances": 5,
+        "parent_id": "boxes",
+        "parent_instance_index": 1,
+        "relationship": {
+          "type": "in",
+          "reference": "boxes",
+          "side": null,
+          "distance": 0.0,
+          "facing": "any",
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "boxes",
+        "place_order": 2,
+        "level": 2,
+        "is_static": false,
+        "size_hint": [
+          0.07289359978982739,
+          0.08499999999999999,
+          0.07212362388293547
+        ],
+        "_single_parent_override": {
+          "id": "boxes_inst_1",
+          "Model": "box",
+          "size": [
+            0.593537192352915,
+            0.337624011098731,
+            0.605
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.592,
+            "z": 0.9862066787941884
+          },
+          "yaw_deg": 0.0
+        }
+      }
+    ],
+    "metadata": {
+      "total_objects": 13,
+      "max_level": 2
+    }
+  }
+}

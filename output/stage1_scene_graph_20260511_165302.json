@@ -1,0 +1,86 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A wooden table centered in a small room, with two cardboard boxes placed in a row on its surface. One box contains five bananas arranged in a single layer, and the other contains five apples in a similar layout. The table is simple and rustic, with visible grain and slightly worn edges.",
+  "room_half_size": 3.0,
+  "room_type": "other",
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "boxes",
+        "model_name": "box",
+        "instances": 2,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "row"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "bananas",
+        "model_name": "banana",
+        "instances": 5,
+        "parent_id": "boxes",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "in",
+          "reference": "boxes",
+          "side": null,
+          "distance": 0.0,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "boxes",
+        "place_order": 2,
+        "level": 2,
+        "is_static": false
+      },
+      {
+        "id": "apples",
+        "model_name": "apple",
+        "instances": 5,
+        "parent_id": "boxes",
+        "parent_instance_index": 1,
+        "relationship": {
+          "type": "in",
+          "reference": "boxes",
+          "side": null,
+          "distance": 0.0,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "boxes",
+        "place_order": 2,
+        "level": 2,
+        "is_static": false
+      }
+    ],
+    "metadata": {
+      "total_objects": 13,
+      "max_level": 2
+    }
+  }
+}

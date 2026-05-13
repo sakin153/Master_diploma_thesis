@@ -1,10 +1,14 @@
-# Стадия 1 - подбираем 3D-модели из каталога для каждого объекта сцены.
+"""Stage 1 - Model Selection
+Selects 3D models from catalog for each scene object
+"""
 
 import json
 import re
+from pathlib import Path
 
 from project.llm_request import DEFAULT_MODEL, request as _default_request
 
+# Fallback mappings for common object synonyms
 _FALLBACKS = {
     "book": "box",
     "lamp": "bottle",
@@ -18,17 +22,16 @@ _FALLBACKS = {
     "rug": "carpet",
 }
 
-_DISAMBIGUATION_PROMPT = """
-You are picking ONE 3D model from a candidate list.
 
-scene_query: {scene_query}
-object: {object}
-candidates: {candidates}
+def _load_prompt(filename):
+    """Load a prompt from the prompts directory."""
+    prompt_file = Path(__file__).parent / "prompts" / filename
+    if not prompt_file.exists():
+        raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
+    return prompt_file.read_text(encoding="utf-8")
 
-Pick the candidate that best matches the object and scene style.
-Reject with {{"uuid": "none"}} ONLY if every candidate is a completely different object.
-Output ONLY: {{"uuid": "abc123"}}
-"""
+
+_DISAMBIGUATION_PROMPT = _load_prompt("model_disambiguation.txt")
 
 
 def _tokenize(text):
@@ -128,26 +131,26 @@ def _llm_pick(obj_name, scene_query, candidates, llm):
 
 
 def pick_models(scene_spec, catalog, llm_model=DEFAULT_MODEL, prompt_model_fn=None):
-    """Стадия 1: подбирает модель из каталога для каждого объекта в SceneSpec.
-
-    Возвращает список:
-        [{"Model": "Desk", "uuid": "abc123", "model_loc": "/path/to/model.glb"}, ...]
+    """Stage 1: Select models from catalog for each object in SceneSpec.
+    
+    Returns:
+        List of dicts: [{"Model": "Desk", "uuid": "abc123", "model_loc": "/path/to/model.glb"}, ...]
     """
     llm = prompt_model_fn if prompt_model_fn is not None else _default_request
 
-    # разворачиваем объекты по количеству: desk x3 → ["desk", "desk", "desk"]
+    # Expand objects by quantity: desk x3 → ["desk", "desk", "desk"]
     object_names = []
     for hint in scene_spec.estimated_objects:
         object_names.extend([hint.name] * hint.quantity)
 
     chosen = []
-    picked_by_type = {}  # тип объекта → выбранная модель (одна на все экземпляры)
+    picked_by_type = {}  # object type → selected model (one per type)
 
     for obj in object_names:
         obj_key = obj.lower()
         search = _FALLBACKS.get(obj_key, obj_key)
 
-        # Если этот тип уже выбирали — используем ту же модель
+        # Reuse model if this type was already selected
         if obj_key in picked_by_type:
             picked = picked_by_type[obj_key]
         else:
@@ -159,7 +162,12 @@ def pick_models(scene_spec, catalog, llm_model=DEFAULT_MODEL, prompt_model_fn=No
             if len(ranked) == 1:
                 picked = ranked[0]
             else:
-                picked = _llm_pick(obj, scene_spec.expanded_description, ranked[:10], llm) or ranked[0]
+                picked = _llm_pick(obj, scene_spec.expanded_description, ranked[:10], llm)
+                if picked is None:
+                    raise RuntimeError(
+                        f"[model_picker] LLM не смог выбрать модель для '{obj}' из {len(ranked)} кандидатов. "
+                        f"Fallback на первый ранжированный отключён."
+                    )
 
             picked_by_type[obj_key] = picked
 
@@ -174,7 +182,7 @@ def pick_models(scene_spec, catalog, llm_model=DEFAULT_MODEL, prompt_model_fn=No
         })
 
     if not chosen:
-        raise RuntimeError("Не найдено ни одной модели. Попробуй другой запрос.")
+        raise RuntimeError("No models found. Try a different query.")
 
     _print_results(chosen)
     return chosen

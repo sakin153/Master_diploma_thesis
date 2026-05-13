@@ -1,0 +1,535 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "table_inst_0",
+        "Model": "table",
+        "size": [
+          0.933193013111886,
+          0.6598259008117989,
+          1.2
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.3499129504058995
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "lamp_inst_0",
+        "Model": "lamp",
+        "size": [
+          0.2147862665203792,
+          0.35,
+          0.13407544785688022
+        ],
+        "Pose": {
+          "x": -0.724,
+          "y": 0.0,
+          "z": 0.19499999999999998
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "cutting_board_inst_0",
+        "Model": "cutting board",
+        "size": [
+          0.4066666666666667,
+          0.01958446208688741,
+          0.38750574767289886
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.7096181318552427
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "pen_holder_inst_0",
+        "Model": "pen holder",
+        "size": [
+          0.10572024660468837,
+          0.10666666666666667,
+          0.10563963887014903
+        ],
+        "Pose": {
+          "x": 0.306,
+          "y": 0.447,
+          "z": 0.7531592341451323
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "scissors_inst_0",
+        "Model": "scissors",
+        "size": [
+          0.008954631448893245,
+          0.09,
+          0.05836588393756039
+        ],
+        "Pose": {
+          "x": 0.429,
+          "y": -0.537,
+          "z": 0.744825900811799
+        },
+        "yaw_deg": 45.0
+      },
+      {
+        "id": "pen_inst_0",
+        "Model": "pen",
+        "size": [
+          0.023875921321361883,
+          0.023483505802524805,
+          0.1366666666666667
+        ],
+        "Pose": {
+          "x": 0.306,
+          "y": 0.447,
+          "z": 0.7115676537130614
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "remote_control_inst_0",
+        "Model": "remote control",
+        "size": [
+          0.15,
+          0.026521031762942467,
+          0.06433375321530971
+        ],
+        "Pose": {
+          "x": 0.312,
+          "y": 0.468,
+          "z": 0.7130864166932702
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "mouse_inst_0",
+        "Model": "mouse",
+        "size": [
+          0.07,
+          0.03379739293977734,
+          0.03747521704143051
+        ],
+        "Pose": {
+          "x": 0.392,
+          "y": 0.557,
+          "z": 0.7167245972816876
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "mug_inst_0",
+        "Model": "mug",
+        "size": [
+          0.08102249354925126,
+          0.0944457478818907,
+          0.10666666666666667
+        ],
+        "Pose": {
+          "x": 0.38,
+          "y": 0.447,
+          "z": 0.7470487747527443
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "notebook_inst_0",
+        "Model": "notebook",
+        "size": [
+          0.215,
+          0.03802483215291466,
+          0.13810061634111884
+        ],
+        "Pose": {
+          "x": -0.347,
+          "y": -0.531,
+          "z": 0.7188383168882563
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 2.5
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.933193013111886,
+          0.6598259008117989,
+          1.2
+        ]
+      },
+      {
+        "id": "notebook",
+        "model_name": "notebook",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.22,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 8,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.215,
+          0.03802483215291466,
+          0.13810061634111884
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "mug",
+        "model_name": "mug",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.18,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 7,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.08102249354925126,
+          0.0944457478818907,
+          0.10666666666666667
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "mouse",
+        "model_name": "mouse",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.12,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 6,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.07,
+          0.03379739293977734,
+          0.03747521704143051
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "remote_control",
+        "model_name": "remote control",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.2,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 5,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.15,
+          0.026521031762942467,
+          0.06433375321530971
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "pen",
+        "model_name": "pen",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "in",
+          "reference": "pen_holder",
+          "side": null,
+          "distance": 0.0,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "pen_holder",
+        "place_order": 4,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.023875921321361883,
+          0.023483505802524805,
+          0.1366666666666667
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "scissors",
+        "model_name": "scissors",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.08,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 3,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.008954631448893245,
+          0.09,
+          0.05836588393756039
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "pen_holder",
+        "model_name": "pen holder",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.15,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 2,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.10572024660468837,
+          0.10666666666666667,
+          0.10563963887014903
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "cutting_board",
+        "model_name": "cutting board",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.4066666666666667,
+          0.01958446208688741,
+          0.38750574767289886
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.933193013111886,
+            0.6598259008117989,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3499129504058995
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "lamp",
+        "model_name": "lamp",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "beside",
+          "reference": "table",
+          "side": "-x",
+          "distance": 0.15,
+          "facing": "inward",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "table",
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.2147862665203792,
+          0.35,
+          0.13407544785688022
+        ]
+      }
+    ],
+    "metadata": {
+      "total_objects": 10,
+      "max_level": 1
+    }
+  }
+}

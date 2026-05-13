@@ -10,7 +10,8 @@ DEFAULT_MODEL = "qwen3-coder-next:cloud"
 DEFAULT_TIMEOUT_S = 180
 
 
-def _ollama_chat(system, user, model, timeout_s, base_url, images=None):
+def _ollama_chat(system, user, model, timeout_s, base_url, images=None,
+                 temperature=0.7, seed=None):
     url = f"{base_url}/api/chat"
 
     # Формируем сообщения
@@ -27,15 +28,20 @@ def _ollama_chat(system, user, model, timeout_s, base_url, images=None):
     else:
         messages.append({"role": "user", "content": user})
 
+    # ADDED (task: temperature gradient): allow callers to override
+    # temperature/seed per-call so domain-retry loops can sample more
+    # aggressively when the model gets stuck on the same wrong answer.
+    options = {
+        "temperature": float(temperature),
+        "num_predict": 4000,  # Увеличено для больших JSON
+    }
+    if seed is not None:
+        options["seed"] = int(seed)
     payload = {
         "model": model,
         "stream": True,
         "messages": messages,
-        "options": {
-            "temperature": 0,
-            "seed": 42,
-            "num_predict": 4000,  # Увеличено для больших JSON
-        },
+        "options": options,
     }
 
     try:
@@ -192,11 +198,19 @@ def request(
     model=DEFAULT_MODEL,
     base_url=OLLAMA_BASE_URL,
     timeout_s=DEFAULT_TIMEOUT_S,
-    images=None
+    images=None,
+    # ADDED (task: temperature gradient): expose temperature/seed so the
+    # planner can vary them per-attempt without changing every other caller.
+    # Defaults are intentionally non-deterministic.
+    temperature=0.7,
+    seed=None,
 ):
-    print(f"[llm] Запрос к {model} (timeout={timeout_s}s)")
+    print(f"[llm] Запрос к {model} (timeout={timeout_s}s, T={temperature}, seed={seed})")
     try:
-        text = _ollama_chat(system, user, model, timeout_s, base_url, images)
+        text = _ollama_chat(
+            system, user, model, timeout_s, base_url, images,
+            temperature=temperature, seed=seed,
+        )
     except TimeoutError:
         print("[llm] Таймаут. Уменьши промпт или увеличь timeout_s.")
         sys.exit(1)

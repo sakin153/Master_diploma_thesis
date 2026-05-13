@@ -1,0 +1,425 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "black_flower_pot_inst_0",
+        "Model": "flower pot",
+        "size": [
+          0.20619633149529168,
+          0.21333333333333335,
+          0.2037576803205785
+        ],
+        "Pose": {
+          "x": 2.23,
+          "y": -2.23,
+          "z": 0.12666666666666668
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "coffee_table_inst_0",
+        "Model": "table",
+        "size": [
+          1.1417455601452697,
+          0.678061150944418,
+          1.2
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.359030575472209
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "lounge_chairs_inst_0",
+        "Model": "lounge chair",
+        "size": [
+          0.9,
+          0.4819994629763197,
+          0.40345889711449245
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.802,
+          "z": 0.26099973148815986
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "lounge_chairs_inst_1",
+        "Model": "lounge chair",
+        "size": [
+          0.9,
+          0.4819994629763197,
+          0.40345889711449245
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": -0.802,
+          "z": 0.26099973148815986
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "wooden_stand_inst_0",
+        "Model": "television",
+        "size": [
+          0.4246368563551987,
+          0.7722373514950363,
+          1.0
+        ],
+        "Pose": {
+          "x": 2.08,
+          "y": -1.6,
+          "z": 0.40611867574751814
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "television_inst_0",
+        "Model": "television",
+        "size": [
+          0.4246368563551987,
+          0.7722373514950363,
+          1.0
+        ],
+        "Pose": {
+          "x": 2.08,
+          "y": -0.6,
+          "z": 0.40611867574751814
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "white_vase_inst_0",
+        "Model": "vase",
+        "size": [
+          0.14399302996044552,
+          0.35000000000000003,
+          0.14396374172762022
+        ],
+        "Pose": {
+          "x": -2.23,
+          "y": 2.23,
+          "z": 0.195
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "wind_chime_inst_0",
+        "Model": "wind chime",
+        "size": [
+          0.16195806276756586,
+          0.6,
+          0.16195501548007146
+        ],
+        "Pose": {
+          "x": 2.464,
+          "y": -2.23,
+          "z": 0.32
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "mug_inst_0",
+        "Model": "mug",
+        "size": [
+          0.07595858770242306,
+          0.08854288863927254,
+          0.10000000000000002
+        ],
+        "Pose": {
+          "x": -0.15,
+          "y": 0.0,
+          "z": 0.7623325952640543
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "notebook_inst_0",
+        "Model": "notebook",
+        "size": [
+          0.22,
+          0.038909130575075467,
+          0.14131225858160998
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.7375157162319558
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "mouse_inst_0",
+        "Model": "mouse",
+        "size": [
+          0.07,
+          0.031043874787831778,
+          0.02994353834329086
+        ],
+        "Pose": {
+          "x": 0.15,
+          "y": 0.0,
+          "z": 0.733583088338334
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 2.5
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "coffee_table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          1.1417455601452697,
+          0.678061150944418,
+          1.2
+        ]
+      },
+      {
+        "id": "lounge_chairs",
+        "model_name": "lounge chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "beside",
+          "reference": "coffee_table",
+          "side": "+y",
+          "distance": 0.0,
+          "facing": "inward",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "coffee_table",
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.9,
+          0.4819994629763197,
+          0.40345889711449245
+        ]
+      },
+      {
+        "id": "television",
+        "model_name": "television",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_front",
+          "reference": "wooden_stand",
+          "side": "+y",
+          "distance": 0.0,
+          "facing": "inward",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "wooden_stand",
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.4246368563551987,
+          0.7722373514950363,
+          1.0
+        ]
+      },
+      {
+        "id": "wooden_stand",
+        "model_name": "television",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "near_wall",
+          "offset_x": 2.08,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.4246368563551987,
+          0.7722373514950363,
+          1.0
+        ]
+      },
+      {
+        "id": "white_vase",
+        "model_name": "vase",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "corner",
+          "offset_x": -2.23,
+          "offset_y": 2.23,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.14399302996044552,
+          0.35000000000000003,
+          0.14396374172762022
+        ]
+      },
+      {
+        "id": "black_flower_pot",
+        "model_name": "flower pot",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "corner",
+          "offset_x": 2.23,
+          "offset_y": -2.23,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.20619633149529168,
+          0.21333333333333335,
+          0.2037576803205785
+        ]
+      },
+      {
+        "id": "mug",
+        "model_name": "mug",
+        "instances": 1,
+        "parent_id": "coffee_table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.07595858770242306,
+          0.08854288863927254,
+          0.10000000000000002
+        ]
+      },
+      {
+        "id": "notebook",
+        "model_name": "notebook",
+        "instances": 1,
+        "parent_id": "coffee_table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 2,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.22,
+          0.038909130575075467,
+          0.14131225858160998
+        ]
+      },
+      {
+        "id": "mouse",
+        "model_name": "mouse",
+        "instances": 1,
+        "parent_id": "coffee_table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 3,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.07,
+          0.031043874787831778,
+          0.02994353834329086
+        ]
+      },
+      {
+        "id": "wind_chime",
+        "model_name": "wind chime",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "beside",
+          "reference": "black_flower_pot",
+          "side": "+x",
+          "distance": 0.05,
+          "facing": "any",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "black_flower_pot",
+        "place_order": 1,
+        "level": 0,
+        "is_static": false,
+        "size_hint": [
+          0.16195806276756586,
+          0.6,
+          0.16195501548007146
+        ]
+      }
+    ],
+    "metadata": {
+      "total_objects": 11,
+      "max_level": 1
+    }
+  }
+}

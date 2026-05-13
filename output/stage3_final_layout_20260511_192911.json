@@ -1,0 +1,51 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "dining chair",
+      "uuid": "44dd41d5ce395d849c685a1d2070ac05",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/44dd41d5ce395d849c685a1d2070ac05/mesh/dining_chair_8.glb",
+      "_query_name": "wooden chair",
+      "size": [
+        0.5063399541637051,
+        0.9066666666666667,
+        0.43979169046153943
+      ],
+      "scale": 0.9801801991282751,
+      "_height_m": 0.9066666666666667,
+      "is_static": true,
+      "save_fn": "44dd41d5ce395d849c685a1d2070ac05_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -1.0,
+        "y": 0.0,
+        "z": 0.4733333333333334
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "dining chair",
+      "uuid": "44dd41d5ce395d849c685a1d2070ac05",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/44dd41d5ce395d849c685a1d2070ac05/mesh/dining_chair_8.glb",
+      "_query_name": "wooden chair",
+      "size": [
+        0.5063399541637051,
+        0.9066666666666667,
+        0.43979169046153943
+      ],
+      "scale": 0.9801801991282751,
+      "_height_m": 0.9066666666666667,
+      "is_static": true,
+      "save_fn": "44dd41d5ce395d849c685a1d2070ac05_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 1.0,
+        "y": 0.0,
+        "z": 0.4733333333333334
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "Two wooden chairs placed exactly 2 meters apart on a clean, neutral-toned floor, each facing an empty central space—likely part of a minimalist waiting area or a simple living room layout with ample clearance for movement."
+}

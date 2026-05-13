@@ -1,0 +1,54 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Describe spatial relationships INSIDE anchor group.
+Anchor: id={anchor_id}, model={anchor_model}, size={anchor_size}
+Dependents: {group_objects}
+Query: {query}
+
+For each dependent return:
+{{"id": "str", "relationship": {{...}}, "place_order": int, "depends_on": "str|null"}}
+
+RELATIONSHIP FIELDS:
+- type: "on_surface|stacked_on|in|around|beside|in_front|behind|facing"
+- reference: sibling node id (null for surface types unless 1:1 alignment)
+- side: "+x|-x|+y|-y|null" (for beside/in_front/behind/around; ignored for surface types)
+- distance: float (gap between bboxes, default 0.1; for surface types: inset from edge)
+- facing: "inward|outward|any" (for around)
+- arrangement: "row|grid|scattered|ring|stack|auto"
+
+ARRANGEMENT RULES (CRITICAL):
+Apply ONLY if trigger phrase is in SAME clause as THIS node's noun:
+- "row": "в ряд|in a row|in a line"
+- "grid": "сеткой|решёткой|in a grid"
+- "scattered": "разбросаны|scattered|randomly" (ONLY if explicitly stated)
+- DEFAULT: "auto" for:
+  * Plain quantities without spatial keywords ("3 apples", "5 boxes")
+  * Centering phrases: "по центру|в центре|in center|centered|centrally"
+  * Distribution phrases: "in each", "на каждом"
+  * Aesthetic/neat arrangement without specific pattern
+
+Examples:
+- "two boxes in a row, 10 apples in each" → boxes:"row", apples:"auto"
+- "5 plates in a grid" → plates:"grid"
+- "3 apples по центру" → apples:"auto" (centered placement)
+- "10 apples scattered" → apples:"scattered"
+- "10 apples in box" → apples:"auto"
+
+REFERENCE-ALIGNMENT (1:1 pairing for surface types):
+SET reference when query has: "напротив каждого X|opposite each X|on each X|за каждым X"
+Example: "plates opposite each chair" → plates: type="on_surface", reference="chairs"
+DON'T SET for: plain quantity, spatial arrangement ("in center", "in a row"), aesthetic distribution
+
+SURFACE+AROUND PROJECTION:
+When placing on_surface with reference that has type="around":
+1. Get reference (rx, ry)
+2. Direction: dx=rx-parent_x, dy=ry-parent_y, normalize
+3. Project onto parent surface: inset by distance+self_half_size
+4. Place at projected point
+
+NOTES:
+- "around" = floor object around anchor (not on surface)
+- If node has parent_instance_index, it's pinned to one parent instance
+- depends_on = reference when reference is non-null
+
+Return: {{"relations": [{{"id": "str", "relationship": {{...}}, "place_order": int, "depends_on": "str|null"}}, ...]}}

@@ -1,0 +1,75 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Build scene hierarchy from object types. Query: {query}
+Room: {room_w}m × {room_l}m
+Objects (total={total_count}):
+{objects_list}
+
+IMPORTANT: The "model_name" field in each node MUST be EXACTLY one of the object names listed above. Do NOT use variations, synonyms, or invented names.
+DO NOT create virtual container nodes like "room", "scene", or "environment" - these are not physical objects. Use only the actual object types from the list above.
+
+OUTPUT: {{"nodes": [{{"id": "str", "model_name": "str", "instances": int, "parent_id": "str|null", "parent_instance_index": int|null}}]}}
+
+ID NAMING:
+- instances=1: singular ("table", "vase"). Duplicates: suffix _1, _2
+- instances>1: plural ("chairs", "plates"). Duplicates: suffix _1, _2
+- snake_case only. NO "_group" suffix
+
+CRITICAL VALIDATION RULES:
+1. Sum of ALL "instances" fields across ALL nodes MUST EXACTLY EQUAL {total_count}
+2. You MUST account for EVERY SINGLE object from the list above
+3. Before returning JSON, verify: sum(node["instances"] for all nodes) == {total_count}
+4. If the sum doesn't match, adjust the instances counts until it does
+
+HIERARCHY RULES:
+- model_name MUST be EXACTLY one of the available types listed above (copy the exact name, do NOT invent new names or variations)
+- EVERY object from the objects list MUST appear in your hierarchy with correct total count
+- Identical objects with same parent = ONE node (instances>1) UNLESS query specifies layout groups OR per-instance content
+- Top-level (parent_id=null): largest furniture defining room layout
+- parent_id: position defined relative to parent (on/around/beside parent)
+
+LAYOUT GROUPS (split when query has structured arrangement):
+Triggers: "two rows of N", "N on each side", "left/right", "front/back row"
+Example: "two rows of 5 desks, chair behind each" →
+  desks_row_a (5, null), desks_row_b (5, null)
+  chairs_row_a (5, "desks_row_a"), chairs_row_b (5, "desks_row_b")
+DON'T split plain quantities ("5 chairs around table")
+
+PER-INSTANCE CONTENT (use parent_instance_index):
+When SAME parent type has DIFFERENT children per instance:
+Triggers: "в одной X — A, в другой — B", "first X has A, second has B"
+Keep parent as ONE multi-instance node. Pin children via parent_instance_index (0-based).
+
+CRITICAL: When using parent_instance_index, the child node's "instances" field represents the TOTAL count for THAT SPECIFIC parent instance ONLY, NOT multiplied by parent count.
+
+Example: "Two boxes: one with 5 bananas, other with 5 apples" →
+  table (1, null), boxes (2, "table")
+  bananas (5, "boxes", parent_instance_index=0)  ← 5 total bananas (not 5×2)
+  apples (5, "boxes", parent_instance_index=1)    ← 5 total apples (not 5×2)
+  Total objects: 1 table + 2 boxes + 5 bananas + 5 apples = 13 objects
+
+HOMOGENEOUS "EACH" (NO parent_instance_index):
+Triggers: "N per/in each X", "на каждом X по N Y"
+Example: "3 tables, 2 boxes on each, 5 apples in each box" →
+  tables (3, null), boxes (6, "tables"), apples (30, "boxes")
+  Total: 3 + 6 + 30 = 39 objects
+NO parent_instance_index — planner distributes evenly.
+Setting parent_instance_index=0 pins ALL to first parent (BUG).
+
+COUNTING RULE:
+- WITHOUT parent_instance_index: instances = total count across ALL parents
+- WITH parent_instance_index: instances = count for THAT ONE parent instance only
+
+DECISION: Use parent_instance_index ONLY for heterogeneous content (different types/counts per parent instance).
+
+FINAL VERIFICATION BEFORE RETURNING:
+1. Count total instances: sum all "instances" values from all nodes
+2. IMPORTANT: Each node's "instances" counts toward the total EXACTLY ONCE, regardless of parent_instance_index
+3. Compare with required total: {total_count}
+4. If sum ≠ {total_count}, YOU MUST adjust the counts:
+   - If sum > {total_count}: reduce instances in some nodes
+   - If sum < {total_count}: increase instances in some nodes
+5. Double-check that every object type from the list appears in your nodes
+6. Verify the math: write out the sum calculation to confirm it equals {total_count}
+
+Return ONLY JSON with NO additional text, markdown, or explanations.

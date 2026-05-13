@@ -1,0 +1,205 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A modern robotics laboratory workspace featuring a central rectangular wooden table under soft ambient lighting, with a desk lamp on the left casting realistic shadows. The tabletop is arranged with natural, non-overlapping everyday objects suitable for pick-and-place tasks: notebook, mug, fruits, mouse, remote, pen, scissors, pen holder, and cutting board. A robotic manipulator arm stands ready in the background, aligned for interaction but excluded from object count per guidelines. Note: Franka Emika FR3 will be placed separately via robot placement system.",
+  "room_half_size": 2.5,
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "lamp",
+        "model_name": "lamp",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": "-x",
+          "distance": 0.15,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 0,
+        "level": 1,
+        "is_static": true
+      },
+      {
+        "id": "notebook",
+        "model_name": "notebook",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.1,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 8,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "mug",
+        "model_name": "mug",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.12,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 7,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "mouse",
+        "model_name": "mouse",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.1,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 6,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "remote_control",
+        "model_name": "remote control",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.1,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 5,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "pen",
+        "model_name": "pen",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.08,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 4,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "scissors",
+        "model_name": "scissors",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.1,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 3,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "pen_holder",
+        "model_name": "pen holder",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.12,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 2,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "cutting_board",
+        "model_name": "cutting board",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.15,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false
+      }
+    ],
+    "metadata": {
+      "total_objects": 10,
+      "max_level": 1
+    }
+  }
+}

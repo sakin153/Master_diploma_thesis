@@ -1,0 +1,52 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+THIS REQUEST IS FOR PLACING ONLY "{model_name}" OBJECTS - DO NOT INCLUDE OTHER OBJECTS IN YOUR RESPONSE!
+
+Place {batch_count} identical "{model_name}" (instances {from_idx}..{to_idx} of {total})
+Size per object (w×d×h): {size_w:.3f}×{size_d:.3f}×{size_h:.3f}m
+Half-extents: half_x={size_w_half:.3f}, half_y={size_d_half:.3f}
+
+Place ALL items AT ONCE in coordinated layout relative to parent center.
+
+Intent: {intent}
+{surface_plan_block}{reference_block}{parent_block}{parent_quota_block}{siblings_block}{numeric_hints}{prior_batches_block}
+World state: {world_state}
+Remaining: {remaining}
+Room: {room_w}m×{room_l}m, origin center, valid [{neg_half:.2f}, {pos_half:.2f}]
+
+SURFACE+AROUND PROJECTION (when on_surface with around reference):
+For each instance i:
+1. Get paired reference (rx_i, ry_i)
+2. Direction: dx=rx_i-parent_x, dy=ry_i-parent_y, normalize
+3. Inset: distance+self_half_size
+4. Project: x_i=parent_x+unit_x×(parent_half_x-inset), y_i=parent_y+unit_y×(parent_half_y-inset)
+
+RULES (SURFACE PLAN above is primary; these are hard floors):
+- No overlap: |xi-xj|>1.15×{size_w:.3f} OR |yi-yj|>1.15×{size_d:.3f}
+- Center-to-center spacing ≥ max({size_w:.3f}, {size_d:.3f})
+- Never reuse identical (x,y)
+- type="in": keep ≥1 child size from each parent wall (items must fit comfortably inside container)
+- Compute z: z=parent_top_z+(child_height/2)+{placement_clearance:.3f}
+- yaw_deg ∈ [0,360)
+- Follow SURFACE ARRANGEMENT PLAN if present - this is MANDATORY and takes precedence
+- FLEXIBILITY: You may use compact arrangements (row, grid, cluster) BUT ONLY if:
+  1. SURFACE ARRANGEMENT PLAN explicitly allows it OR no plan is provided
+  2. All items fit without overlap and stay within bounds
+  3. If SURFACE PLAN says "grid", you CANNOT override it with "row"
+  4. If SURFACE PLAN says "row" on specific axis, you MUST use that axis
+  Always provide valid coordinates for ALL items - never leave the array empty.
+
+CRITICAL OUTPUT FORMAT:
+- Return ONLY a JSON ARRAY with EXACTLY {batch_count} items
+- DO NOT wrap the array in any object keys (no "banana_row", "apple_row", "table", etc.)
+- DO NOT include coordinates for other objects (tables, boxes, etc.)
+- Each array item must be: {{"instance": {from_idx}, "x": float, "y": float, "z": float, "yaw_deg": float, "layer": int}}
+- layer is optional (0 unless layering block assigns)
+
+CORRECT FORMAT:
+[{{"instance": {from_idx}, "x": 0.1, "y": 0.2, "z": 0.5, "yaw_deg": 0.0, "layer": 0}}, ...]
+
+WRONG FORMATS (DO NOT USE):
+- {{"banana_row": [...]}} ❌
+- {{"table": {{...}}, "boxes": {{...}}, "banana_row": [...]}} ❌
+- {{"x": 0.1, "y": 0.2}} (single object instead of array) ❌

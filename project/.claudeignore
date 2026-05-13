@@ -1,0 +1,10 @@
+.cache/
+.kiro/
+.pytest_cache/
+.venv/
+assets/
+creator/
+robot_assets/
+old/
+*~
+/home/sakin153/Рабочий стол/world-creator/prompts.txt

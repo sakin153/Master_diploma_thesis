@@ -81,7 +81,7 @@ def _place_on_table(
     robot_y = ty + offset_y
     robot_z = table_top_z
     
-    xml_path = f"robot_assets/{info['xml_file']}"
+    xml_path = info['xml_file']
     
     return {
         "robot_id": robot_id,
@@ -104,7 +104,7 @@ def _place_on_floor(
     # Floor is at z=0, robot base sits on floor
     robot_z = 0.0
     
-    xml_path = f"robot_assets/{info['xml_file']}"
+    xml_path = info['xml_file']
     
     return {
         "robot_id": robot_id,

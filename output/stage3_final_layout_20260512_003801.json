@@ -1,0 +1,51 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "table",
+      "size": [
+        0.8766831964924432,
+        0.5329472371022842,
+        1.234
+      ],
+      "scale": 0.7105961749536036,
+      "_height_m": 0.5329472371022842,
+      "is_static": true,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.2864736185511421
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "notebook",
+      "uuid": "1c3090016ed053e2bb444e9470aaf9cb",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/1c3090016ed053e2bb444e9470aaf9cb/mesh/notebook.glb",
+      "_query_name": "notebook",
+      "size": [
+        0.11445175104452217,
+        0.021506656868253326,
+        0.153
+      ],
+      "scale": 1.0003072912840778,
+      "_height_m": 0.021506656868253326,
+      "is_static": false,
+      "save_fn": "1c3090016ed053e2bb444e9470aaf9cb_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.5837005655364109
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "A clean, modern desk with a single laptop-style notebook placed open on its surface; the scene includes two industrial-grade Franka Emika panda robotic arms positioned on opposite sides of the table, facing inward toward it for collaborative manipulation tasks. Note: Franka Emika FR3 will be placed separately via robot placement system."
+}

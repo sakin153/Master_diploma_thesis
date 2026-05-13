@@ -1,0 +1,52 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "dining chair",
+      "uuid": "44dd41d5ce395d849c685a1d2070ac05",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/44dd41d5ce395d849c685a1d2070ac05/mesh/dining_chair_8.glb",
+      "_query_name": "wooden chair",
+      "size": [
+        0.5026168662654426,
+        0.9,
+        0.43655792803167515
+      ],
+      "scale": 0.9729729917817437,
+      "_height_m": 0.9,
+      "is_static": true,
+      "save_fn": "44dd41d5ce395d849c685a1d2070ac05_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -2.5,
+        "y": -2.382,
+        "z": 0.47000000000000003
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "dining chair",
+      "uuid": "44dd41d5ce395d849c685a1d2070ac05",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/44dd41d5ce395d849c685a1d2070ac05/mesh/dining_chair_8.glb",
+      "_query_name": "wooden chair",
+      "size": [
+        0.5026168662654426,
+        0.9,
+        0.43655792803167515
+      ],
+      "scale": 0.9729729917817437,
+      "_height_m": 0.9,
+      "is_static": true,
+      "save_fn": "44dd41d5ce395d849c685a1d2070ac05_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -1.997,
+        "y": -2.382,
+        "z": 0.47000000000000003
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 3.0,
+  "query": "A simple scene featuring two wooden chairs placed side by side, aligned parallel to each other, likely positioned near a wall or as part of a minimal seating arrangement.",
+  "room_type": "other"
+}

@@ -1,0 +1,140 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "wooden table",
+      "size": [
+        1.2340346128909028,
+        0.7501858596812542,
+        1.737
+      ],
+      "scale": 1.0002476141769931,
+      "_height_m": 0.7501858596812542,
+      "is_static": true,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.3950929298406271
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "vase",
+      "uuid": "249c548a5270507696cb9c803bb25e37",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/decorations/249c548a5270507696cb9c803bb25e37/mesh/vase.glb",
+      "_query_name": "vase",
+      "size": [
+        0.14399302996044547,
+        0.3499999999999999,
+        0.1439637417276202
+      ],
+      "scale": 1.0000000170298986,
+      "_height_m": 0.3499999999999999,
+      "is_static": false,
+      "save_fn": "249c548a5270507696cb9c803bb25e37_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.9651858596812541
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6643080479334598,
+        1.2,
+        0.6836420961582869
+      ],
+      "scale": 1.0000000099341075,
+      "_height_m": 1.2,
+      "is_static": true,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_2",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 1.049,
+        "y": 0.0,
+        "z": 0.62
+      },
+      "yaw_deg": 180.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6643080479334598,
+        1.2,
+        0.6836420961582869
+      ],
+      "scale": 1.0000000099341075,
+      "_height_m": 1.2,
+      "is_static": true,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_3",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -1.049,
+        "y": 0.0,
+        "z": 0.62
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6643080479334598,
+        1.2,
+        0.6836420961582869
+      ],
+      "scale": 1.0000000099341075,
+      "_height_m": 1.2,
+      "is_static": true,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_4",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 1.31,
+        "z": 0.62
+      },
+      "yaw_deg": 270.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6643080479334598,
+        1.2,
+        0.6836420961582869
+      ],
+      "scale": 1.0000000099341075,
+      "_height_m": 1.2,
+      "is_static": true,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_5",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": -1.31,
+        "z": 0.62
+      },
+      "yaw_deg": 90.0
+    }
+  ],
+  "room_half_size": 3.0,
+  "query": "A large wooden worktable dominates the scene, placed centrally in a modestly sized room with neutral lighting. On the table's surface, a ceramic vase sits precisely at the center, while four wooden chairs are arranged around the table—two on each longer side—facing inward toward the table's center. Note: Franka Emika FR3 will be placed separately via robot placement system.",
+  "room_type": "lab"
+}

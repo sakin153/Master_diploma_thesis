@@ -1,0 +1,46 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+THIS REQUEST IS FOR PLACING ONLY ONE "{model_name}" OBJECT - DO NOT INCLUDE OTHER OBJECTS IN YOUR RESPONSE!
+
+Place ONE object: {model_name} [id={node_id}]
+Size (w×d×h): {size_w:.3f}×{size_d:.3f}×{size_h:.3f}m
+Half-extents: half_x={size_w_half:.3f}, half_y={size_d_half:.3f}
+
+Intent: {intent}
+{reference_block}{parent_block}{parent_quota_block}{siblings_block}{numeric_hints}{prior_batches_block}
+World state: {world_state}
+Remaining: {remaining}
+Room: {room_w}m×{room_l}m, origin center, valid [{neg_half:.2f}, {pos_half:.2f}]
+
+GEOMETRY:
+- distance = gap between bboxes (not center-to-center)
+- side="+x" from ref at (rx,ry) with half_x=rhx: x=rx+rhx+distance+half_x, y≈ry
+- in_room center: (0,0); near_wall: one coord ≈±{pos_half:.2f}; corner: both ≈±{pos_half:.2f}
+
+SURFACE+AROUND PROJECTION (when on_surface with around reference):
+1. Get reference (rx,ry), parent (px,py)
+2. Direction: dx=rx-px, dy=ry-py, normalize
+3. Inset: distance+self_half_size
+4. Project: x=px+unit_x×(parent_half_x-inset), y=py+unit_y×(parent_half_y-inset)
+
+RULES:
+- Compute z: z=parent_top_z+(child_height/2)+{placement_clearance:.3f}
+- yaw_deg ∈ [0,360); 0=long axis along +X
+- ANTI-OVERLAP: for each sibling at (xs,ys): |x-xs|>1.15×{size_w:.3f} OR |y-ys|>1.15×{size_d:.3f}
+- INSIDE CONTAINER (type="in"): stay ≥1 self-size from each parent wall
+- REFERENCE-ALIGNMENT: if block present, pair with specified reference instance
+
+CRITICAL OUTPUT FORMAT:
+- Return ONLY a single JSON OBJECT with coordinates for THIS ONE {model_name}
+- DO NOT wrap it in any parent key (no "table", "box", etc.)
+- DO NOT include coordinates for other objects
+- Required fields: "x", "y", "z", "yaw_deg"
+- Optional field: "layer" (0 unless LAYERING POLICY assigns)
+
+CORRECT FORMAT:
+{{"x": 0.0, "y": 0.0, "z": 0.33, "yaw_deg": 0.0, "layer": 0}}
+
+WRONG FORMATS (DO NOT USE):
+- {{"table": {{"x": 0.0, ...}}, "boxes": {{...}}}} ❌
+- [{{"x": 0.0, ...}}] (array instead of single object) ❌
+- {{"banana_row": [...]}} ❌

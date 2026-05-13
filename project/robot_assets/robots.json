@@ -1,0 +1,26 @@
+{
+  "franka_fr3": {
+    "type": "manipulator",
+    "xml_file": "franka_fr3/fr3.xml",
+    "base_size": [0.2, 0.6, 0.2],
+    "placement": "table_mounted",
+    "keywords": ["franka", "fr3", "panda", "manipulator", "манипулятор"],
+    "description": "Franka Emika FR3 7-DOF collaborative robot arm"
+  },
+  "kuka_iiwa_14": {
+    "type": "manipulator",
+    "xml_file": "kuka_iiwa_14/iiwa14.xml",
+    "base_size": [0.25, 0.8, 0.25],
+    "placement": "table_mounted",
+    "keywords": ["kuka", "iiwa", "kuka iiwa", "iiwa14", "iiwa 14"],
+    "description": "KUKA iiwa 14 R820 7-DOF industrial robot arm"
+  },
+  "unitree_a1": {
+    "type": "quadruped",
+    "xml_file": "unitree_a1/a1.xml",
+    "base_size": [0.6, 0.3, 0.4],
+    "placement": "floor",
+    "keywords": ["unitree", "a1", "quadruped", "dog", "четвероногий", "робопес"],
+    "description": "Unitree A1 quadruped robot"
+  }
+}

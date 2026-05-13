@@ -1,69 +1,50 @@
-# Prompts - LLM Промпты для Pipeline
+# LLM Prompts Directory
 
-Эта папка содержит все промпты для LLM, используемые в pipeline генерации сцен.
+This directory contains all LLM prompt templates used by the world-creator project.
 
-## Структура
+## Prompt Files
 
-### Stage 0: Prompt Expansion
+### Scene Planning Prompts (scene_prompts.py)
 
-**Файл:** `expand_prompt.txt`
+1. **classify_hierarchy.txt** - Builds scene graph hierarchy from object list
+2. **anchor_relations.txt** - Defines relationships between top-level (anchor) objects
+3. **group_relations.txt** - Defines spatial relationships inside one anchor's group
+4. **place_node.txt** - Places a single object instance
+5. **place_node_batch.txt** - Places multiple identical objects at once
+6. **coplace.txt** - Places mixed-type objects in coordinated layout
+7. **place_batch_row.txt** - Places objects in a straight row pattern
+8. **place_batch_grid.txt** - Places objects in a grid pattern
+9. **place_batch_fix.txt** - Fixes placement violations from previous attempts
+10. **surface_arrangement_plan.txt** - Decides horizontal arrangement for objects on surfaces
+11. **layering_plan.txt** - Decides vertical stacking for objects in containers
 
-**Используется в:** `prompt_expander.py`
+### Model Selection Prompts (model_picker.py)
 
-**Назначение:** Расширение короткого пользовательского запроса в детальную спецификацию сцены
+12. **model_disambiguation.txt** - Picks the best 3D model from candidate list
 
-**Входные данные:**
-- Короткий запрос пользователя (например, "офис с 5 столами")
+### Scene Expansion Prompts (prompt_expander.py)
 
-**Выходные данные (JSON):**
-```json
-{
-  "expanded_description": "Детальное описание сцены",
-  "room_type": "office|bedroom|kitchen|...",
-  "room_style": "modern|minimalist|...",
-  "anchor_objects": ["desk"],
-  "estimated_objects": [
-    {"name": "desk", "quantity": 5, "notes": "primary workspace"}
-  ],
-  "room_dimensions_hint": "large (8x8m)"
-}
-```
+13. **expand_prompt.txt** - Expands user query into detailed scene specification
 
-**Ключевые правила:**
-- Максимум 20 экземпляров объектов
-- Максимум 6 типов объектов для полных сцен
-- Объекты должны быть атомарными (не "набор стульев", а "стул" с quantity=4)
-- Anchor objects - главные объекты, вокруг которых размещаются остальные
+### Physics Classification Prompts
 
-## Формат промптов
+14. **physics_classify.txt** - Classifies objects as static or dynamic for physics simulation
 
-Все промпты хранятся в текстовых файлах `.txt` для удобства редактирования и версионирования.
+## Usage
 
-## Использование
+All prompts are loaded automatically by their respective modules using the `_load_prompt()` helper function. The prompts support Python string formatting with `{variable}` placeholders for dynamic content.
 
-Промпты автоматически загружаются соответствующими модулями при импорте:
+## Editing Prompts
 
-```python
-from prompt_expander import expand_prompt
+When editing prompts:
+1. Keep the format consistent with existing prompts
+2. Preserve all `{variable}` placeholders - they are replaced at runtime
+3. Test changes by running the relevant module
+4. Do not change the filename without updating the corresponding Python module
 
-# Промпт загружается автоматически из prompts/expand_prompt.txt
-scene_spec = expand_prompt(query="офис", prompt_model_fn=my_llm, llm_model="gpt-4")
-```
+## File Organization
 
-## Редактирование промптов
-
-При редактировании промптов:
-
-1. Сохраняйте формат JSON в примерах
-2. Не удаляйте обязательные поля
-3. Тестируйте изменения с помощью `test_stage0.py`
-4. Документируйте значительные изменения в этом README
-
-## Следующие промпты
-
-По мере добавления новых этапов pipeline, здесь будут появляться новые промпты:
-
-- [ ] `disambiguation_prompt.txt` - Выбор конкретной модели из каталога (Stage 1)
-- [ ] `semantic_plan_prompt.txt` - Генерация плана размещения (Stage 3)
-- [ ] `collision_resolution_prompt.txt` - Разрешение коллизий (Stage 4)
-- [ ] `vlm_validation_prompt.txt` - Валидация сцены (Stage 7)
+- Prompts are plain text files with `.txt` extension
+- Each prompt is self-contained and includes its own instructions
+- Related prompts (e.g., placement variants) share similar structure
+- Dynamic prompts (with many runtime variables) are kept separate from static ones

@@ -1,0 +1,249 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "flower pot",
+      "uuid": "f20a783002a05c0f80179236f21b8564",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/livingroom_supplies/ornaments/f20a783002a05c0f80179236f21b8564/mesh/flower_pot_13.glb",
+      "_query_name": "flower pot",
+      "size": [
+        0.20619633149529168,
+        0.21333333333333335,
+        0.2037576803205785
+      ],
+      "scale": 0.9481481418688111,
+      "_height_m": 0.21333333333333335,
+      "is_static": true,
+      "save_fn": "f20a783002a05c0f80179236f21b8564_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 2.23,
+        "y": -2.23,
+        "z": 0.12666666666666668
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "table",
+      "uuid": "126f60baf12759ea957fb6c38ba7458d",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/126f60baf12759ea957fb6c38ba7458d/mesh/wooden_patterned_table.glb",
+      "_query_name": "coffee table",
+      "size": [
+        1.1417455601452697,
+        0.678061150944418,
+        1.2
+      ],
+      "scale": 0.9040814627426181,
+      "_height_m": 0.678061150944418,
+      "is_static": true,
+      "save_fn": "126f60baf12759ea957fb6c38ba7458d_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.359030575472209
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "lounge chair",
+      "uuid": "05f5b92fac8b5d7bb215d3876ab2b361",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/05f5b92fac8b5d7bb215d3876ab2b361/mesh/lounge_chair_20.glb",
+      "_query_name": "lounge chair",
+      "size": [
+        0.9,
+        0.4819994629763197,
+        0.40345889711449245
+      ],
+      "scale": 0.6219348100701949,
+      "_height_m": 0.4819994629763197,
+      "is_static": true,
+      "save_fn": "05f5b92fac8b5d7bb215d3876ab2b361_2",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.802,
+        "z": 0.26099973148815986
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "lounge chair",
+      "uuid": "05f5b92fac8b5d7bb215d3876ab2b361",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/05f5b92fac8b5d7bb215d3876ab2b361/mesh/lounge_chair_20.glb",
+      "_query_name": "lounge chair",
+      "size": [
+        0.9,
+        0.4819994629763197,
+        0.40345889711449245
+      ],
+      "scale": 0.6219348100701949,
+      "_height_m": 0.4819994629763197,
+      "is_static": true,
+      "save_fn": "05f5b92fac8b5d7bb215d3876ab2b361_3",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": -0.802,
+        "z": 0.26099973148815986
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "television",
+      "uuid": "c2cfbe38f3ef5ef289564a83aecfc700",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/home_appliances/electrical_appliances/c2cfbe38f3ef5ef289564a83aecfc700/mesh/television_26.glb",
+      "_query_name": "television",
+      "size": [
+        0.4246368563551987,
+        0.7722373514950363,
+        1.0
+      ],
+      "scale": 1.1031962821771029,
+      "_height_m": 0.7722373514950363,
+      "is_static": true,
+      "save_fn": "c2cfbe38f3ef5ef289564a83aecfc700_4",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 2.08,
+        "y": -1.6,
+        "z": 0.40611867574751814
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "television",
+      "uuid": "af59b0b97ac45dffaa65af386b34e665",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/home_appliances/electrical_appliances/af59b0b97ac45dffaa65af386b34e665/mesh/television_17.glb",
+      "_query_name": "wooden stand",
+      "size": [
+        0.4246368563551987,
+        0.7722373514950363,
+        1.0
+      ],
+      "scale": 0.6750257411356887,
+      "_height_m": 0.7425284922818034,
+      "is_static": true,
+      "save_fn": "af59b0b97ac45dffaa65af386b34e665_5",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 2.08,
+        "y": -0.6,
+        "z": 0.40611867574751814
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "vase",
+      "uuid": "249c548a5270507696cb9c803bb25e37",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/decorations/249c548a5270507696cb9c803bb25e37/mesh/vase.glb",
+      "_query_name": "ceramic vase",
+      "size": [
+        0.14399302996044552,
+        0.35000000000000003,
+        0.14396374172762022
+      ],
+      "scale": 1.0000000170298988,
+      "_height_m": 0.35000000000000003,
+      "is_static": true,
+      "save_fn": "249c548a5270507696cb9c803bb25e37_6",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -2.23,
+        "y": 2.23,
+        "z": 0.195
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "wind chime",
+      "uuid": "21b1b6edb55f501580fb0ffc53beabda",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/livingroom_supplies/ornaments/21b1b6edb55f501580fb0ffc53beabda/mesh/wind_chime_45.glb",
+      "_query_name": "wind chime",
+      "size": [
+        0.16195806276756586,
+        0.6,
+        0.16195501548007146
+      ],
+      "scale": 1.0000000099341075,
+      "_height_m": 0.6,
+      "is_static": false,
+      "save_fn": "21b1b6edb55f501580fb0ffc53beabda_7",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 2.464,
+        "y": -2.23,
+        "z": 0.32
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "mug",
+      "uuid": "34c4f3a5b7a35e1ab98a5c5b660c2257",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/ware/34c4f3a5b7a35e1ab98a5c5b660c2257/mesh/mug.glb",
+      "_query_name": "mug",
+      "size": [
+        0.07595858770242306,
+        0.08854288863927254,
+        0.10000000000000002
+      ],
+      "scale": 0.7083407025516109,
+      "_height_m": 0.08854288863927254,
+      "is_static": false,
+      "save_fn": "34c4f3a5b7a35e1ab98a5c5b660c2257_8",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.15,
+        "y": 0.0,
+        "z": 0.7623325952640543
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "notebook",
+      "uuid": "481287f79a065a62a8bf2ffc31c00cff",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/481287f79a065a62a8bf2ffc31c00cff/mesh/notebook_0.glb",
+      "_query_name": "notebook",
+      "size": [
+        0.22,
+        0.038909130575075467,
+        0.14131225858160998
+      ],
+      "scale": 0.9727282408228687,
+      "_height_m": 0.038909130575075467,
+      "is_static": false,
+      "save_fn": "481287f79a065a62a8bf2ffc31c00cff_9",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.7375157162319558
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "mouse",
+      "uuid": "5635c5ef5fa05d39932e73aa6bf4e162",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/remote_control/5635c5ef5fa05d39932e73aa6bf4e162/mesh/mouse_80.glb",
+      "_query_name": "computer mouse",
+      "size": [
+        0.07,
+        0.031043874787831778,
+        0.02994353834329086
+      ],
+      "scale": 0.4775972700132016,
+      "_height_m": 0.031043874787831778,
+      "is_static": false,
+      "save_fn": "5635c5ef5fa05d39932e73aa6bf4e162_10",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.15,
+        "y": 0.0,
+        "z": 0.733583088338334
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "A cozy modern living room in minimalistic Scandinavian style with warm evening lighting, featuring a rectangular wooden coffee table centered in the space, flanked by a modern orange and a modern gray lounge chair. Near the wall, a flat-screen TV sits atop a wooden stand, while tall white ceramic and matte black flower pots with leafy plants anchor opposite corners. The coffee table holds a blue ceramic mug, a red hardcover notebook, and a sleek black computer mouse, and a metallic wind chime dangles near a large window with soft ambient light."
+}

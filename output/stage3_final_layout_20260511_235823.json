@@ -1,0 +1,271 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "0033f5a78e7f5843a139ea446f8b8bbd",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/0033f5a78e7f5843a139ea446f8b8bbd/mesh/wooden_patterned_table.glb",
+      "_query_name": "table",
+      "size": [
+        0.933193013111886,
+        0.6598259008117989,
+        1.2
+      ],
+      "scale": 0.8513880888650567,
+      "_height_m": 0.6598259008117989,
+      "is_static": true,
+      "save_fn": "0033f5a78e7f5843a139ea446f8b8bbd_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.3499129504058995
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "cutting board",
+      "uuid": "0e13775ef1515c65a7474ebe097b9022",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/utensils/0e13775ef1515c65a7474ebe097b9022/mesh/cutting_board.glb",
+      "_query_name": "cutting board",
+      "size": [
+        0.4000000000000001,
+        0.01926340533136467,
+        0.3811531944323596
+      ],
+      "scale": 0.9631707814592587,
+      "_height_m": 0.01926340533136467,
+      "is_static": false,
+      "save_fn": "0e13775ef1515c65a7474ebe097b9022_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.7094576034774813
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "pen holder",
+      "uuid": "10ab616ea78652a8a5611334723ad931",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/10ab616ea78652a8a5611334723ad931/mesh/pen_holder.glb",
+      "_query_name": "pen holder",
+      "size": [
+        0.07474078238010408,
+        0.10000000000000002,
+        0.07474928200244906
+      ],
+      "scale": 0.8000000000000002,
+      "_height_m": 0.10000000000000002,
+      "is_static": false,
+      "save_fn": "10ab616ea78652a8a5611334723ad931_2",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.749825900811799
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "scissors",
+      "uuid": "20a016b2cec35969ab5822caef4d05b0",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_tools/20a016b2cec35969ab5822caef4d05b0/mesh/scissors_48.glb",
+      "_query_name": "scissors",
+      "size": [
+        0.0059697542992621635,
+        0.060000000000000005,
+        0.03891058929170693
+      ],
+      "scale": 0.2790697627998547,
+      "_height_m": 0.060000000000000005,
+      "is_static": false,
+      "save_fn": "20a016b2cec35969ab5822caef4d05b0_3",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.456,
+        "y": 0.577,
+        "z": 0.729825900811799
+      },
+      "yaw_deg": 90.0
+    },
+    {
+      "Model": "pen",
+      "uuid": "315d9ad4826057b3b69bf414a05fe1c7",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/315d9ad4826057b3b69bf414a05fe1c7/mesh/pen.glb",
+      "_query_name": "pen",
+      "size": [
+        0.014294846357029396,
+        0.014316140640041941,
+        0.14333333333333334
+      ],
+      "scale": 0.6658676184595391,
+      "_height_m": 0.014316140640041941,
+      "is_static": false,
+      "save_fn": "315d9ad4826057b3b69bf414a05fe1c7_4",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.397,
+        "y": 0.454,
+        "z": 0.70698397113182
+      },
+      "yaw_deg": 90.0
+    },
+    {
+      "Model": "remote control",
+      "uuid": "7461b85091e35d028c955d7a4d709a85",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/remote_control/7461b85091e35d028c955d7a4d709a85/mesh/remote_control.glb",
+      "_query_name": "remote control",
+      "size": [
+        0.15,
+        0.026521031762942467,
+        0.06433375321530971
+      ],
+      "scale": 0.6630244504161089,
+      "_height_m": 0.026521031762942467,
+      "is_static": false,
+      "save_fn": "7461b85091e35d028c955d7a4d709a85_5",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.312,
+        "y": 0.468,
+        "z": 0.7130864166932702
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "mouse",
+      "uuid": "979ca8e9baf2534f8cf19b54cc4f3b48",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/remote_control/979ca8e9baf2534f8cf19b54cc4f3b48/mesh/mouse.glb",
+      "_query_name": "computer mouse",
+      "size": [
+        0.07,
+        0.03379739293977734,
+        0.03747521704143051
+      ],
+      "scale": 0.8449310258989224,
+      "_height_m": 0.03379739293977734,
+      "is_static": false,
+      "save_fn": "979ca8e9baf2534f8cf19b54cc4f3b48_6",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.392,
+        "y": 0.541,
+        "z": 0.7167245972816876
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "apple",
+      "uuid": "50b88ffa707b53adaad3229d94bb24fa",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/50b88ffa707b53adaad3229d94bb24fa/mesh/apple2.glb",
+      "_query_name": "apple",
+      "size": [
+        0.06860574097866108,
+        0.08,
+        0.06788105777217458
+      ],
+      "scale": 0.8888888903606086,
+      "_height_m": 0.08,
+      "is_static": false,
+      "save_fn": "50b88ffa707b53adaad3229d94bb24fa_7",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.393,
+        "y": 0.526,
+        "z": 0.739825900811799
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "lemon",
+      "uuid": "c3dc4a1606405f408ed5793f75c4dd36",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/fruits/c3dc4a1606405f408ed5793f75c4dd36/mesh/lemon.glb",
+      "_query_name": "lemon",
+      "size": [
+        0.0666532972784955,
+        0.06089887191634861,
+        0.08
+      ],
+      "scale": 0.8699812880690607,
+      "_height_m": 0.06089887191634861,
+      "is_static": false,
+      "save_fn": "c3dc4a1606405f408ed5793f75c4dd36_8",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.7302753367699732
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "mug",
+      "uuid": "34c4f3a5b7a35e1ab98a5c5b660c2257",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/ware/34c4f3a5b7a35e1ab98a5c5b660c2257/mesh/mug.glb",
+      "_query_name": "mug",
+      "size": [
+        0.07595858770242306,
+        0.08854288863927254,
+        0.10000000000000002
+      ],
+      "scale": 0.7083407025516109,
+      "_height_m": 0.08854288863927254,
+      "is_static": false,
+      "save_fn": "34c4f3a5b7a35e1ab98a5c5b660c2257_9",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.2,
+        "y": 0.3,
+        "z": 0.7440973451314352
+      },
+      "yaw_deg": 45.0
+    },
+    {
+      "Model": "notebook",
+      "uuid": "0773f8fc18b45b85a3a5a65c99e746e6",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/0773f8fc18b45b85a3a5a65c99e746e6/mesh/notebook_3.glb",
+      "_query_name": "notebook",
+      "size": [
+        0.18666666666666668,
+        0.030295489664421704,
+        0.11990273016517927
+      ],
+      "scale": 1.009849646702763,
+      "_height_m": 0.030295489664421704,
+      "is_static": false,
+      "save_fn": "0773f8fc18b45b85a3a5a65c99e746e6_10",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.275,
+        "y": 0.44,
+        "z": 0.7149736456440098
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "lamp",
+      "uuid": "1973a76702ee5e7c9d6718d88e85d786",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/lighting_fixtures/1973a76702ee5e7c9d6718d88e85d786/mesh/lamp.glb",
+      "_query_name": "desk lamp",
+      "size": [
+        0.21478626652037916,
+        0.3499999999999999,
+        0.13407544785688022
+      ],
+      "scale": 0.777777772626759,
+      "_height_m": 0.3499999999999999,
+      "is_static": true,
+      "save_fn": "1973a76702ee5e7c9d6718d88e85d786_11",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.467,
+        "y": 0.0,
+        "z": 0.8748259008117989
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "A modern laboratory workspace featuring a central rectangular wooden table under soft ambient lighting, with a modern desk lamp mounted on the left side casting realistic shadows. The tabletop is arranged with everyday objects in natural positions suitable for robotic grasping and pick-and-place tasks, including a red hardcover notebook, blue ceramic mug, yellow lemon, green apple, black computer mouse, black remote control, black pen, black metal scissors, a cylindrical pen holder, and a wooden cutting board. A robotic manipulator arm is positioned in the background near the table, ready to interact — though excluded from object count per rules. Note: Franka Emika FR3, Franka Emika FR3 will be placed separately via robot placement system."
+}

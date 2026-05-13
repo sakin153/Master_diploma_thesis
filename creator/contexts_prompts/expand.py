@@ -8,7 +8,6 @@ Respond with JSON only:
   "expanded_description": "Full detailed description of the scene (2-3 sentences).",
   "room_type": "bedroom|office|classroom|kitchen|living_room|warehouse|lab|outdoor|other",
   "room_style": "modern|minimalist|cozy|industrial|academic|other",
-  "anchor_objects": ["primary anchor name", "secondary anchor name"],
   "estimated_objects": [
     {"name": "Object Name", "quantity": 1, "notes": "placement hint"}
   ],
@@ -23,13 +22,8 @@ Respond with JSON only:
 - `name` MUST be a single atomic object (e.g. "chair", "table") — NEVER a group name like "chair set", "set of chairs", "4 chairs"
 - `quantity` carries the count — e.g. `{"name": "chair", "quantity": 4}` NOT `{"name": "chair set (4 chairs)", "quantity": 1}`
 
-## Hierarchy rules
-- `anchor_objects`: list 1-2 names of the PRIMARY large furniture that everything else relates to
-  * Restaurant → ["dining table"] (one representative table; chairs/plates relate to it)
-  * Office → ["desk"]
-  * Bedroom → ["bed"]
-  * Living room → ["sofa"]
-- Chairs/stools: max 4 per anchor table (not 20)
+## Scene realism rules
+- Chairs/stools: max 4 per table/surface unless explicitly requested
 - Small items on surfaces (plates, cups, books): max 4 per surface
 - Lamps: 0-1 per scene unless explicitly requested; they go ON a table, not on the floor
 

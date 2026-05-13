@@ -1,4 +1,6 @@
-# Стадия 0 - расширяем запрос пользователя.
+"""Stage 0 - Prompt Expansion
+Expands user query into detailed scene specification
+"""
 
 import json
 import re
@@ -6,8 +8,7 @@ from pathlib import Path
 
 from project.llm_request import DEFAULT_MODEL, request as _default_request
 
-_VALID_ROOM_TYPES = {"bedroom", "office", "classroom", "kitchen", "living_room", "dining_room", "warehouse", "lab", "outdoor", "other"}
-_MAX_TOTAL_OBJECTS = 20
+_MAX_TOTAL_OBJECTS = 50
 
 
 class ObjectHint:
@@ -21,13 +22,11 @@ class ObjectHint:
 
 
 class SceneSpec:
-    def __init__(self, original_query, expanded_description, room_type="other",
-                 room_style="modern", estimated_objects=None, room_half_size=2.5,
+    def __init__(self, original_query, expanded_description,
+                 estimated_objects=None, room_half_size=2.5,
                  ):
         self.original_query = original_query
         self.expanded_description = expanded_description
-        self.room_type = room_type
-        self.room_style = room_style
         self.estimated_objects = estimated_objects or []
         self.room_half_size = room_half_size
 
@@ -35,8 +34,6 @@ class SceneSpec:
         objects_str = "\n".join(f"    - {o.name} x{o.quantity}" for o in self.estimated_objects)
         return (
             f"SceneSpec:\n"
-            f"  тип комнаты : {self.room_type}\n"
-            f"  стиль       : {self.room_style}\n"
             f"  размер      : {self.room_half_size * 2:.0f}m x {self.room_half_size * 2:.0f}m\n"
             f"  объекты     :\n{objects_str}"
         )
@@ -56,10 +53,6 @@ def _parse_room_dim(hint):
 
 
 def _parse_llm_response(data, original_query):
-    room_type = str(data.get("room_type", "other"))
-    if room_type not in _VALID_ROOM_TYPES:
-        raise ValueError(f"Неизвестный тип комнаты: {room_type!r}")
-
     objects = []
     for o in data.get("estimated_objects", []):
         if isinstance(o, dict):
@@ -70,7 +63,7 @@ def _parse_llm_response(data, original_query):
             ))
 
     if not objects:
-        raise ValueError("LLM не вернул объекты")
+        raise ValueError("LLM did not return objects")
 
     total = sum(o.quantity for o in objects)
     if total > _MAX_TOTAL_OBJECTS:
@@ -84,8 +77,6 @@ def _parse_llm_response(data, original_query):
     return SceneSpec(
         original_query=original_query,
         expanded_description=expanded_description,
-        room_type=room_type,
-        room_style=str(data.get("room_style", "modern")),
         estimated_objects=objects,
         room_half_size=room_half,
     )
@@ -95,7 +86,7 @@ def _load_expand_prompt_from_file():
     prompt_file = Path(__file__).parent / "prompts" / "expand_prompt.txt"
     if prompt_file.exists():
         return prompt_file.read_text(encoding="utf-8")
-    raise FileNotFoundError(f"Файл промпта не найден: {prompt_file}")
+    raise FileNotFoundError(f"Prompt file not found: {prompt_file}")
 
 
 _EXPAND_SYSTEM = _load_expand_prompt_from_file()
@@ -105,7 +96,7 @@ def expand_prompt(query, prompt_model_fn=None, llm_model=DEFAULT_MODEL, verbose=
     llm = prompt_model_fn if prompt_model_fn is not None else _default_request
 
     if verbose:
-        print(f"[prompt_expander] Расширяем запрос: '{query}'")
+        print(f"[prompt_expander] Expanding query: '{query}'")
 
     raw = llm(_EXPAND_SYSTEM, query, llm_model)
 
@@ -116,6 +107,6 @@ def expand_prompt(query, prompt_model_fn=None, llm_model=DEFAULT_MODEL, verbose=
     spec = _parse_llm_response(raw, original_query=query)
 
     if verbose:
-        print(f"[prompt_expander] Готово: {spec}")
+        print(f"[prompt_expander] Done: {spec}")
 
     return spec

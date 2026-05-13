@@ -1,0 +1,18 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Previous attempt to place {batch_count} identical "{model_name}" on parent {parent_id} FAILED validation.
+
+Item bbox (w×d): {size_w:.3f}×{size_d:.3f}m
+Parent center: ({parent_x:.3f}, {parent_y:.3f})
+
+Last attempt: {last_items_block}
+Violations: {violations_block}
+Suggested targets (satisfy footprint+gap; may adjust ±0.05m): {suggestions_block}
+
+Return ALL {batch_count} items in SAME order. Positions must respect:
+- Each item center stays inside parent footprint with small margin
+- Center-to-center gap ≥ {gap_m:.3f}m on at least one axis for every pair
+- z computed by engine (return any reasonable value, e.g. 0)
+
+Return EXACTLY {batch_count} items:
+[{{"x": float, "y": float, "yaw_deg": float, "z": float}}, ...]

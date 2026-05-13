@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="0626293c5f3e591b9df5fe282051c4cd_1">
+  <default>
+    <default class="visual1">
+      <geom group="2" type="mesh" contype="0" conaffinity="0" />
+    </default>
+    <default class="collision1">
+      <geom group="3" type="mesh" />
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="material_2" file="material_0.png" />
+    <material name="material_2" texture="material_2" specular="0.4000000000000001" shininess="0.001" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1.obj" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1_collision_0.obj" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1_collision_1.obj" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1_collision_2.obj" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1_collision_3.obj" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1_collision_4.obj" />
+    <mesh file="0626293c5f3e591b9df5fe282051c4cd_1_collision_5.obj" />
+  </asset>
+  <worldbody>
+    <body name="0626293c5f3e591b9df5fe282051c4cd_1" pos="-0.304 0.36 0.965136483614233" euler="1.5707963267948966 0.0 0">
+      <geom material="material_2" mesh="0626293c5f3e591b9df5fe282051c4cd_1" class="visual1" />
+      <geom mesh="0626293c5f3e591b9df5fe282051c4cd_1_collision_0" rgba="0.5234842649659925 0.2396787941642654 0.7259171524951855 1" class="collision1" friction="0.8 0.004 0.0001" condim="3" density="50.0" solref="0.01 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+      <geom mesh="0626293c5f3e591b9df5fe282051c4cd_1_collision_1" rgba="0.3407221452672927 0.7696427921451325 0.5609093839512126 1" class="collision1" friction="0.8 0.004 0.0001" condim="3" density="50.0" solref="0.01 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+      <geom mesh="0626293c5f3e591b9df5fe282051c4cd_1_collision_2" rgba="0.01435963598563117 0.27013664273347004 0.15415550873377548 1" class="collision1" friction="0.8 0.004 0.0001" condim="3" density="50.0" solref="0.01 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+      <geom mesh="0626293c5f3e591b9df5fe282051c4cd_1_collision_3" rgba="0.9790469652989302 0.1967753830369957 0.9267006794507519 1" class="collision1" friction="0.8 0.004 0.0001" condim="3" density="50.0" solref="0.01 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+      <geom mesh="0626293c5f3e591b9df5fe282051c4cd_1_collision_4" rgba="0.600079131415634 0.28754646918801896 0.2948256082889754 1" class="collision1" friction="0.8 0.004 0.0001" condim="3" density="50.0" solref="0.01 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+      <geom mesh="0626293c5f3e591b9df5fe282051c4cd_1_collision_5" rgba="0.423562133893459 0.8812439173733086 0.48609253009580966 1" class="collision1" friction="0.8 0.004 0.0001" condim="3" density="50.0" solref="0.01 1.0" solimp="0.9 0.95 0.001 0.5 2" />
+    <joint type="free" damping="0.05" stiffness="0" /></body>
+  </worldbody>
+</mujoco>

@@ -1,0 +1,26 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Describe top-level anchor relationships to room/each other.
+Room: {room_w}m × {room_l}m, origin (0,0) at center, valid range: [{neg_half:.2f}, {pos_half:.2f}]
+
+Anchors: {anchors_list}
+Future dependents per anchor: {future_per_anchor}
+Query: {query}
+
+Return ONE relationship per anchor:
+
+FORM A (anchored to room):
+{{"id": "str", "relationship": {{"type": "in_room", "reference": "room_center", "region": "center|near_wall|corner|custom", "offset_x": float, "offset_y": float, "yaw_deg": float}}}}
+
+FORM B (anchored to another anchor):
+{{"id": "str", "relationship": {{"type": "facing|beside|in_front|behind", "reference": "anchor_id", "side": "+x|-x|+y|-y", "distance": float, "facing": "inward|outward|any", "yaw_deg": float}}}}
+
+RULES:
+- At least ONE anchor uses form A
+- Form B anchors form DAG (no cycles)
+- distance = gap between bboxes (not center-to-center)
+- Reserve clearance for dependents
+- ONE entry per anchor ID (no suffixes like "tables_1")
+- reference must be "room_center" or listed anchor ID verbatim
+
+Return: {{"anchor_relations": [...]}}

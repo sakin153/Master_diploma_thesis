@@ -1,0 +1,65 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A simple scene with a single table supporting three distinct boxes; each box contains five apples, totaling fifteen apples across the scene. The setup emphasizes minimalism with no additional objects or distractions.",
+  "room_half_size": 2.5,
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "boxes",
+        "model_name": "box",
+        "instances": 3,
+        "parent_id": "table",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.1,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "apples",
+        "model_name": "apple",
+        "instances": 15,
+        "parent_id": "boxes",
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in",
+          "reference": null,
+          "side": null,
+          "distance": 0.0,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "boxes",
+        "place_order": 2,
+        "level": 2,
+        "is_static": false
+      }
+    ],
+    "metadata": {
+      "total_objects": 19,
+      "max_level": 2
+    }
+  }
+}

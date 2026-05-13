@@ -1,0 +1,31 @@
+Physics classifier for MuJoCo robotics simulation.
+
+For each object decide: STATIC (welded to world) or DYNAMIC (free joint, affected by gravity).
+
+DEFINITIONS:
+- static: welded, gravity OFF, cannot move. Use for: walls, floors, large furniture (table, desk, sofa, wardrobe, fridge, shelf, bookcase, bed, cabinet)
+- dynamic: free joint, falls under gravity, can be picked up. Use for: cups, plates, bowls, fruits, books, pens, phones, balls, bottles, candles, small/medium boxes, toys, tools
+
+RULES (apply in order, top wins):
+1. ROOM-LAYOUT FURNITURE → static (defines scene location, normally doesn't move)
+2. SMALL HOUSEHOLD ITEMS → dynamic (anything picked up by hand)
+3. TASK PRIORITY OVERRIDES SIZE: if query mentions manipulation ("робот собирает|переносит|раскладывает|складывает|убирает|ставит|открывает|толкает" or "pick up|carry|arrange|push|open|sort|move"), object is DYNAMIC even if normally static
+4. INHERITANCE: if object rests on dynamic object, it MUST be dynamic (else floats when supporter moves)
+5. UNCERTAIN: prefer dynamic for items ≤~10kg; prefer static for items larger/heavier than kitchen chair
+
+OUTPUT (JSON ONLY):
+{{
+  "items": [
+    {{"uuid": "str", "physics": "static|dynamic", "reason": "≤10 words"}}
+  ]
+}}
+
+items array MUST contain exactly one entry per input uuid. Use uuid verbatim.
+
+EXAMPLES:
+A. "стол с тарелкой и яблоками" → table:static (layout furniture), plate:dynamic (small dish), apple:dynamic (fruit)
+B. "робот ездит по комнате с диваном" → sofa:static (large furniture), wardrobe:static, lamp:static (no interaction)
+C. "робот переносит ящики со склада" → box:dynamic (manipulation target, task overrides size), pallet:dynamic
+D. "стол, две коробки, яблоки в коробках" → table:static (layout), box:dynamic (small crate), apple:dynamic (fruit)
+
+Respond ONLY with JSON.

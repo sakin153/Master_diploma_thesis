@@ -9,11 +9,7 @@ import json
 import re
 from typing import Any, List, Optional
 
-_VALID_ROOM_TYPES = {
-    "bedroom", "office", "classroom", "kitchen",
-    "living_room", "warehouse", "lab", "outdoor", "other",
-}
-_MAX_TOTAL_OBJECTS = 20
+_MAX_TOTAL_OBJECTS = 50
 
 
 # ---------------------------------------------------------------------------
@@ -39,15 +35,11 @@ class SceneSpec:
         self,
         original_query: str,
         expanded_description: str,
-        room_type: str = "other",
-        room_style: str = "modern",
         estimated_objects: Optional[List[ObjectHint]] = None,
         room_half_size: float = 2.5,
     ) -> None:
         self.original_query = original_query
         self.expanded_description = expanded_description
-        self.room_type = room_type
-        self.room_style = room_style
         self.estimated_objects: List[ObjectHint] = estimated_objects or []
         self.room_half_size = room_half_size
 
@@ -60,7 +52,7 @@ class SceneSpec:
 
     def __repr__(self) -> str:
         return (
-            f"SceneSpec(type={self.room_type!r}, "
+            f"SceneSpec("
             f"room={self.room_half_size*2:.0f}m×{self.room_half_size*2:.0f}m, "
             f"objects={self.estimated_objects})"
         )
@@ -95,10 +87,6 @@ def parse_llm_response(raw: Any, original_query: str) -> SceneSpec:
         except json.JSONDecodeError as exc:
             raise ValueError(f"LLM returned invalid JSON: {exc}") from exc
 
-    room_type = str(data.get("room_type", "other"))
-    if room_type not in _VALID_ROOM_TYPES:
-        raise ValueError(f"LLM returned unknown room_type: {room_type!r}")
-
     objects: List[ObjectHint] = []
     for o in data.get("estimated_objects", []):
         if isinstance(o, dict):
@@ -128,8 +116,6 @@ def parse_llm_response(raw: Any, original_query: str) -> SceneSpec:
     return SceneSpec(
         original_query=original_query,
         expanded_description=expanded_description,
-        room_type=room_type,
-        room_style=str(data.get("room_style", "modern")),
         estimated_objects=objects,
         room_half_size=room_half,
     )

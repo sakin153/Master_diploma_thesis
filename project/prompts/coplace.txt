@@ -1,0 +1,27 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Place {n_total} MIXED TYPE objects on shared parent surface AS ONE COORDINATED LAYOUT.
+
+Parent: {parent_id} ({parent_model})
+Center: ({parent_x:.3f}, {parent_y:.3f}), top_z={parent_top_z:.3f}
+Footprint half: ({parent_hx:.3f}, {parent_hy:.3f})
+
+Query: {query}
+Objects (in order): {items_block}
+Surface bounds: {bounds_block}
+
+RULES:
+1. Apply query arrangement ("in a row|в ряд|side by side") across ALL items
+2. Each item (x,y) must stay inside ITS OWN surface bounds
+3. NO OVERLAP: for pair (i,j): |xi-xj|≥(wi+wj)/2 OR |yi-yj|≥(di+dj)/2
+4. CENTROID-BALANCE (unless query specifies side/corner):
+   - mean(all x_i) MUST EQUAL {parent_x:.3f} (max deviation ±0.02m)
+   - mean(all y_i) MUST EQUAL {parent_y:.3f} (max deviation ±0.02m)
+   CRITICAL: For "в ряд|in a row|side by side" → place ALL items on ONE LINE through parent center
+   Example: if parent_x=0, parent_y=0, place row at y=0 with x varying
+5. SYMMETRY: prefer mirror-symmetric layout for 2N mixed items (unless query specifies asymmetric)
+6. "centered|по центру|in the middle" → apply rules 4 & 5 strictly
+7. yaw_deg ∈ [0,360); 0 unless query implies orientation
+
+Return: {{"positions": [{{"x": float, "y": float, "yaw_deg": float}}, ...]}}
+EXACTLY {n_total} entries in input order

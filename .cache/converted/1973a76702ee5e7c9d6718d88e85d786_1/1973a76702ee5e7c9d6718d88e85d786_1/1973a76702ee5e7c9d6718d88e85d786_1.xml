@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="1973a76702ee5e7c9d6718d88e85d786_1">
+  <default>
+    <default class="visual1">
+      <geom group="2" type="mesh" contype="0" conaffinity="0" />
+    </default>
+    <default class="collision1">
+      <geom group="3" type="mesh" />
+    </default>
+  </default>
+  <asset>
+    <texture type="2d" name="material_2" file="material_0.png" />
+    <material name="material_2" texture="material_2" specular="0.4000000000000001" shininess="0.001" />
+    <mesh file="1973a76702ee5e7c9d6718d88e85d786_1.obj" />
+  </asset>
+  <worldbody>
+    <body name="1973a76702ee5e7c9d6718d88e85d786_1" pos="-0.505 0.0 0.9651858596812541" euler="1.5707963267948966 0.0 0">
+      <geom material="material_2" mesh="1973a76702ee5e7c9d6718d88e85d786_1" class="visual1" />
+      <geom mesh="1973a76702ee5e7c9d6718d88e85d786_1" class="collision1" friction="0.8 0.005 0.0001" condim="3" density="600.0" solref="0.01 1.0" solimp="0.95 0.99 0.001 0.5 2" />
+    </body>
+  </worldbody>
+</mujoco>

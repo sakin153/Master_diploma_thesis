@@ -1,0 +1,32 @@
+{
+  "stage": "1_scene_graph",
+  "query": "Two wooden chairs placed exactly 2 meters apart on a clean, neutral-toned floor, each facing an empty central space—likely part of a minimalist waiting area or a simple living room layout with ample clearance for movement.",
+  "room_half_size": 2.5,
+  "graph": {
+    "nodes": [
+      {
+        "id": "chairs",
+        "model_name": "dining chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 0
+    }
+  }
+}

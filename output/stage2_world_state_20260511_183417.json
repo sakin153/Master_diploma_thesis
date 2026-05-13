@@ -1,0 +1,71 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "chairs_inst_0",
+        "Model": "dining chair",
+        "size": [
+          0.5026168662654426,
+          0.9,
+          0.43655792803167515
+        ],
+        "Pose": {
+          "x": -2.5,
+          "y": -2.382,
+          "z": 0.47000000000000003
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chairs_inst_1",
+        "Model": "dining chair",
+        "size": [
+          0.5026168662654426,
+          0.9,
+          0.43655792803167515
+        ],
+        "Pose": {
+          "x": -1.997,
+          "y": -2.382,
+          "z": 0.47000000000000003
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 3.0
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "chairs",
+        "model_name": "dining chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "near_wall",
+          "offset_x": -2.5,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.5026168662654426,
+          0.9,
+          0.43655792803167515
+        ]
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 0
+    }
+  }
+}

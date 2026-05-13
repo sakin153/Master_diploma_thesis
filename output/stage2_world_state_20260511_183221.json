@@ -1,0 +1,71 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "chairs_inst_0",
+        "Model": "computer chair",
+        "size": [
+          0.6089490439390048,
+          1.1,
+          0.6266719214784298
+        ],
+        "Pose": {
+          "x": -0.304,
+          "y": 0.0,
+          "z": 0.5700000000000001
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chairs_inst_1",
+        "Model": "computer chair",
+        "size": [
+          0.6089490439390048,
+          1.1,
+          0.6266719214784298
+        ],
+        "Pose": {
+          "x": 0.304,
+          "y": 0.0,
+          "z": 0.5700000000000001
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 2.5
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "chairs",
+        "model_name": "computer chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": false,
+        "size_hint": [
+          0.6089490439390048,
+          1.1,
+          0.6266719214784298
+        ]
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 0
+    }
+  }
+}

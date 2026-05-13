@@ -1,0 +1,104 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "table_inst_0",
+        "Model": "table",
+        "size": [
+          0.852528229976444,
+          0.5182631154965487,
+          1.2
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.27913155774827436
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "notebook_inst_0",
+        "Model": "notebook",
+        "size": [
+          0.19166666666666662,
+          0.03110697599471871,
+          0.12311441043746084
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.5738166034939081
+        },
+        "yaw_deg": 0.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 2.5
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          0.852528229976444,
+          0.5182631154965487,
+          1.2
+        ]
+      },
+      {
+        "id": "notebook",
+        "model_name": "notebook",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.19166666666666662,
+          0.03110697599471871,
+          0.12311441043746084
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            0.852528229976444,
+            0.5182631154965487,
+            1.2
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.27913155774827436
+          },
+          "yaw_deg": 0.0
+        }
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 1
+    }
+  }
+}

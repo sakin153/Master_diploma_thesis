@@ -13,32 +13,27 @@ import mujoco.viewer
 _repo_root = os.path.dirname(os.path.abspath(__file__))
 creator_scene_path = os.path.join(_repo_root, "output/cache/worlds/scene_latest.xml")
 project_scene_path = os.path.join(_repo_root, "project/.cache/worlds/scene_latest.xml")
+root_scene_path = os.path.join(_repo_root, ".cache/worlds/scene_latest.xml")
 
 # Проверяем, какая сцена существует и какая новее
 scene_path = None
 scene_source = None
 
-if os.path.exists(creator_scene_path) and os.path.exists(project_scene_path):
-    # Обе существуют - выбираем более новую
-    creator_time = os.path.getmtime(creator_scene_path)
-    project_time = os.path.getmtime(project_scene_path)
-    
-    if creator_time > project_time:
-        scene_path = creator_scene_path
-        scene_source = "creator (main.py)"
-    else:
-        scene_path = project_scene_path
-        scene_source = "project (main_project.py)"
-elif os.path.exists(creator_scene_path):
-    scene_path = creator_scene_path
-    scene_source = "creator (main.py)"
-elif os.path.exists(project_scene_path):
-    scene_path = project_scene_path
-    scene_source = "project (main_project.py)"
+existing = []
+if os.path.exists(creator_scene_path):
+    existing.append((creator_scene_path, "creator (main.py)"))
+if os.path.exists(project_scene_path):
+    existing.append((project_scene_path, "project (main_project.py)"))
+if os.path.exists(root_scene_path):
+    existing.append((root_scene_path, "repo root (.cache/worlds)") )
+
+if existing:
+    scene_path, scene_source = max(existing, key=lambda it: os.path.getmtime(it[0]))
 else:
     print(f"❌ Файл сцены не найден ни в одной из директорий:")
     print(f"   - {creator_scene_path}")
     print(f"   - {project_scene_path}")
+    print(f"   - {root_scene_path}")
     print("\nСначала запустите:")
     print("   python main.py  (для creator)")
     print("   или")

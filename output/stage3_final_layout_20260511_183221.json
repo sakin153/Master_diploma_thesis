@@ -1,0 +1,52 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6089490439390048,
+        1.1,
+        0.6266719214784298
+      ],
+      "scale": 0.916666675772932,
+      "_height_m": 1.1,
+      "is_static": false,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.304,
+        "y": 0.0,
+        "z": 0.5700000000000001
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "computer chair",
+      "uuid": "aeea9a5e33665bb3b31544206cb2a929",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/chair/aeea9a5e33665bb3b31544206cb2a929/mesh/computer_chair_44.glb",
+      "_query_name": "chair",
+      "size": [
+        0.6089490439390048,
+        1.1,
+        0.6266719214784298
+      ],
+      "scale": 0.916666675772932,
+      "_height_m": 1.1,
+      "is_static": false,
+      "save_fn": "aeea9a5e33665bb3b31544206cb2a929_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.304,
+        "y": 0.0,
+        "z": 0.5700000000000001
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "Two wooden armchairs placed side by side, facing forward, arranged in a compact living area with soft lighting and neutral-toned walls.",
+  "room_type": "living_room"
+}

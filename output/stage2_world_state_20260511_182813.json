@@ -1,0 +1,204 @@
+{
+  "stage": "2_hierarchical_placement",
+  "world_state": {
+    "placed": [
+      {
+        "id": "table_inst_0",
+        "Model": "table",
+        "size": [
+          1.2340346128909028,
+          0.7501858596812542,
+          1.737
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.3950929298406271
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "vase_inst_0",
+        "Model": "vase",
+        "size": [
+          0.14399302996044547,
+          0.3499999999999999,
+          0.1439637417276202
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.9651858596812541
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chairs_inst_0",
+        "Model": "computer chair",
+        "size": [
+          0.6643080479334598,
+          1.2,
+          0.6836420961582869
+        ],
+        "Pose": {
+          "x": 1.049,
+          "y": 0.0,
+          "z": 0.62
+        },
+        "yaw_deg": 180.0
+      },
+      {
+        "id": "chairs_inst_1",
+        "Model": "computer chair",
+        "size": [
+          0.6643080479334598,
+          1.2,
+          0.6836420961582869
+        ],
+        "Pose": {
+          "x": -1.049,
+          "y": 0.0,
+          "z": 0.62
+        },
+        "yaw_deg": 0.0
+      },
+      {
+        "id": "chairs_inst_2",
+        "Model": "computer chair",
+        "size": [
+          0.6643080479334598,
+          1.2,
+          0.6836420961582869
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": 1.31,
+          "z": 0.62
+        },
+        "yaw_deg": 270.0
+      },
+      {
+        "id": "chairs_inst_3",
+        "Model": "computer chair",
+        "size": [
+          0.6643080479334598,
+          1.2,
+          0.6836420961582869
+        ],
+        "Pose": {
+          "x": 0.0,
+          "y": -1.31,
+          "z": 0.62
+        },
+        "yaw_deg": 90.0
+      }
+    ],
+    "remaining": [],
+    "room_half_size": 3.0
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true,
+        "size_hint": [
+          1.2340346128909028,
+          0.7501858596812542,
+          1.737
+        ]
+      },
+      {
+        "id": "vase",
+        "model_name": "vase",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.0,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false,
+        "size_hint": [
+          0.14399302996044547,
+          0.3499999999999999,
+          0.1439637417276202
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            1.2340346128909028,
+            0.7501858596812542,
+            1.737
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3950929298406271
+          },
+          "yaw_deg": 0.0
+        }
+      },
+      {
+        "id": "chairs",
+        "model_name": "computer chair",
+        "instances": 4,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "around",
+          "reference": "table",
+          "side": null,
+          "distance": 0.1,
+          "facing": "inward",
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": "table",
+        "place_order": 2,
+        "level": 1,
+        "is_static": true,
+        "size_hint": [
+          0.6643080479334598,
+          1.2,
+          0.6836420961582869
+        ],
+        "_single_parent_override": {
+          "id": "table_inst_0",
+          "Model": "table",
+          "size": [
+            1.2340346128909028,
+            0.7501858596812542,
+            1.737
+          ],
+          "Pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.3950929298406271
+          },
+          "yaw_deg": 0.0
+        }
+      }
+    ],
+    "metadata": {
+      "total_objects": 6,
+      "max_level": 1
+    }
+  }
+}

@@ -1,0 +1,10 @@
+Pick ONE 3D model from candidates.
+
+scene_query: {scene_query}
+object: {object}
+candidates: {candidates}
+
+Pick candidate that best matches object and scene style.
+Reject with {{"uuid": "none"}} ONLY if every candidate is completely different object.
+
+Output ONLY: {{"uuid": "abc123"}}

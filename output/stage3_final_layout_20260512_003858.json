@@ -1,0 +1,51 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "table",
+      "size": [
+        0.852528229976444,
+        0.5182631154965487,
+        1.2
+      ],
+      "scale": 0.6910173500359192,
+      "_height_m": 0.5182631154965487,
+      "is_static": true,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.27913155774827436
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "notebook",
+      "uuid": "0773f8fc18b45b85a3a5a65c99e746e6",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/0773f8fc18b45b85a3a5a65c99e746e6/mesh/notebook_3.glb",
+      "_query_name": "notebook",
+      "size": [
+        0.19166666666666662,
+        0.03110697599471871,
+        0.12311441043746084
+      ],
+      "scale": 1.0368991908108725,
+      "_height_m": 0.03110697599471871,
+      "is_static": false,
+      "save_fn": "0773f8fc18b45b85a3a5a65c99e746e6_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.5738166034939081
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "A clean, modern desk with a single open notebook placed on its surface; two Franka FR3 robotic arms are positioned on the floor beside the desk, facing it in a ready stance but not part of the object inventory per robot exclusion rules. Note: Franka Emika FR3 will be placed separately via robot placement system."
+}

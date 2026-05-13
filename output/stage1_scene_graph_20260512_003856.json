@@ -1,0 +1,45 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A clean, modern desk with a single open notebook placed on its surface; two Franka FR3 robotic arms are positioned on the floor beside the desk, facing it in a ready stance but not part of the object inventory per robot exclusion rules. Note: Franka Emika FR3 will be placed separately via robot placement system.",
+  "room_half_size": 2.5,
+  "graph": {
+    "nodes": [
+      {
+        "id": "table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": null,
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "notebook",
+        "model_name": "notebook",
+        "instances": 1,
+        "parent_id": "table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 1
+    }
+  }
+}

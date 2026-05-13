@@ -14,7 +14,7 @@
     <mesh file="aeea9a5e33665bb3b31544206cb2a929_4.obj" />
   </asset>
   <worldbody>
-    <body name="aeea9a5e33665bb3b31544206cb2a929_4" pos="-1.12 0.0 0.45" euler="90 270.0 0">
+    <body name="aeea9a5e33665bb3b31544206cb2a929_4" pos="0.0 1.31 0.62" euler="1.5707963267948966 4.71238898038469 0">
       <geom material="material_8" mesh="aeea9a5e33665bb3b31544206cb2a929_4" class="visual4" />
       <geom mesh="aeea9a5e33665bb3b31544206cb2a929_4" class="collision4" friction="0.8 0.005 0.0001" condim="3" density="600.0" solref="0.01 1.0" solimp="0.95 0.99 0.001 0.5 2" />
     </body>

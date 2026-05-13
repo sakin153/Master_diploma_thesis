@@ -1,5 +1,6 @@
-# Stage 5 - MuJoCo XML Assembly
-# Converts placed models (.glb meshes) to MuJoCo XML scene
+"""Stage 5 - MuJoCo XML Assembly
+Converts placed models (.glb meshes) to MuJoCo XML scene
+"""
 
 import math
 import os
@@ -13,12 +14,8 @@ from pathlib import Path
 import trimesh
 from obj2mjcf.cli import Args, CoacdArgs, process_obj
 
-
-# Опционально отключить определение «переда» модели через VLM
-# (например в офлайн-окружении). По умолчанию включено.
-_ORIENT_DISABLED = os.environ.get(
-    "WORLD_CREATOR_DISABLE_ORIENTATION", ""
-).lower() in ("1", "true", "yes")
+# Configuration: disable model orientation detection (VLM-based)
+_ORIENT_DISABLED = os.environ.get("WORLD_CREATOR_DISABLE_ORIENTATION", "").lower() in ("1", "true", "yes")
 
 
 def _get_orientation_offset(model):
@@ -52,8 +49,10 @@ def _get_orientation_offset(model):
         return 0
 
 
+# Keywords indicating objects that need convex decomposition
 _CONCAVE_HINTS = ("crate", "container", "box", "basket", "bin", "drawer", "ящик")
 
+# Target masses for common objects (kg)
 _MASS_TARGETS = (
     (("plate", "dish"),            0.55),
     (("bowl",),                    0.45),
@@ -79,6 +78,7 @@ _MASS_TARGETS = (
     (("apple", "fruit"),           0.18),
 )
 
+# Fill factors for volume-based mass calculation
 _FILL_FACTORS = (
     (("cup", "mug", "glass"),     0.15),
     (("bowl",),                   0.20),
@@ -148,7 +148,10 @@ def _get_physics_profile(model_name, size, is_static):
         density = _compute_density(model_name, size) if size else 400.0
         return {
             "is_static": False,
-            "friction": "0.6 0.004 0.0001",
+            # 0.8 tangential friction keeps small objects from sliding under
+            # micro-vibrations (banana tangent force was ~60% of normal at
+            # μ=0.6 → at the slip threshold). Still safe for grab/drag.
+            "friction": "0.8 0.004 0.0001",
             "density": str(density),
             "condim": "3",
             "solref": "0.01 1.0",
@@ -232,7 +235,11 @@ def _modify_body_tag(root, model):
     yaw_offset = _get_orientation_offset(model)
     final_yaw = (yaw_deg + yaw_offset) % 360.0
 
-    euler_str = f"0 0 {final_yaw}" if up_axis == "z" else f"90 {final_yaw} 0"
+    # Convert all angles to radians for consistency with compiler angle="radian"
+    if up_axis == "z":
+        euler_str = f"0 0 {math.radians(final_yaw)}"
+    else:
+        euler_str = f"{math.radians(90)} {math.radians(final_yaw)} 0"
 
     if yaw_offset:
         print(f"[mujoco_assembler]   {model_name}: is_static={profile['is_static']}, "
@@ -243,9 +250,26 @@ def _modify_body_tag(root, model):
     for body in root.findall(".//body"):
         body.set("pos", f"{px} {py} {pz}")
         body.set("euler", euler_str)
+        # `euler` and `quat` are mutually exclusive in MuJoCo (the latter is
+        # written by Stage 5.5 settle). Drop any stale `quat` so cached XML
+        # reused on a new run starts from this stage's freshly computed pose.
+        if "quat" in body.attrib:
+            del body.attrib["quat"]
+
+        # Strip any pre-existing free joint (stale from cached XML reuse)
+        # before deciding whether to add one based on the current profile.
+        for stale in body.findall("joint[@type='free']"):
+            body.remove(stale)
 
         if not profile["is_static"]:
-            ET.SubElement(body, "joint", type="free", damping="0.01", stiffness="0")
+            # Conservative free-joint params: small damping to gently absorb
+            # contact chatter without resisting external forces (grab/drag).
+            # No armature — high armature broke external manipulation by
+            # exaggerating effective rotational inertia.
+            ET.SubElement(body, "joint",
+                          type="free",
+                          damping="0.05",
+                          stiffness="0")
 
         for geom in body.findall(".//geom"):
             g_class = geom.get("class", "")
@@ -298,8 +322,8 @@ def _add_physics_options(root):
     ET.SubElement(root, "option",
         timestep="0.002",
         gravity="0 0 -9.81",
-        iterations="50",
-        tolerance="1e-10",
+        iterations="20",
+        tolerance="1e-6",
         integrator="implicitfast",
     ).tail = "\n"
 
@@ -309,7 +333,7 @@ def _add_physics_options(root):
         condim="3",
         friction="0.8 0.005 0.0001",
         solref="0.01 1",
-        solimp="0.95 0.99 0.001 0.5 2",
+        solimp="0.8 0.9 0.001 0.5 2",
         density="600",
     ).tail = "\n"
 
@@ -430,7 +454,10 @@ def _create_fallback_cube(model, path):
     )
 
     if not profile["is_static"]:
-        ET.SubElement(body, "joint", type="free", damping="0.01", stiffness="0")
+        ET.SubElement(body, "joint",
+                      type="free",
+                      damping="0.02",
+                      stiffness="0")
 
     ET.SubElement(body, "geom",
         type="box",
@@ -496,7 +523,14 @@ def _convert_model(model, converted_dir, visual_count, material_count):
         included_tree.write(xml_path, encoding="utf-8", xml_declaration=True)
         return xml_path, visual_count, material_count
 
-    # Load, scale, and center mesh
+    # Load, scale, and center mesh by AABB.
+    #
+    # AABB centering keeps the body origin at the geometric centre of the
+    # bounding box, which is what scene_planner assumes when it computes
+    # `z = parent_top + obj_h / 2`. Centring by mesh CoM instead breaks that
+    # invariant for asymmetric meshes (objects end up partially inside their
+    # parent or floating above it), so we always center by AABB and let
+    # MuJoCo handle the slight CoM/AABB mismatch via inertia auto-derivation.
     mesh = trimesh.load(model["model_loc"], force="mesh")
     mesh.apply_scale(float(model.get("scale", 1.0)))
 
@@ -524,19 +558,20 @@ def _convert_model(model, converted_dir, visual_count, material_count):
 
     # Build obj2mjcf args
     use_decomp = _needs_convex_decomp(model)
-    args_kwargs = dict(
-        obj_dir=model_dir,
-        verbose=True,
-        save_mjcf=True,
-        compile_model=True,
-        overwrite=True,
-        decompose=use_decomp,
-    )
+    args_kwargs = {
+        "obj_dir": model_dir,
+        "verbose": True,
+        "save_mjcf": True,
+        "compile_model": True,
+        "overwrite": True,
+        "decompose": use_decomp,
+    }
     if use_decomp:
+        # Conservative decomposition parameters for stability
         args_kwargs["coacd_args"] = CoacdArgs(
             preprocess_resolution=30,
-            threshold=0.08,
-            max_convex_hull=24,
+            threshold=0.15,  # Increased from 0.08 for fewer subdivisions
+            max_convex_hull=6,  # Reduced from 24, sufficient for containers
             mcts_iterations=60,
             mcts_max_depth=3,
             mcts_nodes=16,
@@ -577,18 +612,21 @@ def _convert_model(model, converted_dir, visual_count, material_count):
     return xml_path, visual_count, material_count
 
 
-def assemble_mujoco_scene(placed_models, room_half_size, output_path, cache_dir=None):
-    """Stage 5: Assemble MuJoCo XML scene from placed models.
+def assemble_mujoco_scene(placed_models, room_half_size, output_path, cache_dir=None, robots=None):
+    """Stage 5: Assemble MuJoCo XML scene from placed models and robots.
 
     Args:
         placed_models: List of models with Pose, yaw_deg, size, model_loc
         room_half_size: Room half-size in meters
         output_path: Path to save the MuJoCo XML file
         cache_dir: Cache directory for converted meshes (default: .cache)
+        robots: Optional list of robot placements with robot_id, pos, yaw, xml_path
 
     Returns:
         str: Path to the generated MuJoCo XML file
     """
+    if robots is None:
+        robots = []
     if cache_dir is None:
         cache_dir = ".cache"
 
@@ -601,7 +639,10 @@ def assemble_mujoco_scene(placed_models, room_half_size, output_path, cache_dir=
     print(f"[mujoco_assembler] Room: {room_half_size*2:.1f}m x {room_half_size*2:.1f}m")
     print(f"[mujoco_assembler] Cache: {cache_path}")
 
+    # Create main XML structure
     main_root = ET.Element("mujoco", model="scene")
+    compiler = ET.SubElement(main_root, "compiler", angle="radian")
+    compiler.tail = "\n"
     _add_physics_options(main_root)
 
     asset_elem = ET.SubElement(main_root, "asset")
@@ -644,6 +685,165 @@ def assemble_mujoco_scene(placed_models, room_half_size, output_path, cache_dir=
             if str(fallback_xml) not in included_paths:
                 included_paths.add(str(fallback_xml))
                 ET.SubElement(main_root, "include", file=str(fallback_xml)).tail = "\n"
+
+    # Add robots to the scene
+    if robots:
+        print(f"[mujoco_assembler] Adding {len(robots)} robot(s) to scene")
+        for i, robot in enumerate(robots):
+            robot_id = robot.get("robot_id", f"robot_{i}")
+            xml_path = robot.get("xml_path", "")
+            pos = robot.get("pos", [0, 0, 0])
+            yaw = robot.get("yaw", 0.0)
+            
+            print(f"[mujoco_assembler]   {i+1}/{len(robots)}: {robot_id}")
+            
+            if not xml_path or not os.path.exists(xml_path):
+                print(f"[mujoco_assembler]     ⚠ Robot XML not found: {xml_path}")
+                continue
+            
+            # Parse robot XML and integrate into scene
+            try:
+                robot_tree = ET.parse(xml_path)
+                robot_root = robot_tree.getroot()
+                
+                # Find the robot's worldbody
+                robot_worldbody = robot_root.find("worldbody")
+                if robot_worldbody is None:
+                    print(f"[mujoco_assembler]     ⚠ No worldbody found in robot XML")
+                    continue
+                
+                # Find the base body in the robot's worldbody
+                robot_base_body = robot_worldbody.find("body")
+                if robot_base_body is None:
+                    print(f"[mujoco_assembler]     ⚠ No base body found in robot worldbody")
+                    continue
+                
+                # Modify robot base body position/orientation directly (no wrapper)
+                import copy
+                robot_body_copy = copy.deepcopy(robot_base_body)
+                
+                # Set position and orientation (convert yaw to radians)
+                robot_body_copy.set("pos", f"{pos[0]} {pos[1]} {pos[2]}")
+                robot_body_copy.set("euler", f"0 0 {math.radians(yaw)}")
+                robot_body_copy.tail = "\n"
+                
+                # Add modified base body to worldbody
+                worldbody_elem.append(robot_body_copy)
+                
+                # Merge robot assets and fix mesh file paths (avoid duplicate materials/textures)
+                robot_assets = robot_root.find("asset")
+                if robot_assets is not None:
+                    robot_dir = Path(xml_path).parent
+                    
+                    # Get meshdir from robot XML compiler
+                    compiler = robot_root.find("compiler")
+                    meshdir = ""
+                    if compiler is not None:
+                        meshdir = compiler.get("meshdir", "")
+                    
+                    # Collect existing material and texture names
+                    existing_materials = set()
+                    existing_textures = set()
+                    for existing_mat in asset_elem.findall("material"):
+                        name = existing_mat.get("name")
+                        if name:
+                            existing_materials.add(name)
+                    for existing_tex in asset_elem.findall("texture"):
+                        name = existing_tex.get("name")
+                        if name:
+                            existing_textures.add(name)
+                    
+                    for child in robot_assets:
+                        # Deep copy asset element
+                        asset_copy = copy.deepcopy(child)
+                        
+                        # Skip duplicate materials
+                        if asset_copy.tag == "material":
+                            mat_name = asset_copy.get("name")
+                            if mat_name and mat_name in existing_materials:
+                                continue
+                            if mat_name:
+                                existing_materials.add(mat_name)
+                        
+                        # Skip duplicate textures
+                        elif asset_copy.tag == "texture":
+                            tex_name = asset_copy.get("name")
+                            if tex_name and tex_name in existing_textures:
+                                continue
+                            if tex_name:
+                                existing_textures.add(tex_name)
+                        
+                        # Fix mesh file paths
+                        elif asset_copy.tag == "mesh":
+                            file_attr = asset_copy.get("file")
+                            if file_attr:
+                                # Construct absolute mesh path
+                                if meshdir:
+                                    mesh_path = robot_dir / meshdir / file_attr
+                                else:
+                                    mesh_path = robot_dir / file_attr
+                                
+                                # Convert to absolute path
+                                asset_copy.set("file", str(mesh_path.resolve()))
+                        
+                        asset_elem.append(asset_copy)
+                
+                # Merge robot defaults (avoid duplicates by checking nested class names)
+                robot_defaults = robot_root.findall("default")
+                
+                # Collect all class names that already exist in main_root (including nested)
+                existing_classes = set()
+                for existing_default in main_root.findall(".//default[@class]"):
+                    cls = existing_default.get("class")
+                    if cls:
+                        existing_classes.add(cls)
+                
+                # Only add robot defaults if none of their nested classes already exist
+                for robot_default in robot_defaults:
+                    # Check all nested default classes in this robot_default tree
+                    robot_classes = set()
+                    for nested_default in robot_default.findall(".//default[@class]"):
+                        cls = nested_default.get("class")
+                        if cls:
+                            robot_classes.add(cls)
+                    
+                    # If any of the robot's classes already exist, skip this entire default block
+                    if robot_classes and robot_classes.intersection(existing_classes):
+                        continue
+                    
+                    # Add this default block and update existing_classes
+                    default_copy = copy.deepcopy(robot_default)
+                    main_root.insert(1, default_copy)  # Insert after compiler element
+                    existing_classes.update(robot_classes)
+                
+                # Merge robot actuators
+                robot_actuators = robot_root.find("actuator")
+                if robot_actuators is not None:
+                    main_actuators = main_root.find("actuator")
+                    if main_actuators is None:
+                        main_actuators = ET.SubElement(main_root, "actuator")
+                        main_actuators.tail = "\n"
+                    for actuator in robot_actuators:
+                        actuator_copy = copy.deepcopy(actuator)
+                        main_actuators.append(actuator_copy)
+                
+                # Merge robot contacts
+                robot_contacts = robot_root.find("contact")
+                if robot_contacts is not None:
+                    main_contacts = main_root.find("contact")
+                    if main_contacts is None:
+                        main_contacts = ET.SubElement(main_root, "contact")
+                        main_contacts.tail = "\n"
+                    for contact in robot_contacts:
+                        contact_copy = copy.deepcopy(contact)
+                        main_contacts.append(contact_copy)
+                
+                print(f"[mujoco_assembler]     ✓ Added at pos=({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), yaw={yaw:.0f}°")
+                
+            except Exception as e:
+                print(f"[mujoco_assembler]     ✗ Failed to add robot: {e}")
+                import traceback
+                traceback.print_exc()
 
     output_path = Path(output_path).resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)

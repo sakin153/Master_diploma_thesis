@@ -1,0 +1,33 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A simple scene featuring two wooden chairs placed side by side, aligned parallel to each other, likely positioned near a wall or as part of a minimal seating arrangement.",
+  "room_half_size": 3.0,
+  "room_type": "other",
+  "graph": {
+    "nodes": [
+      {
+        "id": "chairs",
+        "model_name": "dining chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "near_wall",
+          "offset_x": -2.5,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      }
+    ],
+    "metadata": {
+      "total_objects": 2,
+      "max_level": 0
+    }
+  }
+}

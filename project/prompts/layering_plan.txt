@@ -1,0 +1,34 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Decide how to STACK {instances} items of '{model_name}' inside container '{parent_id}' ({parent_model}).
+
+Container geometry:
+floor area (XY): {floor_area:.4f}m² ({psw:.3f}×{psd:.3f}m)
+interior height (Z): ≈{interior_h:.3f}m
+floor world Z: {parent_floor_z:.3f}m
+top world Z: {parent_top_z:.3f}m
+center (X,Y): ({cx:.3f}, {cy:.3f})
+
+Child item bbox: {sw:.3f}×{sd:.3f}×{sh:.3f}m
+footprint: {child_footprint:.4f}m², volume: {child_volume:.5f}m³
+
+Total items: {instances}
+Required pairwise XY gap: 1.15×bbox along constraint axis
+Required wall margin: ≥child_size from each container wall
+
+Geometric capacity hint (informational):
+per-layer estimate: ≈{per_layer_estimate:.1f} items (floor_area/(child_footprint×1.30))
+layers needed: ≈{layers_needed:d}
+
+Decide:
+- How many layers (1 if items fit comfortably in single plane, more if not)
+- Items per layer (sum MUST = {instances})
+- Z position of each layer in WORLD coordinates
+  Typical: layer i centered at parent_floor_z + child_h/2 + i×(child_h+small_gap)
+
+Output: {{"layers": [{{"items_count": int, "z_world": float}}, ...]}}
+
+Constraints:
+- sum(items_count) = {instances}
+- each z_world ∈ [{parent_floor_z:.3f}, {parent_top_z:.3f}]
+- items_count > 0

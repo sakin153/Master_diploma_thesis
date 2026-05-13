@@ -1,0 +1,227 @@
+{
+  "stage": "3_final_layout",
+  "models": [
+    {
+      "Model": "table",
+      "uuid": "1522dad65f0859758dad5636ba348bf8",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/basic_furniture/table/1522dad65f0859758dad5636ba348bf8/mesh/table.glb",
+      "_query_name": "wooden table",
+      "size": [
+        0.8766831964924432,
+        0.5329472371022842,
+        1.234
+      ],
+      "scale": 0.7105961749536036,
+      "_height_m": 0.5329472371022842,
+      "is_static": true,
+      "save_fn": "1522dad65f0859758dad5636ba348bf8_0",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.2864736185511421
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "lamp",
+      "uuid": "1973a76702ee5e7c9d6718d88e85d786",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/bedroom_supplies/lighting_fixtures/1973a76702ee5e7c9d6718d88e85d786/mesh/lamp.glb",
+      "_query_name": "modern desk lamp",
+      "size": [
+        0.27615377124048757,
+        0.45,
+        0.17238271867313174
+      ],
+      "scale": 0.9999999933772618,
+      "_height_m": 0.45,
+      "is_static": true,
+      "save_fn": "1973a76702ee5e7c9d6718d88e85d786_1",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.576,
+        "y": 0.0,
+        "z": 0.245
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "cutting board",
+      "uuid": "0e13775ef1515c65a7474ebe097b9022",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/utensils/0e13775ef1515c65a7474ebe097b9022/mesh/cutting_board.glb",
+      "_query_name": "wooden cutting board",
+      "size": [
+        0.41,
+        0.01974499046464878,
+        0.3906820242931685
+      ],
+      "scale": 0.9872500509957399,
+      "_height_m": 0.01974499046464878,
+      "is_static": false,
+      "save_fn": "0e13775ef1515c65a7474ebe097b9022_2",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.5828197323346086
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "pen holder",
+      "uuid": "10ab616ea78652a8a5611334723ad931",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/10ab616ea78652a8a5611334723ad931/mesh/pen_holder.glb",
+      "_query_name": "cylindrical pen holder",
+      "size": [
+        0.08719757944345473,
+        0.11666666666666665,
+        0.08720749566952386
+      ],
+      "scale": 0.9333333333333332,
+      "_height_m": 0.11666666666666665,
+      "is_static": false,
+      "save_fn": "10ab616ea78652a8a5611334723ad931_3",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.6312805704356176
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "scissors",
+      "uuid": "20a016b2cec35969ab5822caef4d05b0",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_tools/20a016b2cec35969ab5822caef4d05b0/mesh/scissors_48.glb",
+      "_query_name": "black metal scissors",
+      "size": [
+        0.013829930793290682,
+        0.139,
+        0.0901428651924544
+      ],
+      "scale": 0.6465116171529968,
+      "_height_m": 0.139,
+      "is_static": false,
+      "save_fn": "20a016b2cec35969ab5822caef4d05b0_4",
+      "_up_axis": "y",
+      "Pose": {
+        "x": -0.419,
+        "y": 0.522,
+        "z": 0.6424472371022842
+      },
+      "yaw_deg": 90.0
+    },
+    {
+      "Model": "pen",
+      "uuid": "d3ef0c336d9e50eb9d8954e48b0cf6a0",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/d3ef0c336d9e50eb9d8954e48b0cf6a0/mesh/pen_25.glb",
+      "_query_name": "black pen",
+      "size": [
+        0.13933333333333334,
+        0.021512877314624822,
+        0.02083260029159549
+      ],
+      "scale": 1.000598477452625,
+      "_height_m": 0.021512877314624822,
+      "is_static": false,
+      "save_fn": "d3ef0c336d9e50eb9d8954e48b0cf6a0_5",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.5837036757595967
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "remote control",
+      "uuid": "79564ac8965954cfa126ae5a2c31fda0",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/remote_control/79564ac8965954cfa126ae5a2c31fda0/mesh/remote_control.glb",
+      "_query_name": "black remote control",
+      "size": [
+        0.05846395652476895,
+        0.02145176678146811,
+        0.147
+      ],
+      "scale": 0.9977533623216079,
+      "_height_m": 0.02145176678146811,
+      "is_static": false,
+      "save_fn": "79564ac8965954cfa126ae5a2c31fda0_6",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.345,
+        "y": 0.42,
+        "z": 0.5836731204930183
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "mouse",
+      "uuid": "979ca8e9baf2534f8cf19b54cc4f3b48",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/remote_control/979ca8e9baf2534f8cf19b54cc4f3b48/mesh/mouse.glb",
+      "_query_name": "black computer mouse",
+      "size": [
+        0.083,
+        0.04007405162859314,
+        0.04443490020626761
+      ],
+      "scale": 1.0018467878515795,
+      "_height_m": 0.04007405162859314,
+      "is_static": false,
+      "save_fn": "979ca8e9baf2534f8cf19b54cc4f3b48_7",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.35,
+        "y": 0.52,
+        "z": 0.5929842629165808
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "mug",
+      "uuid": "34c4f3a5b7a35e1ab98a5c5b660c2257",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/kitchen_supplies/ware/34c4f3a5b7a35e1ab98a5c5b660c2257/mesh/mug.glb",
+      "_query_name": "blue ceramic mug",
+      "size": [
+        0.08861835231949355,
+        0.10330003674581795,
+        0.11666666666666665
+      ],
+      "scale": 0.8263974863102125,
+      "_height_m": 0.10330003674581795,
+      "is_static": false,
+      "save_fn": "34c4f3a5b7a35e1ab98a5c5b660c2257_8",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.6245972554751932
+      },
+      "yaw_deg": 0.0
+    },
+    {
+      "Model": "notebook",
+      "uuid": "481287f79a065a62a8bf2ffc31c00cff",
+      "model_loc": "/home/sakin153/.cache/huggingface/hub/datasets--HorizonRobotics--EmbodiedGenData/snapshots/0da911ca5b1c26c64533d8579b2fe9d3f042acb4/dataset/desktop_supplies/office_stationery/481287f79a065a62a8bf2ffc31c00cff/mesh/notebook_0.glb",
+      "_query_name": "red hardcover notebook",
+      "size": [
+        0.226,
+        0.03997028868166844,
+        0.14516622927019934
+      ],
+      "scale": 0.9992571928453106,
+      "_height_m": 0.03997028868166844,
+      "is_static": false,
+      "save_fn": "481287f79a065a62a8bf2ffc31c00cff_9",
+      "_up_axis": "y",
+      "Pose": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.5929323814431184
+      },
+      "yaw_deg": 0.0
+    }
+  ],
+  "room_half_size": 2.5,
+  "query": "A modern laboratory workspace featuring a rectangular wooden table centered in a clean, well-lit room. The tabletop is arranged with everyday objects for robotic grasping and pick-and-place tasks: a red hardcover notebook, blue ceramic mug, yellow lemon, green apple, black computer mouse, compact black remote control, sleek black pen, black metal scissors, a cylindrical pen holder containing multiple pens, and a wooden cutting board. A modern desk lamp mounted on the left side provides soft ambient lighting and realistic shadows, enhancing photorealistic rendering suitable for computer vision datasets. Note: Franka Emika FR3, Franka Emika FR3 will be placed separately via robot placement system."
+}

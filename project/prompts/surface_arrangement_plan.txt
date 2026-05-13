@@ -1,0 +1,53 @@
+RESPOND IN ENGLISH. RETURN ONLY VALID JSON.
+
+Decide HORIZONTAL ARRANGEMENT for {instances} items of '{model_name}' on/in parent '{parent_id}' ({parent_model}).
+Relationship type: {rel_type}
+
+Parent geometry:
+footprint: {psw:.3f}×{psd:.3f}m, floor_area: {floor_area:.4f}m²
+center: ({cx:.3f}, {cy:.3f})
+longer free axis: {long_axis_hint} (free range: {long_free_hint:.3f}m)
+
+Child: bbox {sw:.3f}×{sd:.3f}×{sh:.3f}m, footprint {child_footprint:.4f}m²
+Items: {instances}
+
+Query (for style/semantics): {query}
+
+Hard minimum constraints (validator will reject below these):
+- pairwise center-to-center gap ≥ {min_gap_floor:.3f}m
+- wall margin (parent edge to child edge) ≥ {min_wall_margin_floor:.3f}m
+
+ROW FEASIBILITY CHECK (MANDATORY before choosing "row"):
+Calculate required length for a row:
+- On X-axis: ({instances}-1) × gap_m + {instances} × {sw:.3f}m must be ≤ {psw:.3f}m - 2×wall_margin_m
+- On Y-axis: ({instances}-1) × gap_m + {instances} × {sd:.3f}m must be ≤ {psd:.3f}m - 2×wall_margin_m
+
+Example with minimum gap ({min_gap_floor:.3f}m) and minimum margin ({min_wall_margin_floor:.3f}m):
+- X-axis needs: ({instances}-1)×{min_gap_floor:.3f} + {instances}×{sw:.3f} = {(instances-1)*min_gap_floor + instances*sw:.3f}m
+  Available: {psw:.3f} - 2×{min_wall_margin_floor:.3f} = {psw - 2*min_wall_margin_floor:.3f}m
+  → Fits on X: {"YES" if (instances-1)*min_gap_floor + instances*sw <= psw - 2*min_wall_margin_floor else "NO"}
+
+- Y-axis needs: ({instances}-1)×{min_gap_floor:.3f} + {instances}×{sd:.3f} = {(instances-1)*min_gap_floor + instances*sd:.3f}m
+  Available: {psd:.3f} - 2×{min_wall_margin_floor:.3f} = {psd - 2*min_wall_margin_floor:.3f}m
+  → Fits on Y: {"YES" if (instances-1)*min_gap_floor + instances*sd <= psd - 2*min_wall_margin_floor else "NO"}
+
+RULE: Choose "row" ONLY if at least one axis shows "YES" above. If both show "NO", you MUST choose "grid" or "dice" instead.
+
+Decide plan:
+- "pattern": "single|row|grid|dice|scatter|ring" (fit geometry AND query semantics)
+  * "single": 1 item (always centered)
+  * "row": linear arrangement along one axis (ONLY if total row length fits: (N-1)×gap + N×child_size ≤ parent_dimension)
+  * "grid": 2D regular grid (preferred for 6+ items or when row doesn't fit)
+  * "dice": small count (2-5) in dice-like pattern (centered cluster)
+  * "scatter": random/irregular (ONLY if query says "scattered|разбросаны|randomly")
+  * "ring": circular arrangement
+  * CENTERING: If query mentions "по центру|в центре|centered|in center", prefer "dice" for 2-5 items or "grid" for 6+ items (both create centered clusters)
+  * CRITICAL: For "row" pattern, verify: (items_count - 1) × gap_m + items_count × max(child_w, child_d) ≤ parent_dimension_on_axis. If not, use "grid" or "dice" instead.
+- "axis": "x|y|centered" (for row/ring; grid/dice/scatter use 'centered')
+  * For "row": choose axis with MORE free space (prefer {long_axis_hint})
+- "gap_m": chosen min center-to-center distance (≥{min_gap_floor:.3f}m; may be larger for aesthetics)
+  * For "row": ensure (items-1)×gap_m + items×child_size ≤ parent_size on chosen axis
+- "wall_margin_m": chosen min distance from parent edge to child edge (≥{min_wall_margin_floor:.3f}m)
+- "rationale": ONE short sentence explaining why this pattern fits the space and query
+
+Output: {{"pattern": "...", "axis": "...", "gap_m": float, "wall_margin_m": float, "rationale": "..."}}

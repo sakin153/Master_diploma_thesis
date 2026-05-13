@@ -1,0 +1,206 @@
+{
+  "stage": "1_scene_graph",
+  "query": "A cozy modern living room in minimalistic Scandinavian style with warm evening lighting, featuring a rectangular wooden coffee table centered in the space, flanked by a modern orange and a modern gray lounge chair. Near the wall, a flat-screen TV sits atop a wooden stand, while tall white ceramic and matte black flower pots with leafy plants anchor opposite corners. The coffee table holds a blue ceramic mug, a red hardcover notebook, and a sleek black computer mouse, and a metallic wind chime dangles near a large window with soft ambient light.",
+  "room_half_size": 2.5,
+  "graph": {
+    "nodes": [
+      {
+        "id": "coffee_table",
+        "model_name": "table",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "center",
+          "offset_x": 0.0,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "lounge_chairs",
+        "model_name": "lounge chair",
+        "instances": 2,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "beside",
+          "reference": "coffee_table",
+          "side": "+y",
+          "distance": 0.0,
+          "facing": "inward",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "coffee_table",
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "television",
+        "model_name": "television",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_front",
+          "reference": "wooden_stand",
+          "side": "+y",
+          "distance": 0.0,
+          "facing": "inward",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "wooden_stand",
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "wooden_stand",
+        "model_name": "television",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "near_wall",
+          "offset_x": 2.08,
+          "offset_y": 0.0,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "white_vase",
+        "model_name": "vase",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "corner",
+          "offset_x": -2.23,
+          "offset_y": 2.23,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "black_flower_pot",
+        "model_name": "flower pot",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "in_room",
+          "reference": "room_center",
+          "region": "corner",
+          "offset_x": 2.23,
+          "offset_y": -2.23,
+          "yaw_deg": 0.0
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 0,
+        "is_static": true
+      },
+      {
+        "id": "mug",
+        "model_name": "mug",
+        "instances": 1,
+        "parent_id": "coffee_table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 1,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "notebook",
+        "model_name": "notebook",
+        "instances": 1,
+        "parent_id": "coffee_table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 2,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "mouse",
+        "model_name": "mouse",
+        "instances": 1,
+        "parent_id": "coffee_table",
+        "parent_instance_index": 0,
+        "relationship": {
+          "type": "on_surface",
+          "reference": null,
+          "side": null,
+          "distance": 0.05,
+          "facing": null,
+          "offset": null,
+          "arrangement": "auto"
+        },
+        "depends_on": null,
+        "place_order": 3,
+        "level": 1,
+        "is_static": false
+      },
+      {
+        "id": "wind_chime",
+        "model_name": "wind chime",
+        "instances": 1,
+        "parent_id": null,
+        "parent_instance_index": null,
+        "relationship": {
+          "type": "beside",
+          "reference": "black_flower_pot",
+          "side": "+x",
+          "distance": 0.05,
+          "facing": "any",
+          "yaw_deg": 0.0
+        },
+        "depends_on": "black_flower_pot",
+        "place_order": 1,
+        "level": 0,
+        "is_static": false
+      }
+    ],
+    "metadata": {
+      "total_objects": 11,
+      "max_level": 1
+    }
+  }
+}
